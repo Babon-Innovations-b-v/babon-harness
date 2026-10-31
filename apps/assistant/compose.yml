@@ -1,0 +1,206 @@
+# The assistant: four services, run by the root docker-compose.yml through
+# `include:`. Paths here are relative to apps/assistant/. Every setting comes
+# from the environment file the deploy loop pulls from the vault
+# ($HARNESS_ROOT/harness.env, passed with --env-file); nothing secret is
+# written in this file.
+#
+#   gateway     upstream OpenClaw, unmodified, pinned. It holds the Signal
+#               conversation, the sessions and its own memory, and calls the
+#               door below for every tool.
+#   assistant   this repository's door: alert triage, the notify pen, the
+#               patrol and the MCP tool door the gateway calls.
+#   signal-cli  the Signal account, shared by both: the gateway reads and
+#               answers chat, the door sends pages.
+#   whisper     speech to text for voice notes, only with --profile voice.
+#
+# Nothing here is published beyond the server's loopback. Alertmanager and
+# Prometheus reach the door by name on the compose network.
+
+services:
+  assistant-init:
+    image: alpine:3
+    restart: "no"
+    command: ["sh", "-c", "chown -R 1000:1000 /gateway-state /workspace /whisper-models"]
+    volumes:
+      - gateway_state:/gateway-state
+      - assistant_workspace:/workspace
+      - whisper_models:/whisper-models
+
+  gateway:
+    # OpenClaw 2026.9.1 (ad6fe23), the build the reference deployment runs.
+    # Every config key the workspace fragment sets was read off this
+    # release; moving the pin means re-reading `openclaw config schema`.
+    image: ghcr.io/openclaw/openclaw@sha256:6afe42854c87471188b9c4f8dce6bbc14005a48d8e1592846548b32508754f84
+    container_name: assistant-gateway
+    restart: unless-stopped
+    init: true
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_PORT: "18789"
+      # Required: a gateway bound beyond its own loopback refuses to start
+      # without a token.
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in the vault}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in the vault}
+      # The fragment names these two as ${...} and the gateway interpolates
+      # them from here: an MCP header cannot take a secret reference.
+      OPENCLAW_TOOLS_AUTHORIZATION: Bearer ${OPENCLAW_WEBHOOK_SECRET:?set OPENCLAW_WEBHOOK_SECRET in the vault}
+      OPENCLAW_TRANSCRIBE_AUTHORIZATION: Bearer ${OPENCLAW_WEBHOOK_SECRET}
+      TZ: ${ASSISTANT_TIMEZONE:-UTC}
+    volumes:
+      - gateway_state:/home/node/.openclaw
+      - assistant_workspace:/home/node/.openclaw/workspace
+    # Loopback only, for the gateway watch on the server and an ssh tunnel.
+    ports:
+      - "127.0.0.1:18789:18789"
+    # The image's own command with the startup guard lifted: upstream refuses
+    # to start until `gateway.mode` is set, and on a fresh box it is set by
+    # the first `workspace/apply.sh`, which needs the gateway running.
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18789/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      assistant-init:
+        condition: service_completed_successfully
+      # Started, not healthy: a door that will not come up must not keep the
+      # gateway down, and must not fail `docker compose up -d`.
+      assistant:
+        condition: service_started
+      signal-cli:
+        condition: service_started
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+
+  assistant:
+    build:
+      context: ../..
+      dockerfile: apps/assistant/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    container_name: assistant
+    restart: unless-stopped
+    environment:
+      OPENCLAW_PORT: "8000"
+      OPENCLAW_STATE_PATH: ${OPENCLAW_STATE_PATH:-/state/openclaw.db}
+      OPENCLAW_DAILY_CAP_EUR: ${OPENCLAW_DAILY_CAP_EUR:-5}
+      OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET:?set OPENCLAW_WEBHOOK_SECRET in the vault}
+      OPENCLAW_WEBHOOK_SECRET_PREV: ${OPENCLAW_WEBHOOK_SECRET_PREV:-}
+      # The door is the sender: it talks to signal-cli directly and never
+      # POSTs a page to itself.
+      OPENCLAW_GATEWAY_SELF: "1"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in the vault}
+      DOMAIN: ${DOMAIN:-}
+      ASSISTANT_NAME: ${ASSISTANT_NAME:-Assistant}
+      ASSISTANT_TIMEZONE: ${ASSISTANT_TIMEZONE:-UTC}
+      ASSISTANT_BRIEF_TIME: ${ASSISTANT_BRIEF_TIME:-08:00}
+      ASSISTANT_ADVISOR_TIME: ${ASSISTANT_ADVISOR_TIME:-09:00}
+      ASSISTANT_AGENDA_WRITE: ${ASSISTANT_AGENDA_WRITE:-0}
+      ASSISTANT_GITHUB_WRITE: ${ASSISTANT_GITHUB_WRITE:-0}
+      ASSISTANT_MEETING_REMINDERS: ${ASSISTANT_MEETING_REMINDERS:-0}
+      ASSISTANT_VOICE: ${ASSISTANT_VOICE:-0}
+      # The scheduled reports leave through message_teammate, so it is on by
+      # default; video calls need Talk on the file cloud.
+      ASSISTANT_TEAM_MESSAGE: ${ASSISTANT_TEAM_MESSAGE:-1}
+      ASSISTANT_VIDEO_CALL: ${ASSISTANT_VIDEO_CALL:-0}
+      ASSISTANT_DOOR_WRITE: ${ASSISTANT_DOOR_WRITE:-1}
+      ASSISTANT_QUIET_HOURS: ${ASSISTANT_QUIET_HOURS:-22:00-07:30}
+      ASSISTANT_NAMESPACE: ${ASSISTANT_NAMESPACE:-default}
+      SIGNAL_CLI_URL: http://signal-cli:8080
+      SIGNAL_BOT_NUMBER: ${SIGNAL_BOT_NUMBER:-}
+      SIGNAL_RECIPIENT: ${SIGNAL_RECIPIENT:-}
+      SIGNAL_ALLOWLIST: ${SIGNAL_ALLOWLIST:-}
+      SIGNAL_PEOPLE: ${SIGNAL_PEOPLE:-}
+      AGENDA_BASE_URL: ${AGENDA_BASE_URL:-}
+      AGENDA_USER: ${AGENDA_USER:-}
+      AGENDA_APP_PASSWORD: ${AGENDA_APP_PASSWORD:-}
+      AGENDA_CALENDARS: ${AGENDA_CALENDARS:-}
+      TEAM_CALENDAR: ${TEAM_CALENDAR:-}
+      # gh reads GH_TOKEN; the write tools check GITHUB_ASSISTANT_TOKEN.
+      GH_TOKEN: ${GITHUB_ASSISTANT_TOKEN:-}
+      GITHUB_ASSISTANT_TOKEN: ${GITHUB_ASSISTANT_TOKEN:-}
+      PROM_URL: ${PROM_URL:-http://prometheus:9090}
+      LOKI_URL: ${LOKI_URL:-}
+      OPENCLAW_DB_RO_URL: ${OPENCLAW_DB_RO_URL:-}
+      NC_URL: ${NC_URL:-}
+      NC_ALERTS_USER: ${NC_ALERTS_USER:-}
+      NC_ALERTS_PASSWORD: ${NC_ALERTS_PASSWORD:-}
+      NC_ALERTS_ROOM: ${NC_ALERTS_ROOM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      MONITOR_HTTP_TARGETS: ${MONITOR_HTTP_TARGETS:-}
+      MONITOR_DEPLOYMENTS: ${MONITOR_DEPLOYMENTS:-}
+      # A kubeconfig with a read-only role, only when a cluster is wired. No
+      # file at this path means no kubectl tools at all.
+      KUBECONFIG: /kube/config
+    volumes:
+      - assistant_state:/state
+      - ${HARNESS_ROOT:-/opt/harness}/kube:/kube:ro
+    ports:
+      - "127.0.0.1:${OPENCLAW_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  signal-cli:
+    # signal-cli-rest-api (MIT) wrapping signal-cli (GPL-3.0), used as an
+    # unmodified container. Pinned by digest; the digest the reference
+    # deployment runs. Inbound sealed-sender messages need signal-cli 0.14.5
+    # or later, so never pin below that.
+    image: bbernhard/signal-cli-rest-api@sha256:2cf09d66a86fdd210e42ee91662216364acc27da1163a8c44167a77ea3a6559a
+    container_name: signal-cli
+    restart: unless-stopped
+    environment:
+      # json-rpc, because the gateway's Signal plugin opens a websocket on
+      # /v1/receive and native mode answers it with a plain GET. REGISTERING
+      # or LINKING a number needs MODE=native for the duration.
+      MODE: ${SIGNAL_CLI_MODE:-json-rpc}
+    volumes:
+      # The account's keys. Back it up: ops/signal_registration_backup.sh.
+      - signal_data:/home/.local/share/signal-cli
+    # Not published. signal-cli-rest-api authenticates nobody, so whatever can
+    # reach port 8080 owns the account; only this compose network can.
+    expose:
+      - "8080"
+
+  whisper:
+    # faster-whisper behind an OpenAI-shaped /v1/audio/transcriptions, CPU
+    # only. large-v3 because the faster models drop a clause in another
+    # language silently rather than slowly. No language is pinned: forcing one
+    # turns speech in another into fluent nonsense.
+    image: ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
+    container_name: assistant-whisper
+    profiles: ["voice"]
+    restart: unless-stopped
+    environment:
+      WHISPER__MODEL: Systran/faster-whisper-large-v3
+      WHISPER__INFERENCE_DEVICE: cpu
+      WHISPER__COMPUTE_TYPE: int8
+    volumes:
+      # The weights, downloaded once. The image runs as uid 1000.
+      - whisper_models:/home/ubuntu/.cache/huggingface/hub
+    expose:
+      - "8000"
+
+volumes:
+  gateway_state:        # the gateway's config, Signal link and sessions
+  assistant_workspace:  # AGENTS/SOUL/USER/IDENTITY.md, rendered by apply.sh
+  assistant_state:      # the door's SQLite state
+  signal_data:          # the Signal account's keys
+  whisper_models:       # speech model weights

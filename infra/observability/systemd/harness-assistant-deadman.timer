@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the assistant deadman every 60 seconds
+
+[Timer]
+OnBootSec=60s
+OnActiveSec=60s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=harness-assistant-deadman.service
+
+[Install]
+WantedBy=timers.target

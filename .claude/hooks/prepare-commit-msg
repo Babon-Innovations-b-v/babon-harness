@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# The git prepare-commit-msg hook, found here because core.hooksPath points at
+# .claude/hooks (set relative, so each worktree runs its own checkout's copy).
+#
+# ONE PURPOSE: write a `Worktree:` trailer naming the worktree the commit was
+# made in, so the commit carries which effort produced it.
+#
+# WHY. Every session usually commits under the same git identity, and the
+# `Co-Authored-By` trailer names the model, not the session. So a tool that
+# hands a failing commit back to whoever made it has nothing to go on. The
+# worktree name is that fact: a session enters `.claude/worktrees/<slug>`
+# before its first write, and the slug it picks names the effort (often with
+# the issue number in it). It identifies the work rather than the person, which
+# is the more useful of the two when a few people run many efforts.
+#
+# WHAT IT DOES NOT DO. It does not set a git identity. Worktrees share one
+# `.git/config`, so a per-worktree identity needs `extensions.worktreeConfig`,
+# and an identity set by hand in a fixture can leak onto real commits. A
+# trailer cannot do that: the worst it can do is add a wrong line to a message.
+#
+# FAILURE POLICY: fail-open on everything. No repo, no message file, not in a
+# worktree, a slug that does not look like a slug, a trailer already present,
+# a merge or a squash, an amend, `git interpret-trailers` missing -> exit 0 and
+# the commit proceeds unchanged. This hook must never be the reason a commit
+# fails; it adds provenance, and provenance is not worth a blocked commit.
+#
+# ENV: WORKTREE_TRAILER=0 disarms it. `git commit --no-verify` does NOT
+# skip prepare-commit-msg (git only skips it for pre-commit and commit-msg),
+# which is deliberate here: a human waiving the guards still gets provenance.
+set -u
+
+[ "${WORKTREE_TRAILER:-1}" = "0" ] && exit 0
+
+msg_file="${1:-}"
+[ -n "$msg_file" ] && [ -f "$msg_file" ] || exit 0
+
+# $2 is the source of the message. `merge` and `squash` are git composing a
+# message out of other commits, and `commit` is -c/-C/--amend reusing one that
+# already has whatever trailer it was born with. In all three the trailer would
+# either duplicate or claim the wrong worktree for work done elsewhere.
+case "${2:-}" in
+    merge | squash | commit) exit 0 ;;
+esac
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+# Only a session worktree gets the trailer. The shared checkout is where a
+# human commits from, and a human is not what this line exists to identify.
+# Matched on the path rather than on `git rev-parse --is-inside-work-tree`,
+# because every worktree answers yes to that and only these are sessions.
+case "$root" in
+    */.claude/worktrees/*) slug="${root##*/}" ;;
+    *) exit 0 ;;
+esac
+
+# A slug is what `EnterWorktree` accepts: letters, digits, dots, underscores,
+# dashes, and `/` between segments. Anything else is not a name this hook
+# should be writing into a commit message, so it writes nothing.
+case "$slug" in
+    "" | *[!A-Za-z0-9._-]*) exit 0 ;;
+esac
+
+command -v git >/dev/null 2>&1 || exit 0
+
+# Already there (a re-run, a template, a rebase replaying a message that
+# carries it): leave the message exactly as it is. `--parse` reads only the
+# final trailer block, so a `Worktree:` quoted in the prose of a long commit
+# body is not mistaken for one.
+existing=$(git interpret-trailers --parse <"$msg_file" 2>/dev/null | grep -ci '^Worktree:' || true)
+case "$existing" in
+    "" | 0) ;;
+    *) exit 0 ;;
+esac
+
+# --in-place so the exit status is about the write, and the message is left
+# untouched when git cannot do it.
+git interpret-trailers --in-place --trailer "Worktree: $slug" "$msg_file" 2>/dev/null || exit 0
+exit 0

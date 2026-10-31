@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The git pre-commit hook, found here because core.hooksPath points at
+# .claude/hooks (set relative, so each worktree runs its own checkout's copy).
+# Two steps, in this order: the torn-commit guard, whose thinking lives in
+# torn_commit_guard.py, then this repository's own checks in
+# .claude/hooks/local/pre-commit when that file exists.
+#
+# FAILURE POLICY: fail-open on everything the hook cannot do. No repo, no
+# python3, no guard file, no local hook -> that step is skipped and the commit
+# proceeds. Only a check that RAN and said no stops the commit.
+#
+# ENV: TORN_GUARD=0 disarms the whole hook; `git commit --no-verify` skips it
+# entirely. Both belong to a human at a terminal who can see what they are
+# waiving, and a session reaching for either is blocked by
+# .claude/hooks/commit_guard.py.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ "${TORN_GUARD:-1}" = "0" ] && exit 0
+
+guard="$root/.claude/hooks/torn_commit_guard.py"
+if [ -f "$guard" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$guard" || exit $?
+fi
+
+local_hook="$root/.claude/hooks/local/pre-commit"
+if [ -x "$local_hook" ]; then
+    exec "$local_hook" "$@"
+elif [ -e "$local_hook" ]; then
+    echo "note: $local_hook is not executable, so it did not run" >&2
+fi
+exit 0

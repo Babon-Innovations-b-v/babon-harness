@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the assistant's memory compact every Sunday at 23:00 (server local time)
+
+[Timer]
+OnCalendar=Sun *-*-* 23:00:00
+AccuracySec=1min
+Persistent=true
+Unit=harness-assistant-weekly-compact.service
+
+[Install]
+WantedBy=timers.target

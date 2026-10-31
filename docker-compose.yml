@@ -1,0 +1,19 @@
+# The whole stack, one fragment per component. Every service is defined in
+# its component's own compose.yml; this file only names them. The deploy loop
+# (infra/auto-deploy) rebuilds only the services of a fragment whose folder
+# changed, so a new component adds one line here and nothing else.
+#
+# Run it with the env cache the vault writes:
+#   docker compose --env-file $HARNESS_ROOT/harness.env up -d
+#
+# The project name is fixed: the assistant's backup script and the deploy
+# loop name volumes and containers by it (harness_<volume>).
+name: harness
+
+include:
+  - infra/caddy/compose.yml
+  - infra/nextcloud/compose.yml
+  - infra/observability/compose.yml
+  - apps/website/compose.yml
+  - apps/notulen/compose.yml
+  - apps/assistant/compose.yml

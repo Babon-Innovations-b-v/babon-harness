@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpu-jobs"
+version = "0.1.0"
+description = "Optional Kubernetes GPU Job dispatch for the notulen worker (notulen transcribes on CPU without it)."
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "kubernetes>=29",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pyyaml>=6"]
+
+[tool.setuptools]
+packages = [
+    "gpu_jobs",
+    "gpu_jobs.cluster",
+    "gpu_jobs.config",
+    "gpu_jobs.creators",
+    "gpu_jobs.naming",
+    "gpu_jobs.security",
+]

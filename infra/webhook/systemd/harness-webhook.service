@@ -1,0 +1,31 @@
+# The push webhook listener (adnanh/webhook, installed by
+# infra/auto-deploy/install.sh). GitHub POSTs every push to
+# https://deploy.<DOMAIN>/hooks/deploy; Caddy proxies it here, and a push to
+# main whose HMAC-SHA256 signature matches DEPLOY_WEBHOOK_SECRET starts a deploy
+# cycle. The timer is the backstop when a push never arrives.
+#
+# hooks.json.template is rendered by webhook itself (-template) from the
+# environment, so the secret is read from the vault cache and never written to
+# another file. Port: WEBHOOK_PORT is not read here; 9000 is the default Caddy
+# proxies to. Keep it closed in the firewall: only Caddy should reach it.
+[Unit]
+Description=Push webhook: start a deploy cycle on every push to main
+After=network-online.target
+Wants=network-online.target
+OnFailure=harness-notify-failure@%n.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=harness
+Group=harness
+EnvironmentFile=/opt/harness/harness.env
+ExecStart=/usr/local/bin/webhook -hooks /opt/harness/repo/infra/webhook/hooks.json.template -template -ip 0.0.0.0 -port 9000 -verbose
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

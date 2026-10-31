@@ -1,0 +1,202 @@
+{
+  "promptCacheTtl": "1h",
+  "subagentPromptCacheTtl": "1h",
+  "env": {
+    "DO_NOT_TRACK": "1"
+  },
+  "worktree": {
+    "bgIsolation": "none",
+    "baseRef": "fresh"
+  },
+  "permissions": {
+    "allow": [
+      "mcp__github__*",
+      "Bash(gh:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"WORKFLOW PROTOCOL (CLAUDE.md): before responding to the first user message in this conversation, invoke the grill skill via Skill(grill). No exceptions: debug, support, research, brainstorm all route through grill first. A session that will WRITE files enters its own worktree before the first write: EnterWorktree({name: \\\"<slug>\\\"}), then the worktree setup CLAUDE.md names. A read-only session stays in the shared checkout.\"}}'",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "CLAUDE_HOOK=SessionStart python3 \"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/scripts/worktree-reap.py\" 2>>\"${TMPDIR:-/tmp}/worktree-reap.err\" || true",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; cur=$(git -C \"$d\" config --get core.hooksPath 2>/dev/null || true); case \"$cur\" in .claude/hooks) ;; \"\"|.git/hooks|*/.git/hooks|/*/.claude/hooks) git -C \"$d\" config core.hooksPath .claude/hooks ;; .githooks) [ -f \"$d/.claude/hooks/pre-commit\" ] && git -C \"$d\" config core.hooksPath .claude/hooks ;; *) echo \"core.hooksPath is $cur, not .claude/hooks: the commit guards are NOT installed\" >&2 ;; esac; exit 0",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/checkout_current.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/checkout_current.py\" ] || exit 0; CLAUDE_HOOK=SessionStart python3 \"$h/checkout_current.py\"",
+            "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 150
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"Active soul rules, obey in THIS reply (source of truth: .claude/soul.md; keep this text in sync). 1) Plain language only: everyday words plus terms already defined in CONTEXT.md; never invent jargon; when the user introduces a new term, add it to CONTEXT.md first, then use it; write for someone outside the project; no marketing voice. 2) Reply length tracks the answer, never the prompt: write the shortest version that is still fully clear, then stop; a long question can earn a one-line reply, a short question can earn ten. 3) No em dashes; use commas, colons, semicolons. 4) State results and decisions; no preamble, no narration. 5) Lead with the plain answer; ask short, easy-to-read questions only when needed; give further or more detailed information only when asked; having just processed a lot does not license a long reply, nor a long artifact: a doc, an issue or a comment tracks what its reader needs, never how much was just read. 6) A little warmth is welcome: a brief friendly word or bit of encouragement is fine, kept genuine, never at the cost of brevity or plainness. 7) English only: every reply and artifact in this repo is in English; another language stays only where the reader needs it (product copy in its own locale, documents for a reader who does not work in English).\"}}'",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/issue_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/issue_guard.py\" ] || exit 0; python3 \"$h/issue_guard.py\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/md_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/md_guard.py\" ] || exit 0; python3 \"$h/md_guard.py\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/commit_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/commit_guard.py\" ] || exit 0; python3 \"$h/commit_guard.py\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/wait_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/wait_guard.py\" ] || exit 0; python3 \"$h/wait_guard.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__create_issue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/issue_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/issue_guard.py\" ] || exit 0; python3 \"$h/issue_guard.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/md_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/md_guard.py\" ] || exit 0; python3 \"$h/md_guard.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 150
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/output_cap.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/output_cap.py\" ] || exit 0; python3 \"$h/output_cap.py\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/call_efficiency.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/call_efficiency.py\" ] || exit 0; CLAUDE_HOOK=PostToolUse python3 \"$h/call_efficiency.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/checkout_current.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/checkout_current.py\" ] || exit 0; python3 \"$h/checkout_current.py\"",
+            "timeout": 180
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/leftover_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/leftover_guard.py\" ] || exit 0; python3 \"$h/leftover_guard.py\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/soul_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/soul_guard.py\" ] || exit 0; python3 \"$h/soul_guard.py\""
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/call_efficiency.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/call_efficiency.py\" ] || exit 0; CLAUDE_HOOK=Stop python3 \"$h/call_efficiency.py\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 200
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

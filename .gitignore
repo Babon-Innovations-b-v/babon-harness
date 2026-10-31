@@ -1,0 +1,44 @@
+# Caches and build output
+__pycache__/
+*.py[oc]
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+node_modules/
+dist/
+build/
+out/
+target/
+.gradle/
+
+# OS and editor
+.DS_Store
+*:Zone.Identifier
+.idea/
+.vscode/*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Session state: per-clone, regenerable
+.claude/worktrees/
+.claude/state/
+# A person's own pre-push guard, kept out of the repository
+.claude/hooks/local/pre-push
+tmp/
+
+# The owner's own settings and any env file holding a secret: the vault is
+# where those live, and config/*.example is what is committed
+config/*.env
+oidc-client.env
+
+# Local virtual environment
+.venv/

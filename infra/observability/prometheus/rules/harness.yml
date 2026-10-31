@@ -1,0 +1,111 @@
+# The harness alert set: small and generic on purpose. Each rule renders a
+# `summary` with its magnitude and a `first_action`, the two annotations the
+# relay puts in a raw message and the assistant reads when it triages.
+groups:
+  - name: harness
+    rules:
+      - alert: TargetDown
+        expr: up{job!="probes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "scrape target {{ $labels.job }} ({{ $labels.instance }}) has been down for 5 minutes"
+          first_action: "docker compose ps, then docker compose logs --tail 50 on that service"
+
+      - alert: EndpointDown
+        expr: probe_success{job="probes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} has failed its HTTPS probe for 5 minutes"
+          first_action: "open it in a browser; then docker compose logs --tail 50 caddy"
+
+      - alert: DiskAlmostFull
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"}
+               / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full"
+          first_action: "docker system df; prune old images with docker image prune -a"
+
+      - alert: MemoryPressure
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "only {{ $value | humanizePercentage }} of memory is available"
+          first_action: "docker stats --no-stream to see which container holds it"
+
+      - alert: ContainerRestarting
+        expr: increase(harness_container_restarts_total[15m]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: "container {{ $labels.name }} restarted {{ $value | humanize }} times in 15 minutes"
+          first_action: "docker logs --tail 50 {{ $labels.name }}"
+
+      - alert: UnitFailed
+        expr: harness_systemd_unit_failed == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "systemd unit {{ $labels.unit }} is in the failed state"
+          first_action: "journalctl -u {{ $labels.unit }} -n 50 --no-pager"
+
+      # The collector that feeds UnitFailed and ContainerRestarting. Without
+      # this rule a dead collector reads as a box where nothing ever fails.
+      - alert: TextfileCollectorStale
+        expr: time() - harness_textfile_last_run_timestamp_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "the textfile collector last ran {{ $value | humanizeDuration }} ago"
+          first_action: "systemctl status harness-textfile.timer harness-textfile.service"
+
+      # Written by the deploy loop after every successful cycle
+      # (harness_deploy_last_success_timestamp_seconds in the textfile directory).
+      - alert: DeployLoopStale
+        expr: time() - harness_deploy_last_success_timestamp_seconds > 6 * 3600
+        for: 15m
+        labels:
+          severity: warning
+          kind: stale
+        annotations:
+          summary: "the deploy loop has not finished a cycle for {{ $value | humanizeDuration }}"
+          first_action: "journalctl -u harness-auto-deploy.service -n 50 --no-pager"
+
+      - alert: DeployLoopStale
+        expr: absent(harness_deploy_last_success_timestamp_seconds)
+        for: 6h
+        labels:
+          severity: warning
+          kind: never-reported
+        annotations:
+          summary: "the deploy loop has never reported a successful cycle"
+          first_action: "journalctl -u harness-auto-deploy.service -n 50 --no-pager"
+
+      - alert: CertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="probes"} - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "the certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          first_action: "docker compose logs caddy | grep -i acme"
+
+      - alert: CertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="probes"} - time() < 3 * 86400
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "the certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          first_action: "docker compose logs caddy | grep -i acme; check DNS still points here"

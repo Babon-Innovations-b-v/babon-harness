@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# This repository's own pre-commit checks. Git runs .claude/hooks/pre-commit,
+# which runs the torn-commit guard and then execs this file, so everything here
+# runs after that guard has passed. Two steps, in order: check that the test
+# register and the tree agree, then replay the break of every register row this
+# commit touches.
+#
+# FAILURE POLICY: fail-open on everything the hook cannot do. No repo, no
+# python3, no pytest, no register package -> that step is skipped, with one line
+# on stderr when there is something worth saying. Only a check that RAN and said
+# no exits 1.
+#
+# ENV: TORN_GUARD=0 disarms the whole pre-commit, the shared guard and every
+# step here; `git commit --no-verify` skips it entirely. Both belong to a human
+# at a terminal who can see what they are waiving, and a session reaching for
+# either is blocked by .claude/hooks/commit_guard.py.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ "${TORN_GUARD:-1}" = "0" ] && exit 0
+[ -d "$root/tools/test_register" ] || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
+
+# ── Every test in the tree has a register row ──────────────────────────────
+#
+# A test nobody registered is a test nobody knows about, and a row is one line
+# in one file, in the diff, where a person reads it. The check is stdlib and
+# system python3, a fraction of a second, and it runs on every commit rather
+# than only on one that adds a test: a row can also be broken by DELETING the
+# test it names.
+if ! register_out=$( cd "$root" && python3 -m tools.test_register \
+        --check --repo "$root" 2>&1 ); then
+    echo "" >&2
+    echo "$register_out" >&2
+    echo "" >&2
+    echo "BLOCKED: the test register and the tree disagree." >&2
+    echo "" >&2
+    echo "  python3 -m tools.test_register --new <module> --says \"<invariant>\"" >&2
+    echo "" >&2
+    echo "writes a test file and its row together, so a row cannot be forgotten." >&2
+    exit 1
+fi
+
+# ── The break of every row this commit touches still breaks it ─────────────
+#
+# A test that can never fail looks exactly like a good one. Every row carries a
+# break, an exact edit that must make its test go red, and this replays the
+# breaks of the rows this commit reaches: the test changed, or the module it
+# pins changed, or the file the break edits changed.
+#
+# Touched rather than all of them, because replaying a break runs that test
+# twice and the whole register is a second full suite. Touched rather than
+# nightly, because a finding on a timer attaches to no commit, so the eject
+# cannot hand it back and it becomes a held deploy waiting for a person.
+#
+# Only a `green` refuses: the test passed with its own break applied. `unproven`
+# (no runner on this box, an anchor that moved, a run that skipped everything)
+# is a note, never a block, the same fail-open rule as every step around it.
+changed="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
+[ -n "$changed" ] || exit 0
+
+# The runner: the uv workspace when there is one, else the system python3 when
+# it has pytest. Neither is a reason to stop a commit.
+if command -v uv >/dev/null 2>&1 && [ -f "$root/uv.lock" ] \
+        && ( cd "$root" && uv run --frozen python -c "import pytest" >/dev/null 2>&1 ); then
+    runner=(uv run --frozen python)
+elif python3 -c "import pytest" >/dev/null 2>&1; then
+    runner=(python3)
+else
+    echo "note: no python with pytest on this box, so no break was replayed" >&2
+    exit 0
+fi
+
+replay_list="$(mktemp)"
+replay_log="$(mktemp)"
+printf '%s\n' "$changed" > "$replay_list"
+# Git's own variables are stripped first: a hook's children inherit GIT_DIR,
+# which OVERRIDES cwd, so a test that builds a scratch repository in tmp_path
+# would otherwise commit into the repository being committed to.
+( cd "$root" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX \
+    -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+    -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_INDEX_VERSION \
+    "${runner[@]}" -m tools.test_register \
+    --changed-file "$replay_list" --repo "$root" ) >"$replay_log" 2>&1
+replay_verdict=$?
+rm -f "$replay_list"
+if [ "$replay_verdict" -ne 0 ]; then
+    echo "" >&2
+    cat "$replay_log" >&2
+    rm -f "$replay_log"
+    exit 1
+fi
+grep -E '^(green|unproven)' "$replay_log" >&2 || true
+rm -f "$replay_log"
+exit 0

@@ -1,0 +1,149 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "port": 18789
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "userTimezone": "@ASSISTANT_TIMEZONE@",
+      "contextInjection": "always",
+      "heartbeat": {
+        "every": "0m",
+        "target": "none"
+      },
+      "skipOptionalBootstrapFiles": [
+        "SOUL.md",
+        "USER.md",
+        "IDENTITY.md"
+      ],
+      "compaction": {
+        "keepRecentTokens": 20000,
+        "memoryFlush": {
+          "enabled": true
+        }
+      },
+      "skills": []
+    },
+    "entries": {
+      "main": {
+        "name": "@ASSISTANT_NAME@",
+        "description": "The team's assistant on Signal",
+        "identity": {
+          "name": "@ASSISTANT_NAME@",
+          "theme": "calm, plain spoken, with a stake in whether the systems stay up"
+        }
+      }
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "models": [
+          {
+            "id": "claude-opus-5",
+            "name": "Claude Opus 5",
+            "contextTokens": 100000
+          }
+        ]
+      }
+    }
+  },
+  "memory": {
+    "search": {
+      "enabled": true,
+      "provider": "none",
+      "fallback": "none"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "memory-core": {
+        "config": {
+          "dreaming": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "tools": {
+    "deny": [
+      "apply_patch",
+      "browser",
+      "terminal",
+      "canvas",
+      "nodes",
+      "automations",
+      "cron",
+      "message",
+      "conversations_list",
+      "conversations_send",
+      "conversations_turn",
+      "openclaw",
+      "gateway",
+      "agents_list",
+      "sessions_list",
+      "sessions_history",
+      "sessions_search",
+      "sessions_send",
+      "sessions_spawn",
+      "sessions_yield",
+      "subagents",
+      "skill_workshop",
+      "ask_user",
+      "computer",
+      "create_goal",
+      "get_goal",
+      "update_goal",
+      "dashboard",
+      "dir_fetch",
+      "dir_list",
+      "file_fetch",
+      "file_write",
+      "mobile_ui",
+      "node_inference",
+      "pdf",
+      "portal",
+      "progress_card",
+      "secrets",
+      "sessions",
+      "transcripts",
+      "tts",
+      "process"
+    ],
+    "media": {
+      "models": [
+        {
+          "provider": "openai",
+          "model": "Systran/faster-whisper-large-v3",
+          "capabilities": [
+            "audio"
+          ],
+          "type": "provider",
+          "baseUrl": "@ASSISTANT_TRANSCRIBE_URL@",
+          "headers": {
+            "Authorization": "${OPENCLAW_TRANSCRIBE_AUTHORIZATION}"
+          },
+          "timeoutSeconds": 300
+        }
+      ]
+    }
+  },
+  "mcp": {
+    "servers": {
+      "assistant-tools": {
+        "url": "http://assistant:8000/mcp",
+        "transport": "streamable-http",
+        "connectionTimeoutMs": 30000,
+        "headers": {
+          "Authorization": "${OPENCLAW_TOOLS_AUTHORIZATION}"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "deploy",
+    "execute-command": "{{ or (getenv \"HARNESS_ROOT\") \"/opt/harness\" }}/repo/infra/webhook/trigger-deploy.sh",
+    "command-working-directory": "{{ or (getenv \"HARNESS_ROOT\") \"/opt/harness\" }}/repo",
+    "response-message": "deploy triggered",
+    "pass-arguments-to-command": [
+      { "source": "payload", "name": "head_commit.id" },
+      { "source": "payload", "name": "pusher.name" }
+    ],
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hmac-sha256",
+            "secret": "{{ getenv \"DEPLOY_WEBHOOK_SECRET\" | js }}",
+            "parameter": { "source": "header", "name": "X-Hub-Signature-256" }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "refs/heads/main",
+            "parameter": { "source": "payload", "name": "ref" }
+          }
+        }
+      ]
+    }
+  }
+]

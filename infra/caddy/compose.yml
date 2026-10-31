@@ -1,0 +1,28 @@
+# Caddy: the HTTPS front door, the only container with public ports.
+# Included from the root docker-compose.yml. Config: infra/caddy/Caddyfile.
+
+services:
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    ports:
+      - "80:80"        # plain HTTP, redirected to HTTPS
+      - "443:443"      # HTTPS
+      - "443:443/udp"  # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in config/harness.env and the vault}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in config/harness.env and the vault}
+      WEBHOOK_PORT: ${WEBHOOK_PORT:-9000}
+    extra_hosts:
+      # Lets Caddy reach the deploy webhook, which runs on the host.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # This directory (paths in an included file are relative to it), so
+      # a pull updates the Caddyfile in place and `caddy reload` picks it up.
+      - ./:/etc/caddy:ro
+      - caddy_data:/data      # TLS certificates and ACME account: keep this volume
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

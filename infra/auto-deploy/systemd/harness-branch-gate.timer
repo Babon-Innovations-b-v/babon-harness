@@ -1,0 +1,13 @@
+# Every fifteen minutes. No Requires= on the service, for the reason
+# harness-auto-deploy.timer gives.
+[Unit]
+Description=Verify hand-back pull requests every fifteen minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Unit=harness-branch-gate.service
+
+[Install]
+WantedBy=timers.target

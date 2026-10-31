@@ -1,0 +1,66 @@
+# promtool unit tests for rules/harness.yml. Run from this directory's parent:
+#   docker run --rm -v "$PWD/prometheus:/p:ro" -w /p/tests --entrypoint promtool \
+#     prom/prometheus:v3.4.1 test rules harness.test.yml
+rule_files:
+  - ../rules/harness.yml
+
+evaluation_interval: 1m
+
+tests:
+  # The deploy loop writes its last success time; seven hours without one pages.
+  - interval: 1m
+    input_series:
+      - series: 'harness_deploy_last_success_timestamp_seconds'
+        values: '0x480'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: DeployLoopStale
+        exp_alerts: []
+      - eval_time: 7h
+        alertname: DeployLoopStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: stale
+            exp_annotations:
+              summary: "the deploy loop has not finished a cycle for 7h 0m 0s"
+              first_action: "journalctl -u harness-auto-deploy.service -n 50 --no-pager"
+
+  # 90 percent used for ten minutes pages; 80 percent never does.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{fstype="ext4",mountpoint="/"}'
+        values: '10x20'
+      - series: 'node_filesystem_size_bytes{fstype="ext4",mountpoint="/"}'
+        values: '100x20'
+      - series: 'node_filesystem_avail_bytes{fstype="ext4",mountpoint="/data"}'
+        values: '20x20'
+      - series: 'node_filesystem_size_bytes{fstype="ext4",mountpoint="/data"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: DiskAlmostFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              fstype: ext4
+              mountpoint: /
+            exp_annotations:
+              summary: "/ is 90% full"
+              first_action: "docker system df; prune old images with docker image prune -a"
+
+  # A failed harness unit pages after a minute.
+  - interval: 1m
+    input_series:
+      - series: 'harness_systemd_unit_failed{unit="harness-backup.service"}'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: UnitFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              unit: harness-backup.service
+            exp_annotations:
+              summary: "systemd unit harness-backup.service is in the failed state"
+              first_action: "journalctl -u harness-backup.service -n 50 --no-pager"

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the assistant patrol three times a day (server local time)
+
+[Timer]
+OnCalendar=*-*-* 09,13,17:00:00
+AccuracySec=1min
+Persistent=true
+Unit=harness-assistant-patrol.service
+
+[Install]
+WantedBy=timers.target

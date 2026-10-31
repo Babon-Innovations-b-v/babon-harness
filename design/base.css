@@ -1,0 +1,79 @@
+/* ============================================================================
+   ELEMENT DEFAULTS - the type scale from tokens.css applied to plain HTML,
+   plus the three utility classes worth having (.lead, .muted, .eyebrow).
+   Uses only the custom properties declared in tokens.css.
+   Import design/index.css, never this file directly.
+   ============================================================================ */
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  background: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, .h1 {
+  font-family: var(--font-heading);
+  color: var(--color-primary);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--fw-h1);
+  letter-spacing: var(--tracking-tight);
+}
+@media (min-width: 768px) {
+  h1, .h1 { font-size: var(--fs-display); line-height: var(--lh-display); }
+}
+h2, .h2 {
+  font-family: var(--font-heading);
+  color: var(--color-primary);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-h2);
+}
+h3, .h3 {
+  font-family: var(--font-heading);
+  color: var(--color-primary);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  font-weight: var(--fw-h3);
+}
+h4, .h4 {
+  font-family: var(--font-heading);
+  color: var(--color-primary);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-h4);
+  font-weight: var(--fw-h4);
+}
+
+p { color: var(--color-ink); font-size: var(--fs-body); line-height: var(--lh-body); }
+small { font-size: var(--fs-sm); line-height: var(--lh-sm); }
+
+a { color: var(--color-accent); text-decoration: none; transition: color .2s; }
+a:hover { color: var(--color-accent-dark); }
+
+code, pre { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+code {
+  background: var(--color-bg-section);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+}
+
+/* Intro paragraph, slightly larger than body text */
+.lead { font-size: var(--fs-body-lg); line-height: var(--lh-body-lg); color: var(--color-ink); }
+
+/* Secondary text: captions, timestamps, footnotes */
+.muted { color: var(--color-muted); }
+
+/* Small uppercase label above a heading or under a logo */
+.eyebrow {
+  font-family: var(--font-heading);
+  font-size: var(--fs-micro);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--color-muted);
+}

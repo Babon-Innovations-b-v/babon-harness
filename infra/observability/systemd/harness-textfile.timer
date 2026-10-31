@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the textfile collector every 60 seconds
+
+[Timer]
+OnBootSec=30s
+OnActiveSec=60s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=harness-textfile.service
+
+[Install]
+WantedBy=timers.target

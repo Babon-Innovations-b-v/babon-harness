@@ -1,0 +1,244 @@
+name: Deploy watchdog
+
+# The only workflow in this repository, and deliberately not a build.
+#
+# Every build and every test runs on the deploy server (infra/auto-deploy).
+# What GitHub does here is the one thing the server cannot do for itself:
+# notice that it has gone quiet. A gate that stops reporting looks exactly like
+# a gate that always passes, and the only thing that could say so is the
+# machine that stopped saying things.
+#
+# So this job checks out nothing, builds nothing and runs no tests. It asks the
+# GitHub API what the server has reported (the vm/* commit statuses and the
+# Deployments) and opens one tracking issue when the answer is "nothing". About
+# fifty API calls, under twenty seconds.
+#
+# It stays quiet on a quiet weekend by construction: every rule is anchored to a
+# commit that exists on main. No push, nothing to deploy, nothing to report.
+#
+# It can never close a tracking issue it did not verify: the check step writes
+# `checked=true` only after walking the whole commit table, and the close step
+# refuses to touch the issue without it. A failed API call is a red run, never
+# an all-clear.
+#
+# Scratch files are .txt, not .md: the repository's markdown guard blocks a new
+# markdown file anywhere, a shell redirect inside a workflow included.
+
+on:
+  schedule:
+    # Every two hours, off the hour: scheduled runs at :00 queue behind the rest
+    # of GitHub and can be delayed by many minutes.
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: read
+  deployments: read
+  issues: write
+
+concurrency:
+  group: deploy-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      # Keep it ten times clear of the gate's own timeout (1200 s) and shorter
+      # than a working day, so a break that starts in the morning is reported
+      # before the day ends. With a two-hour schedule the worst-case detection
+      # latency is 8h.
+      STALE_HOURS: "6"
+      # Must span more than one working day of commits; raise it on a busy
+      # repository, keep it at least 40.
+      WALK: "40"
+      TITLE: "Deploy watchdog: the server has stopped reporting deploys to GitHub"
+      # The repository owner; the issue is opened unassigned if that fails.
+      ASSIGNEE: ${{ github.repository_owner }}
+    steps:
+      - name: Ask GitHub what the deploy server has reported
+        id: check
+        run: |
+          set -uo pipefail
+          now=$(date -u +%s)
+          : > findings.txt
+          add() { printf -- '- %s\n' "$1" >> findings.txt; }
+
+          # The commit table: newest WALK commits on main plus the combined
+          # status GitHub holds for each. One call per commit. No early break,
+          # because the gate stamps HEAD only: a single commit without a vm/gate
+          # status is normal and only the whole window is evidence.
+          # `checked` is what the close step gates on, and it is written in
+          # exactly one place: the bottom of this script, after the whole commit
+          # table has been walked. An empty answer from the API (a rate limit,
+          # an expired token, an incident) is a failed run, never "zero
+          # findings".
+          commits=$(gh api "repos/$REPO/commits?sha=main&per_page=$WALK" \
+            --jq '.[] | [.sha, .commit.committer.date] | @tsv') || {
+            echo "could not read the commit table from the GitHub API, not a clean bill of health"
+            exit 1
+          }
+          mapfile -t rows <<< "$commits"
+          if [ -z "${rows[0]:-}" ]; then
+            echo "the commit table came back empty, nothing was checked"
+            exit 1
+          fi
+
+          declare -a shas ages
+          deploy_green_idx=-1
+          gate_states=""
+          newest_gate_state=""
+          stuck_pending=""
+          idx=0
+          for row in "${rows[@]}"; do
+            sha=${row%%$'\t'*}
+            when=${row#*$'\t'}
+            age_h=$(( (now - $(date -u -d "$when" +%s)) / 3600 ))
+            shas[$idx]=$sha
+            ages[$idx]=$age_h
+            statuses=$(gh api "repos/$REPO/commits/$sha/status" \
+              --jq '.statuses[] | [.context, .state, .description] | @tsv' || true)
+            while IFS=$'\t' read -r ctx state desc; do
+              [ -z "$ctx" ] && continue
+              case "$ctx" in
+                vm/deploy)
+                  if [ "$state" = "success" ] && [ "$deploy_green_idx" -lt 0 ]; then
+                    deploy_green_idx=$idx
+                  fi
+                  ;;
+                vm/gate)
+                  # A `not run:` description would be a gate that deliberately
+                  # ran no suite. It is not evidence that the gate REPORTED, so
+                  # R2 ignores it and R3 does not raise it. (The gate posts no
+                  # vm/gate at all for scope none; this keeps the rule honest if
+                  # a future version does.)
+                  case "$desc" in
+                    "not run:"*) ;;
+                    *)
+                      gate_states="$gate_states $state"
+                      [ -z "$newest_gate_state" ] && newest_gate_state="$state"
+                      ;;
+                  esac
+                  ;;
+              esac
+              if [ "$state" = "pending" ] && [ "$age_h" -ge "$STALE_HOURS" ]; then
+                stuck_pending="$stuck_pending \`$ctx\` on \`${sha:0:8}\`,"
+              fi
+            done <<< "$statuses"
+            idx=$((idx + 1))
+          done
+          oldest=$((idx - 1))
+
+          # R1, a commit is sitting on main with no deploy reported.
+          if [ "$deploy_green_idx" -lt 0 ]; then
+            if [ "${ages[$oldest]}" -ge "$STALE_HOURS" ]; then
+              add "No \`vm/deploy\` success on any of the last $idx commits, and the oldest of them is ${ages[$oldest]}h old. This is not a deploy in flight."
+            fi
+          elif [ "$deploy_green_idx" -gt 0 ]; then
+            stuck=$((deploy_green_idx - 1))
+            if [ "${ages[$stuck]}" -ge "$STALE_HOURS" ]; then
+              add "\`${shas[$stuck]:0:8}\` has been on main for ${ages[$stuck]}h with no \`vm/deploy\` success. The newest commit that did deploy is \`${shas[$deploy_green_idx]:0:8}\`."
+            fi
+          fi
+
+          # R2, the verification gate is not reporting at all. A window of
+          # nothing but `not run:` gate statuses counts as nothing: that is a
+          # selector pinned to scope `none`, and it verifies exactly as much as
+          # a gate that is switched off.
+          if [ -z "${gate_states// /}" ] && [ "$idx" -ge 5 ] && [ "${ages[$oldest]}" -ge "$STALE_HOURS" ]; then
+            add "No \`vm/gate\` status that ran on any of the last $idx commits. A gate that never reports looks exactly like a gate that always passes."
+          fi
+
+          # R3, the gate ran and could not form an opinion.
+          if [ "$newest_gate_state" = "error" ]; then
+            add "The newest \`vm/gate\` status is \`error\`: the gate could not run (an environment fault, or \`GATE_ENABLED\` is not 1). Nothing shipped for that commit: amber ships nothing. The cycle retries every two minutes, so a standing error means the server has verified nothing for as long as this status is old."
+          fi
+
+          # R4, a cycle died between its first and last report.
+          if [ -n "${stuck_pending// /}" ]; then
+            add "Commit statuses still pending after ${STALE_HOURS}h, so a deploy cycle died mid-flight: ${stuck_pending%,}"
+          fi
+
+          # R5, what the Environments view says is live.
+          environments=$(gh api "repos/$REPO/environments" --jq '.environments[].name' 2>/dev/null || true)
+          for env_name in $environments; do
+            dep=$(gh api "repos/$REPO/deployments?environment=$env_name&per_page=1" --jq '.[0].id // empty' || true)
+            [ -z "$dep" ] && continue
+            line=$(gh api "repos/$REPO/deployments/$dep/statuses?per_page=1" \
+              --jq '.[0] | select(. != null) | "\(.state)\t\(.created_at)"' || true)
+            [ -z "$line" ] && continue
+            dstate=${line%%$'\t'*}
+            dwhen=${line#*$'\t'}
+            dage_h=$(( (now - $(date -u -d "$dwhen" +%s)) / 3600 ))
+            case "$dstate" in
+              success|inactive) ;;
+              queued|in_progress|pending)
+                if [ "$dage_h" -ge 1 ]; then
+                  add "\`$env_name\` has been \`$dstate\` for ${dage_h}h; that swap never finished."
+                fi
+                ;;
+              *)
+                add "\`$env_name\` last reported \`$dstate\`, so it is not running the code the deploy server last tried to ship."
+                ;;
+            esac
+          done
+
+          count=$(grep -c '^- ' findings.txt || true)
+          echo "count=${count:-0}" >> "$GITHUB_OUTPUT"
+          # The only writer of `checked`, and the last line that can run. Reached
+          # only by walking the whole commit table and every environment.
+          echo "checked=true" >> "$GITHUB_OUTPUT"
+          echo "findings: ${count:-0}"
+          cat findings.txt
+
+      - name: Open, update or close the tracking issue
+        if: always()
+        run: |
+          set -uo pipefail
+          checked="${{ steps.check.outputs.checked }}"
+          count="${{ steps.check.outputs.count }}"
+
+          # Nothing below may run on a check that did not finish. `if: always()`
+          # means this step runs even when the one above failed, and an unset
+          # output expands to the empty string, so without this guard a failed
+          # API call would read as "zero findings" and close the tracking issue.
+          if [ "$checked" != "true" ]; then
+            echo "the check step did not complete, the tracking issue is left exactly as it is"
+            exit 1
+          fi
+
+          number=$(gh issue list --repo "$REPO" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty')
+
+          if [ "${count:-0}" -eq 0 ]; then
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --repo "$REPO" \
+                --body "The server is reporting deploys again as of $(date -u +%Y-%m-%dT%H:%M:%SZ). Closing."
+              gh issue close "$number" --repo "$REPO"
+            fi
+            exit 0
+          fi
+
+          {
+            echo "The deploy server is the only thing that deploys, and GitHub is where it reports what it did."
+            echo "This issue is opened, updated and closed by \`.github/workflows/deploy-watchdog.yml\`."
+            echo "The body is rewritten on every run; reply in a comment instead of editing it."
+            echo
+            echo "**Checked $(date -u +%Y-%m-%dT%H:%M:%SZ) over the newest $WALK commits on main, stale after ${STALE_HOURS}h.**"
+            echo
+            cat findings.txt
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > body.txt
+
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$REPO" --body-file body.txt
+          else
+            gh issue create --repo "$REPO" --title "$TITLE" --body-file body.txt --assignee "$ASSIGNEE" \
+              || gh issue create --repo "$REPO" --title "$TITLE" --body-file body.txt
+          fi
+          exit 1

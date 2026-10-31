@@ -1,0 +1,21 @@
+# The branch gate (infra/auto-deploy/branch_gate/verify_hand_backs.sh):
+# verifies the eject's hand-back pull requests and marks a green one ready.
+# Evidence is its journal: journalctl -u harness-branch-gate
+[Unit]
+Description=Verify auto-eject hand-back pull requests
+After=network-online.target
+Wants=network-online.target
+OnFailure=harness-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+User=harness
+Group=harness
+WorkingDirectory=/opt/harness/repo
+Environment=PATH=/home/harness/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/harness/repo/infra/auto-deploy/branch_gate/verify_hand_backs.sh
+TimeoutStartSec=90min
+Nice=19
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal

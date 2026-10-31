@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the assistant claim audit every Monday at 08:30 (server local time)
+
+[Timer]
+OnCalendar=Mon *-*-* 08:30:00
+AccuracySec=1min
+Persistent=true
+Unit=harness-assistant-claim-audit.service
+
+[Install]
+WantedBy=timers.target

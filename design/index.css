@@ -1,0 +1,12 @@
+/* ============================================================================
+   DESIGN SYSTEM ENTRY POINT - the ONE file every surface imports.
+   The website (apps/website/), documents (apps/documents/) and the
+   dashboards (lib/dashkit/) link THIS file only; never import tokens.css or base.css directly. That way
+   a restyle here changes everything at once.
+
+     tokens.css   colors, fonts, sizes, spacing (the values)
+     base.css     plain HTML defaults + .lead / .muted / .eyebrow (the rules)
+   ============================================================================ */
+
+@import url('tokens.css');
+@import url('base.css');

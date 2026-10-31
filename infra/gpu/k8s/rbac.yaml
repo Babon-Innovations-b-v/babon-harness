@@ -1,0 +1,51 @@
+# The dashboard's identity in the cluster: one service account that may manage
+# transcription Jobs and GPU placeholder Pods in ${GPU_NAMESPACE} and nothing
+# else. infra/gpu/make-dashboard-kubeconfig.sh mints a kubeconfig for it; that
+# kubeconfig, base64-encoded, is KUBECONFIG_B64 in the vault.
+#
+# What the dashboard does with each grant:
+#   jobs   create (dispatch), list/get (cost ceiling, recovery, dead-job watch)
+#   pods   create/delete (hold and release a GPU while a meeting records),
+#          get/list (kubectl-style inspection when something is stuck)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notulen-dashboard
+  namespace: ${GPU_NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: notulen-dashboard
+  namespace: ${GPU_NAMESPACE}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notulen-dashboard
+  namespace: ${GPU_NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: notulen-dashboard
+subjects:
+  - kind: ServiceAccount
+    name: notulen-dashboard
+    namespace: ${GPU_NAMESPACE}
+---
+# A long-lived token for the service account. Kubernetes fills it in.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notulen-dashboard-token
+  namespace: ${GPU_NAMESPACE}
+  annotations:
+    kubernetes.io/service-account.name: notulen-dashboard
+type: kubernetes.io/service-account-token

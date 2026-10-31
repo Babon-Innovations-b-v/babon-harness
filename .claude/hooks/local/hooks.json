@@ -1,0 +1,9 @@
+[
+  {"event": "SessionStart", "command": "python3 .claude/hooks/local/eject_notice.py 2>/dev/null || true", "timeout": 12},
+  {"event": "PreToolUse", "matcher": "Write|Edit", "command": "python3 .claude/hooks/local/overlay_guard.py", "timeout": 5},
+  {"event": "PreToolUse", "matcher": "Write|Edit", "command": "python3 .claude/hooks/local/bible_guard.py", "timeout": 5},
+  {"event": "PostToolUse", "matcher": "Edit|Write", "command": "python3 .claude/hooks/local/linkmap_sync.py", "timeout": 35},
+  {"event": "PostToolUse", "matcher": "Edit|Write", "command": "python3 .claude/hooks/local/diagram_watch.py", "timeout": 10},
+  {"event": "Stop", "command": "python3 .claude/hooks/local/diagram_watch.py", "timeout": 20},
+  {"event": "Stop", "command": "br=$(git symbolic-ref --short HEAD 2>/dev/null) || exit 0; [ \"$br\" = main ] || exit 0; if [ -n \"$(git status --porcelain -- .claude/memory)\" ]; then git add .claude/memory && git commit -q -m 'memory: auto-save' -- .claude/memory || exit 0; fi; git fetch -q origin main 2>/dev/null || exit 0; [ \"$(git rev-list --count main..origin/main)\" -gt 0 ] && { git rebase -q --autostash origin/main 2>/dev/null || { git rebase --abort 2>/dev/null; exit 0; }; }; [ \"$(git rev-list --count origin/main..main)\" -gt 0 ] && git push -q origin main 2>/dev/null; exit 0", "timeout": 30}
+]

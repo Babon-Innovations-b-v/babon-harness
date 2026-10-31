@@ -1,0 +1,42 @@
+{
+  "_comment": [
+    "The assistant's scheduled reports, declared so a rebuilt box gets them back.",
+    "",
+    "The @...@ words are filled by `fragment.render_automations()` from the",
+    "owner's settings: the name, the time zone and the two report times.",
+    "",
+    "NEITHER REPORT IS DELIVERED BY THE GATEWAY. `--no-deliver` is passed and the",
+    "ask names `message_teammate`, so the report leaves through our own tool,",
+    "where the word cap is a number in code. Upstream's `announce` would post the",
+    "model's final text straight to the phone with nothing of ours in the path.",
+    "",
+    "THE ASK ASKS FOR LESS, WHICH IS NOT THE SAME AS ASKING FOR IT SHORTER. An",
+    "instruction to be brief does not make a survey short; the ask names only",
+    "what needs the reader, and a quiet day is one line.",
+    "",
+    "The gateway keeps jobs in its own store rather than in openclaw.json, so no",
+    "config fragment can carry them; `declarationKey` is upstream's idempotent",
+    "identity, which is what makes re-declaring safe on every deploy.",
+    "`workspace/apply.sh` applies this file."
+  ],
+  "automations": [
+    {
+      "declarationKey": "harness:morning-brief",
+      "name": "harness-morning-brief",
+      "displayName": "Morning brief",
+      "description": "Weekday brief for the owner",
+      "cron": "@BRIEF_CRON@",
+      "tz": "@ASSISTANT_TIMEZONE@",
+      "message": "Check the systems, the board, your worklist and today's calendar with your tools, then send @OWNER_NAME@ the result with message_teammate. Tell them only what they have to act on today: today's meetings, anything that broke and is still broken, and every page my_actions shows as held or dropped overnight, one short line each with its subject exactly as shown and its local time (a held page you do not name is sent to them separately). Name every card my_actions shows as closed but still muting, with what it silenced. Anything still broken stays in, one short line each ('still down: X, since <time>'), however often you have told them: a fault is not old news until it is fixed. A worklist item for them goes in unless they were told it before and it has not moved: each worklist line says when they were last told in a send, and only that line counts, never a note. A call link you made that has no calendar event is one short question: has a time been set? If none of this applies, send exactly 'Nothing needs you today.' Never call anything clear, fine, back or steady, and leave out what you checked, what someone else is doing, and repeats of anything that is not broken. If something you told them earlier has turned out wrong (a commit, a reading or a note since says a different cause or outcome), say so in one line. Pass worklist_items for every worklist item the message is about. Nobody asked for this run: every write it makes, the message included, takes requested_by \"@ASSISTANT_NAME@\"."
+    },
+    {
+      "declarationKey": "harness:weekly-advisor",
+      "name": "harness-weekly-advisor",
+      "displayName": "Weekly advisor",
+      "description": "Monday look around the systems and the backlog",
+      "cron": "@ADVISOR_CRON@",
+      "tz": "@ASSISTANT_TIMEZONE@",
+      "message": "Look around the systems and the backlog. If one thing is worth @OWNER_NAME@'s attention this week, send it to them with message_teammate. If nothing is, send them one line saying the week looks clear. Do not list what you looked at. Pass worklist_items for every worklist item the message is about. Nobody asked for this run: every write it makes, the message included, takes requested_by \"@ASSISTANT_NAME@\"."
+    }
+  ]
+}

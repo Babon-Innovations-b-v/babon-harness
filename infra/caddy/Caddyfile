@@ -1,0 +1,147 @@
+# Caddyfile: the front door of the harness.
+#
+# Caddy terminates HTTPS for every host below and forwards each request
+# to the right container on the docker network. Certificates come from
+# Let's Encrypt automatically: point DNS for the domain and every
+# subdomain below at the server and there is nothing else to configure.
+#
+# {$DOMAIN}, {$ACME_EMAIL} and {$WEBHOOK_PORT} are filled in from the
+# environment compose hands Caddy (infra/caddy/compose.yml), which comes
+# from the vault cache at $HARNESS_ROOT/harness.env.
+{
+	email {$ACME_EMAIL}
+}
+
+# One login for every private subdomain.
+#
+# Caddy asks oauth2-proxy in a subrequest whether the browser carries a
+# valid login cookie. A 202 lets the request through and copies the
+# signed-in identity into Remote-User and Remote-Email, which is what
+# dashkit's get_user reads. A 401 becomes a redirect to /oauth2/start,
+# which sends the browser to Nextcloud to log in and back again.
+#
+# The cookie is set on .{$DOMAIN}, so one login on any subdomain unlocks
+# all of them. Each SSO-gated site must also proxy /oauth2/* straight to
+# oauth2-proxy (outside this snippet) so the callback can land.
+(oauth2_auth) {
+	# Never trust an identity the client sent itself. request_header runs
+	# before forward_auth, so only oauth2-proxy's answer survives.
+	request_header -Remote-User
+	request_header -Remote-Email
+
+	forward_auth oauth2-proxy:4180 {
+		uri /oauth2/auth
+		copy_headers X-Auth-Request-User>Remote-User X-Auth-Request-Email>Remote-Email
+
+		@auth_denied status 401
+		handle_response @auth_denied {
+			redir https://{host}/oauth2/start?rd={scheme}://{host}{uri} 302
+		}
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
+
+# Public website.
+{$DOMAIN} {
+	reverse_proxy website:80
+	import security_headers
+}
+
+# Nextcloud: files, calendars, contacts, and the identity provider every
+# other subdomain logs in through. It brings its own login screen (with
+# two-factor), so Caddy only passes traffic through.
+cloud.{$DOMAIN} {
+	# Calendar and contacts apps discover the server through these. Answer
+	# at the edge with the https target: Nextcloud's own redirect, behind
+	# TLS-terminating Caddy, points at plain http, which Apple rejects.
+	redir /.well-known/caldav https://cloud.{$DOMAIN}/remote.php/dav/ 301
+	redir /.well-known/carddav https://cloud.{$DOMAIN}/remote.php/dav/ 301
+
+	reverse_proxy nextcloud:80 {
+		# Nextcloud issues its two session cookies without a lifetime, so a
+		# browser restart drops them and forces a racy remember-me restore
+		# that can fail ("Token does not exist"). Stamping Max-Age to match
+		# the 7-day session_lifetime (infra/nextcloud/session-lifetime-assert.sh)
+		# keeps the session across a restart. Only a non-empty value matches,
+		# so the logout clear still expires the cookie. This must be
+		# header_down inside reverse_proxy: a site-level header block runs
+		# before the upstream Set-Cookie exists and silently does nothing.
+		header_down Set-Cookie "^(oc[a-z0-9]+=[^;]+)" "${1}; Max-Age=604800"
+		header_down Set-Cookie "^(oc_sessionPassphrase=[^;]+)" "${1}; Max-Age=604800"
+	}
+
+	import security_headers
+	header {
+		# A cached login page carries a stale CSRF token and produces
+		# "session token expired" on the first login attempt.
+		Cache-Control "no-cache, no-store, must-revalidate"
+	}
+}
+
+# oauth2-proxy's own host: sign-in and sign-out pages, reachable directly.
+auth.{$DOMAIN} {
+	reverse_proxy oauth2-proxy:4180
+	import security_headers
+}
+
+# Notulen: the meeting-minutes dashboard. Behind the single sign-on.
+notulen.{$DOMAIN} {
+	@oauth2_path path /oauth2/*
+	handle @oauth2_path {
+		reverse_proxy oauth2-proxy:4180
+	}
+
+	# Liveness probe: answers a boolean only, no data, so it skips the login.
+	@healthz path /healthz
+	handle @healthz {
+		reverse_proxy notulen:8000
+	}
+
+	# Nextcloud Talk posts call events here so calls can be recorded. The
+	# app checks the Talk HMAC signature itself; a login redirect would
+	# break the bot, so this path skips the SSO gate.
+	@talkbot path /api/talk/webhook
+	handle @talkbot {
+		reverse_proxy notulen:8000
+	}
+
+	# Internal endpoints (sync heartbeats) are for the docker network and
+	# the host only, never the internet.
+	@internal path /api/internal/*
+	handle @internal {
+		respond 404
+	}
+
+	handle {
+		import oauth2_auth
+		reverse_proxy notulen:8000
+	}
+
+	import security_headers
+	header {
+		Cache-Control "no-cache, no-store, must-revalidate"
+	}
+}
+
+# Deploy webhook. GitHub POSTs push events to /hooks/<id>, and the
+# webhook service on the host (infra/webhook) starts a deploy cycle. NOT
+# behind the single sign-on, and it must not be: GitHub cannot answer a
+# login redirect, so the HMAC-SHA256 signature against
+# DEPLOY_WEBHOOK_SECRET, checked by the webhook service, is the real auth.
+# Everything else on this host is 404.
+deploy.{$DOMAIN} {
+	@hooks path /hooks/*
+	handle @hooks {
+		reverse_proxy host.docker.internal:{$WEBHOOK_PORT:9000}
+	}
+	handle {
+		respond 404
+	}
+}

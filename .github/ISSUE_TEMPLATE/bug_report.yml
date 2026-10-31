@@ -1,0 +1,104 @@
+name: Bug report
+description: Something in the harness does not work, or the documentation says something the code does not do.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project is a reference implementation, published as-is under the
+        MIT licence: reports are read, but there is no promise of a fix.
+
+        **Found a security problem?** Do not file it here. Report it privately
+        through this repository's Security tab, "Report a vulnerability".
+
+        The first three questions are the ones that make a report usable.
+        Without them, most setup failures are indistinguishable from each other.
+
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version
+      description: Run `claude --version` and paste the output.
+      placeholder: "2.0.14 (Claude Code)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      description: Where you run Claude Code, not the server it builds.
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows with WSL2 (Ubuntu)
+        - Ubuntu or Debian Linux
+        - Another Linux distribution
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: setup-phase
+    attributes:
+      label: How far did you get
+      description: >
+        The onboarding phases from .claude/skills/onboard/phases.md. Pick the
+        last one that finished, not the one that failed.
+      options:
+        - Did not start setup yet
+        - Phase 0, explain the plan
+        - Phase 1, laptop tools and GitHub
+        - Phase 2, Scaleway CLI and API key
+        - Phase 3, settings file and the vault
+        - Phase 4, create the server
+        - Phase 5, DNS
+        - Phase 6, deploy the stack
+        - Phase 7, Nextcloud accounts, 2FA and the single sign-on
+        - Phase 8, Notulen
+        - Phase 9, the assistant
+        - Phase 10, fast transcription (GPU)
+        - Phase 11, finish
+        - Past setup, the harness is running
+        - Not a setup problem
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: trigger
+    attributes:
+      label: What you asked Claude, or the command you ran
+      description: The exact sentence or command, copied rather than remembered.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or error
+      description: >
+        Paste the relevant part. Remove API keys, tokens, passwords, phone
+        numbers, your server's IP address and your domain first; they are not needed to
+        reproduce anything.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed every key, token, password and personal detail from what I pasted.
+          required: true
+        - label: This is not a security vulnerability (those are reported privately).
+          required: true

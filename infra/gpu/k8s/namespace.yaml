@@ -1,0 +1,9 @@
+# The namespace every notulen GPU object lives in: the transcription Jobs, the
+# GPU placeholder Pods, the worker Secret and ConfigMap, and the dashboard's
+# service account. ${GPU_NAMESPACE} is filled in by infra/gpu/apply.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${GPU_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: harness

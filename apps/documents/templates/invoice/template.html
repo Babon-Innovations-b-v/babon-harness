@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+{{ design_style }}
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 18mm 22mm;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-ink);
+    background: var(--color-paper);
+    font-size: 10pt;
+    line-height: 1.5;
+  }
+
+  /* Header: identity left, company block right */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .logo { max-height: 16mm; max-width: 60mm; }
+  .wordmark {
+    font-family: var(--font-heading);
+    font-size: 21pt;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--color-primary);
+    line-height: 1.1;
+  }
+  .tagline {
+    font-size: 8.5pt;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    margin-top: 2pt;
+  }
+  .company-block {
+    text-align: right;
+    font-size: 8pt;
+    color: var(--color-muted);
+    line-height: 1.65;
+  }
+
+  .rule {
+    border: none;
+    border-top: 2px solid var(--color-accent);
+    margin: 6mm 0 9mm;
+  }
+
+  h1 {
+    font-family: var(--font-heading);
+    font-size: 23pt;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: 8mm;
+  }
+
+  /* Invoice meta and bill-to, side by side */
+  .parties {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10mm;
+  }
+  .block-label {
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    margin-bottom: 2mm;
+  }
+  .bill-to { line-height: 1.6; }
+  .bill-to .name { font-weight: 700; color: var(--color-primary); }
+  .meta { text-align: right; }
+  .meta .row { margin-bottom: 1.2mm; }
+  .meta .label { color: var(--color-muted); padding-right: 5mm; }
+  .meta .value { font-weight: 700; color: var(--color-primary); }
+
+  /* Line items */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  thead tr { background: var(--color-primary); border-radius: var(--radius); }
+  thead th {
+    color: var(--color-paper);
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: left;
+    padding: calc(var(--space) * 0.75) var(--space);
+  }
+  tbody td {
+    padding: var(--space);
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+  }
+  .num { text-align: right; white-space: nowrap; }
+  .item-title { font-weight: 700; color: var(--color-primary); }
+  .item-details { color: var(--color-muted); font-size: 9pt; margin-top: 1mm; }
+
+  /* Totals */
+  .totals td {
+    padding: calc(var(--space) * 0.6) var(--space);
+    border: none;
+  }
+  .totals .spacer { border: none; }
+  .totals .lbl { text-align: right; color: var(--color-muted); }
+  .totals .amt { text-align: right; white-space: nowrap; }
+  .totals .subtotal td { border-top: 1px solid var(--color-line); }
+  .totals .grand td {
+    border-top: 2px solid var(--color-accent);
+    font-weight: 700;
+    font-size: 12pt;
+    color: var(--color-primary);
+    padding-top: calc(var(--space) * 0.9);
+  }
+
+  .payment {
+    margin-top: 10mm;
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+  .notes { margin-top: 3mm; }
+
+  .footer {
+    margin-top: 12mm;
+    padding-top: 4mm;
+    border-top: 1px solid var(--color-line);
+    font-size: 8pt;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }
+  .footer b { color: var(--color-primary); }
+</style>
+</head>
+<body>
+
+{% set currency = data.get("currency", "€") %}
+{% set vat_percent = data.get("vat_percent", 21) %}
+{% set totals = namespace(subtotal=0.0) %}
+{% for item in data.line_items %}
+  {% set totals.subtotal = totals.subtotal + item.qty * item.unit_price %}
+{% endfor %}
+{% set subtotal = totals.subtotal | round(2) %}
+{% set vat = (subtotal * vat_percent / 100) | round(2) %}
+{% set total = (subtotal + vat) | round(2) %}
+
+<div class="header">
+  <div>
+    {% if company.logo %}
+      <img class="logo" src="{{ company.logo }}" alt="{{ company.name }}">
+    {% else %}
+      <div class="wordmark">{{ company.name }}</div>
+      {% if company.tagline %}<div class="tagline">{{ company.tagline }}</div>{% endif %}
+    {% endif %}
+  </div>
+  <div class="company-block">
+    {# Every line degrades gracefully: empty fields drop out, no dangling separators. #}
+    {% set place_line = [company.address, (company.postal_code ~ " " ~ company.city) | trim, company.country] | select | list %}
+    {% set contact_line = [company.email, company.phone, company.website] | select | list %}
+    {% set reg_line = [
+      ((labels.registration | default("Reg. no.")) ~ " " ~ company.registration_number) if company.registration_number else None,
+      ((labels.vat_number | default("VAT")) ~ " " ~ company.vat_number) if company.vat_number else None,
+    ] | select | list %}
+    {% if company.name %}<div>{{ company.name }}{% if company.legal_form %} {{ company.legal_form }}{% endif %}</div>{% endif %}
+    {% if place_line %}<div>{{ place_line | join(", ") }}</div>{% endif %}
+    {% if contact_line %}<div>{{ contact_line | join(" | ") }}</div>{% endif %}
+    {% if reg_line %}<div>{{ reg_line | join(" | ") }}</div>{% endif %}
+  </div>
+</div>
+<hr class="rule">
+
+<h1>{{ labels.invoice | default("Invoice") }}</h1>
+
+<div class="parties">
+  <div class="bill-to">
+    <div class="block-label">{{ labels.bill_to | default("Bill to") }}</div>
+    <div class="name">{{ data.customer.name }}</div>
+    {% if data.customer.contact %}{{ data.customer.contact }}<br>{% endif %}
+    {{ data.customer.address }}<br>
+    {{ data.customer.postal_code }} {{ data.customer.city }}{% if data.customer.country %}<br>{{ data.customer.country }}{% endif %}
+  </div>
+  <div class="meta">
+    <div class="row"><span class="label">{{ labels.invoice_number | default("Invoice number") }}</span><span class="value">{{ data.invoice_number }}</span></div>
+    <div class="row"><span class="label">{{ labels.date | default("Invoice date") }}</span><span class="value">{{ data.date }}</span></div>
+    {% if data.due_date %}<div class="row"><span class="label">{{ labels.due_date | default("Due date") }}</span><span class="value">{{ data.due_date }}</span></div>{% endif %}
+    {% if data.reference %}<div class="row"><span class="label">{{ labels.reference | default("Reference") }}</span><span class="value">{{ data.reference }}</span></div>{% endif %}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 55%">{{ labels.description | default("Description") }}</th>
+      <th class="num">{{ labels.qty | default("Qty") }}</th>
+      <th class="num">{{ labels.unit_price | default("Unit price") }}</th>
+      <th class="num">{{ labels.amount | default("Amount") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in data.line_items %}
+    <tr>
+      <td>
+        <div class="item-title">{{ item.description }}</div>
+        {% if item.details %}<div class="item-details">{{ item.details }}</div>{% endif %}
+      </td>
+      <td class="num">{{ item.qty }}</td>
+      <td class="num">{{ currency }} {{ item.unit_price | money }}</td>
+      <td class="num">{{ currency }} {{ (item.qty * item.unit_price) | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tbody class="totals">
+    <tr class="subtotal">
+      <td class="spacer" colspan="2"></td>
+      <td class="lbl">{{ labels.subtotal | default("Subtotal") }}</td>
+      <td class="amt">{{ currency }} {{ subtotal | money }}</td>
+    </tr>
+    <tr>
+      <td class="spacer" colspan="2"></td>
+      <td class="lbl">{{ labels.vat | default("VAT") }} {{ vat_percent }}%</td>
+      <td class="amt">{{ currency }} {{ vat | money }}</td>
+    </tr>
+    <tr class="grand">
+      <td class="spacer" colspan="2"></td>
+      <td class="lbl">{{ labels.total | default("Total") }}</td>
+      <td class="amt">{{ currency }} {{ total | money }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{% if data.payment_terms %}<div class="payment">{{ data.payment_terms }}</div>{% endif %}
+{% if data.notes %}<div class="notes">{{ data.notes }}</div>{% endif %}
+
+<div class="footer">
+  {% if company.iban %}
+  <b>{{ labels.payment_details | default("Payment details") }}:</b>
+  {{ labels.iban | default("IBAN") }} {{ company.iban }}{% if company.bank_name %} ({{ company.bank_name }}){% endif %}{% if company.name %},
+  {{ labels.in_name_of | default("in the name of") }} {{ company.name }}{% if company.legal_form %} {{ company.legal_form }}{% endif %}{% endif %}<br>
+  {% endif %}
+  {{ labels.quote_invoice_number | default("Please quote the invoice number with your payment.") }}
+</div>
+
+</body>
+</html>

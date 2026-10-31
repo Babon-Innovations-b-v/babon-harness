@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Signal send canary every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnActiveSec=30min
+OnUnitActiveSec=30min
+AccuracySec=5s
+Unit=harness-signal-send-canary.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Signal send canary: the bot sends one message to itself and records when that last worked.
+After=network-online.target docker.service
+Wants=network-online.target
+OnFailure=harness-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/harness/repo
+EnvironmentFile=-/opt/harness/harness.env
+ExecStart=/usr/bin/python3 -m infra.observability.alerts.signal_send_canary
+TimeoutStartSec=120
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/harness
+NoNewPrivileges=yes

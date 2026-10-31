@@ -1,0 +1,12 @@
+# Blackbox exporter modules. One module: an HTTPS GET that must end in a 2xx
+# after redirects. A login page behind single sign-on answers 2xx at the end of
+# its redirect, so it counts as up; a 5xx, a TLS error or a timeout does not.
+modules:
+  https_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      fail_if_not_ssl: true

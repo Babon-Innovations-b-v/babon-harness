@@ -1,0 +1,30 @@
+# Company profile, filled by onboarding from your answers or from documents
+# you put in business/. Every surface that needs a company detail (invoice
+# footer, website contact block, letter header) reads it from here, so a
+# typo is only ever fixed once.
+#
+# Leave a field empty ("") if it does not apply to you yet.
+
+name: ""                 # official company name, as registered
+tagline: ""              # one short line under the name
+legal_form: ""           # e.g. sole proprietorship, LLC, B.V., GmbH
+address: ""              # street and number
+postal_code: ""
+city: ""
+country: ""
+email: ""                # the address customers should reach you on
+phone: ""                # include the country code
+website: ""              # full URL, e.g. https://example.com
+registration_number: ""  # chamber-of-commerce style id
+vat_number: ""           # VAT or tax id, shown on invoices
+iban: ""                 # bank account customers pay into
+bank_name: ""
+director: ""             # name that signs letters and invoices
+
+logo: ""                 # optional: path to your logo under design/, e.g. design/logo.png
+
+# Brand colors. These mirror --color-primary and --color-accent in
+# design/tokens.css; onboarding keeps both in sync. Change one, change both.
+colors:
+  primary: ""            # e.g. "#232a33"
+  accent: ""             # e.g. "#4a708c"

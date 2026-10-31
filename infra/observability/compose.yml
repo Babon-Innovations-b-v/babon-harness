@@ -1,0 +1,105 @@
+# Observability stack, pulled into the root docker-compose.yml with `include`.
+# Paths are relative to this directory. Values come from the vault-pulled env
+# file the deploy passes to compose ($HARNESS_ROOT/harness.env).
+#
+# Published ports are loopback only; nothing here faces the internet. The
+# host-side deadmen use 9094 (Alertmanager) and 9095 (relay). To look at
+# Prometheus from a laptop: ssh -L 9090:127.0.0.1:9090 <server>.
+
+services:
+  probe-targets:
+    image: python:3.12-slim
+    restart: "no"
+    working_dir: /app
+    command: ["python", "-m", "infra.observability.probes.render_targets"]
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set}
+      PROBE_SUBDOMAINS: ${PROBE_SUBDOMAINS:-@,cloud,notulen}
+      PROBE_TARGETS_FILE: /targets/probes.json
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./:/app/infra/observability:ro
+      - probe-targets:/targets
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    restart: unless-stopped
+    depends_on:
+      probe-targets:
+        condition: service_completed_successfully
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - probe-targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9094:9093"
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile
+    volumes:
+      - /:/host:ro,rslave
+      - /var/lib/harness/textfile:/textfile:ro
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    restart: unless-stopped
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+  alert-relay:
+    image: python:3.12-slim
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "-m", "infra.observability.alert_relay.app"]
+    environment:
+      ASSISTANT_URL: http://assistant:${OPENCLAW_PORT:-8000}
+      OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET:-}
+      SIGNAL_CLI_URL: http://signal-cli:8080
+      SIGNAL_BOT_NUMBER: ${SIGNAL_BOT_NUMBER:-}
+      SIGNAL_RECIPIENT: ${SIGNAL_RECIPIENT:-}
+      SIGNAL_ALLOWLIST: ${SIGNAL_ALLOWLIST:-}
+      SCW_REGION: ${SCW_REGION:-fr-par}
+      HARNESS_STATE_DIR: /var/lib/harness
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./:/app/infra/observability:ro
+      # The deadman flag lives here; without this mount the raw safety net
+      # can never engage (the relay logs that, loudly).
+      - /var/lib/harness:/var/lib/harness:ro
+    ports:
+      - "127.0.0.1:9095:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  probe-targets:
+  prometheus-data:
+  alertmanager-data:

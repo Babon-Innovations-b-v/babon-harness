@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dashkit"
+version = "0.1.0"
+description = "Shared FastAPI library for the harness dashboards: app factory, SSO user, database, activity log, sync heartbeat, AI-call accounting."
+readme = "CLAUDE.md"
+requires-python = ">=3.12"
+license = "MIT"
+# Only what dashkit itself imports. Per-dashboard extras (boto3,
+# kubernetes, ...) stay with each dashboard.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "psycopg[binary]>=3.2",
+    "anthropic>=0.92",
+    "pydantic>=2.7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.setuptools]
+# Single top-level package: the `dashkit/` directory itself.
+packages = [
+    "dashkit",
+    "dashkit.ai",
+    "dashkit.core",
+    "dashkit.core.audit",
+    "dashkit.core.sync",
+]
+package-dir = {"dashkit" = "."}
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Ship the static frontend (api.js, base.css, ...) with the Python code
+# so installing the package is enough.
+dashkit = ["frontend/*"]

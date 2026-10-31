@@ -1,0 +1,56 @@
+# The notulen dashboard, included from the root docker-compose.yml. Paths in
+# an included file resolve from this file's directory, so the build context
+# climbs back to the repository root. Caddy proxies notulen.$DOMAIN to
+# notulen:8000 behind the single sign-on (oauth2-proxy), which sets the
+# Remote-User and Remote-Email headers this app reads.
+#
+# Every value comes from the vault cache ($HARNESS_ROOT/harness.env), which
+# the deploy cycle passes to compose as its env file. Only the keys this app
+# reads are passed into the container.
+services:
+  notulen:
+    build:
+      context: ../..
+      dockerfile: apps/notulen/Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER in the vault}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the vault}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in the vault}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in the vault}
+      # Recordings: any S3-compatible store. fr-par is only the default.
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-fr-par}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in the vault}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in the vault}
+      # Where the minutes are committed: a fine-grained token with contents
+      # write on NOTULEN_TARGET_REPO and nothing else.
+      NOTULEN_TARGET_REPO: ${NOTULEN_TARGET_REPO:?set NOTULEN_TARGET_REPO (owner/name)}
+      NOTULEN_TARGET_PATH: ${NOTULEN_TARGET_PATH:-business/minutes}
+      GITHUB_NOTULEN_PAT: ${GITHUB_NOTULEN_PAT:-}
+      NOTULEN_ATTENDEES: ${NOTULEN_ATTENDEES:-}
+      NOTULEN_LANGUAGE: ${NOTULEN_LANGUAGE:-}
+      # Pages and the send-to-assistant button go to the assistant's door.
+      OPENCLAW_NOTIFY_URL: ${OPENCLAW_NOTIFY_URL:-}
+      OPENCLAW_WEBHOOK_SECRET: ${OPENCLAW_WEBHOOK_SECRET:-}
+      # The optional GPU tier. With GPU_ENABLED=0 everything runs on this
+      # container's CPU.
+      GPU_ENABLED: ${GPU_ENABLED:-0}
+      GPU_NAMESPACE: ${GPU_NAMESPACE:-notulen}
+      GPU_POOL: ${GPU_POOL:-notulen-gpu}
+      NOTULEN_WORKER_IMAGE: ${NOTULEN_WORKER_IMAGE:-}
+      KUBECONFIG_B64: ${KUBECONFIG_B64:-}
+    volumes:
+      # Live recording sessions are appended here chunk by chunk; a volume
+      # keeps them across a redeploy.
+      - notulen_sessions:/tmp/notulen
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  notulen_sessions:

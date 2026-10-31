@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the assistant chat relay every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=10s
+Unit=harness-assistant-chat-relay.service
+
+[Install]
+WantedBy=timers.target

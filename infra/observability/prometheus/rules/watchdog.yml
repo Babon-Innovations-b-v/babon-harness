@@ -1,0 +1,13 @@
+# The always-firing heartbeat. Alertmanager sends it nowhere; the dead-man's
+# switch (alerts/dead_mans_switch.py) reads it from Alertmanager's API and
+# pages straight through signal-cli when it has been unseen for an hour.
+groups:
+  - name: watchdog
+    interval: 30s
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: info
+        annotations:
+          summary: "alerting pipeline heartbeat"

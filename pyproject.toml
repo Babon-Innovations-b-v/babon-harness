@@ -1,0 +1,63 @@
+[project]
+name = "harness"
+version = "0"
+description = "Workspace root. Members own their own dependencies; this file lists them and pins what the apps imported from the repository root need."
+requires-python = ">=3.12"
+# apps/assistant and apps/notulen are not installed packages: they are
+# imported as `apps.<name>.*` from the repository root (uvicorn, pytest and
+# the door all put the root on sys.path), so their third-party dependencies
+# live here.
+dependencies = [
+    "dashkit",
+    "documents",
+    "gpu-jobs",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "anthropic>=0.92",
+    "kubernetes>=29",
+    # The assistant's ops-database reads use psycopg2; dashkit and notulen
+    # use psycopg 3. Both are declared until one of them moves.
+    "psycopg2-binary>=2.9",
+    "psycopg[binary]>=3.2",
+    "boto3>=1.34",
+    "python-multipart>=0.0.9",
+    "requests>=2.32",
+]
+
+[project.optional-dependencies]
+# CPU transcription for notulen. Heavy (ctranslate2 and model tooling), and
+# imported lazily, so the base install stays lean: `uv sync --extra whisper`.
+whisper = ["faster-whisper>=1.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "pypdf>=4",
+    "pyyaml>=6",
+]
+# The MCP servers: the diagram server (.mcp.json) and the assistant's agenda
+# server. mcp 2.x renamed FastMCP, so both stay on 1.x until they are ported.
+mcp-tools = [
+    "mcp>=1.26,<2",
+    "caldav>=1.3",
+    "icalendar>=6.0",
+]
+
+[tool.uv]
+# The root is a workspace anchor, not an installable package.
+package = false
+
+[tool.uv.workspace]
+members = ["lib/dashkit", "apps/documents", "infra/gpu-jobs"]
+
+[tool.uv.sources]
+dashkit = { workspace = true }
+documents = { workspace = true }
+gpu-jobs = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = [".", "lib", "apps", "infra/gpu-jobs"]
+testpaths = [".claude", "docs", "tools", "lib", "apps", "infra"]
+norecursedirs = [".git", ".claude/worktrees", "node_modules", "__pycache__", ".venv"]

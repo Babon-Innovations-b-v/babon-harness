@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# The git pre-push hook, found here because core.hooksPath points at
+# .claude/hooks. It holds no check of its own: it hands git's arguments and the
+# push lines on stdin to .claude/hooks/local/pre-push when this checkout has
+# one, and lets the push go when it does not. A local pre-push may be kept out
+# of the repository (git-ignored), so each person can carry their own guard.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+local_hook="$root/.claude/hooks/local/pre-push"
+if [ -x "$local_hook" ]; then
+    exec "$local_hook" "$@"
+elif [ -e "$local_hook" ]; then
+    echo "note: $local_hook is not executable, so it did not run" >&2
+fi
+exit 0

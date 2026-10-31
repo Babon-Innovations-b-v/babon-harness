@@ -1,0 +1,34 @@
+# One deploy cycle (infra/auto-deploy/auto-deploy.sh). Started by
+# harness-auto-deploy.timer every two minutes and by the push webhook on every
+# push; safe to start by hand: sudo systemctl start harness-auto-deploy.service
+#
+# Paths and the user are written for HARNESS_ROOT=/opt/harness and the user
+# `harness`; install.sh and step 80 rewrite both for the box they run on.
+[Unit]
+Description=Deploy origin/main when it changes (gate, build, boot, bookmark)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+OnFailure=harness-notify-failure@%n.service
+# A backstop against a trigger loop, far above any real push rate. Tripping it
+# refuses every start, the timer's included, until:
+#   sudo systemctl reset-failed harness-auto-deploy.service
+StartLimitIntervalSec=1h
+StartLimitBurst=600
+
+[Service]
+Type=oneshot
+User=harness
+Group=harness
+WorkingDirectory=/opt/harness/repo
+Environment=PATH=/home/harness/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/harness/repo/infra/auto-deploy/auto-deploy.sh
+# A backstop against a hang, not a budget: well above the slowest healthy cycle.
+TimeoutStartSec=60min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# The priority of the placeholder Pod that holds a notulen GPU while a meeting
+# is still recording (infra/gpu-jobs/gpu_jobs/creators/warm_notulen_gpu.py).
+# Below the default 0, so the notulen Job preempts it; at or above the cluster
+# autoscaler's expendable_pods_priority_cutoff of -10, so the autoscaler still
+# brings up a node for it. Never preempts anything itself. Cluster-scoped.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: notulen-gpu-warmup
+value: -5
+globalDefault: false
+preemptionPolicy: Never
+description: "Placeholder holding a notulen GPU during a recording; the notulen Job takes its place."

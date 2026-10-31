@@ -1,0 +1,43 @@
+# Alertmanager for the harness. Every alert goes to the alert-relay, which hands
+# it to the assistant (or, while the assistant deadman flag is fresh, sends it
+# straight to Signal). The relay holds the assistant's bearer, so this file
+# carries no secret.
+#
+# Severity only sets how often a still-firing group is repeated. It never
+# decides whether something reaches a phone: every route ends at the relay.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'cluster']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: alert-relay
+  routes:
+    # The always-firing heartbeat. The dead-man's switch reads it from the API;
+    # nobody should be paged by it.
+    - matchers:
+        - alertname = Watchdog
+      receiver: null-receiver
+      group_wait: 0s
+      group_interval: 1h
+      repeat_interval: 8760h
+    - matchers:
+        - severity = critical
+      receiver: alert-relay
+      repeat_interval: 1h
+    - matchers:
+        - severity = warning
+      receiver: alert-relay
+      repeat_interval: 4h
+
+receivers:
+  - name: alert-relay
+    webhook_configs:
+      - url: http://alert-relay:8000/alerts
+        send_resolved: true
+  # Black hole for the Watchdog: no webhook, no page.
+  - name: null-receiver
+

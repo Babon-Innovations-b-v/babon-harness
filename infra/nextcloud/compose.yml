@@ -1,0 +1,130 @@
+# Postgres, Nextcloud and the single sign-on in front of every private
+# subdomain. Included from the root docker-compose.yml.
+#
+# Nextcloud is the identity provider: accounts are made there, with a
+# password and a second factor. oauth2-proxy turns a Nextcloud login into
+# a cookie on .$DOMAIN that Caddy's (oauth2_auth) snippet checks. Paths
+# below are relative to this directory.
+
+services:
+  # One database server for Nextcloud and the stack. POSTGRES_DB is
+  # created by the image on first boot; postgres-init.sh adds Nextcloud's
+  # own database and user right after.
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      # Loopback only by default: the other containers reach it by the
+      # service name "postgres", the host on 127.0.0.1, nothing else. Docker
+      # inserts published ports AHEAD of ufw/iptables rules, so a host
+      # firewall added later does not close a wider bind again. Set
+      # POSTGRES_BIND_ADDRESS=0.0.0.0 only when GPU workers off this
+      # machine must write back, and know the password is then the only
+      # guard on port 5432.
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in the vault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the vault}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in the vault}
+      NEXTCLOUD_DB_NAME: ${NEXTCLOUD_DB_NAME:?set NEXTCLOUD_DB_NAME in the vault}
+      NEXTCLOUD_DB_USER: ${NEXTCLOUD_DB_USER:?set NEXTCLOUD_DB_USER in the vault}
+      NEXTCLOUD_DB_PASSWORD: ${NEXTCLOUD_DB_PASSWORD:?set NEXTCLOUD_DB_PASSWORD in the vault}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-nextcloud-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Files, calendars, contacts, and the login every other subdomain uses.
+  # Upstream image, unmodified (AGPL). First boot installs itself with the
+  # NEXTCLOUD_ADMIN_* account. Move the pin one major version at a time.
+  nextcloud:
+    image: nextcloud:34.0.5-apache
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:?set NEXTCLOUD_ADMIN_USER in the vault}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?set NEXTCLOUD_ADMIN_PASSWORD in the vault}
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${DOMAIN:?set DOMAIN}
+      # It sits behind Caddy; tell it what the outside world sees.
+      OVERWRITEHOST: cloud.${DOMAIN}
+      OVERWRITEPROTOCOL: https
+      OVERWRITECLIURL: https://cloud.${DOMAIN}
+      TRUSTED_PROXIES: 172.16.0.0/12  # the docker networks Caddy lives on
+      APACHE_DISABLE_REWRITE_IP: 1
+    volumes:
+      - nextcloud_data:/var/www/html   # all files and config: keep this volume
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Same image, running Nextcloud's cron.php every 5 minutes instead of a
+  # web server. Without it background jobs (calendar reminders, cleanup,
+  # previews) never run. This replaces a host systemd timer; there is none.
+  nextcloud-cron:
+    image: nextcloud:34.0.5-apache
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    volumes:
+      - nextcloud_data:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nextcloud:
+        condition: service_started
+
+  # The single sign-on. Caddy asks it /oauth2/auth on every request to a
+  # private subdomain; it answers 202 with the user in X-Auth-Request-*
+  # headers, or 401, and runs the login round trip to Nextcloud.
+  #
+  # Settings that infra/nextcloud/session-lifetime-assert.sh checks are
+  # command-line flags so `docker inspect` can see them; secrets stay in
+  # the environment, out of the process arguments.
+  #
+  # Cookie: 8 hours, no refresh. The Nextcloud oidc app hands out no
+  # refresh token, so a refresh attempt ends the session. Expiring after
+  # 8 hours sends the browser back through Nextcloud, whose own 7-day
+  # session signs the person straight back in without a password, while
+  # re-checking that the account still exists and is enabled. Do not
+  # lengthen the cookie to save a redirect: a revoked account would keep
+  # opening the dashboards for as long as it lives.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=oidc
+      - --provider-display-name=Nextcloud
+      - --oidc-issuer-url=https://cloud.${DOMAIN}
+      - --scope=openid profile email
+      - --email-domain=*
+      - --upstream=static://202
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --skip-provider-button=true
+      - --cookie-domain=.${DOMAIN}
+      - --whitelist-domain=.${DOMAIN}
+      - --cookie-secure=true
+      - --cookie-expire=8h
+      - --cookie-refresh=0s
+    environment:
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set OAUTH2_PROXY_COOKIE_SECRET in the vault}
+    extra_hosts:
+      # Discovery and token calls go to cloud.$DOMAIN. This keeps them on
+      # the server instead of out over the internet and back.
+      - "cloud.${DOMAIN}:host-gateway"
+    depends_on:
+      nextcloud:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  nextcloud_data:

@@ -1,0 +1,12 @@
+# Nightly at 02:40 server time. No Requires= on the service, for the reason
+# harness-auto-deploy.timer gives.
+[Unit]
+Description=Nightly unselected gate audit
+
+[Timer]
+OnCalendar=*-*-* 02:40:00
+Persistent=true
+Unit=harness-gate-audit.service
+
+[Install]
+WantedBy=timers.target

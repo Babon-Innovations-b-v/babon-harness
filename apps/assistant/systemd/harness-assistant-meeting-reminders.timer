@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for meetings about to start every 5 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=20s
+Unit=harness-assistant-meeting-reminders.service
+
+[Install]
+WantedBy=timers.target

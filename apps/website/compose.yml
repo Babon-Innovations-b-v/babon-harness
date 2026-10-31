@@ -1,0 +1,15 @@
+# The public website, included from the root docker-compose.yml. Paths in an
+# included file resolve from this file's directory, so the build context
+# climbs back to the repository root, where the Dockerfile can reach both
+# apps/website/ and design/. Caddy proxies the bare domain to website:80.
+services:
+  website:
+    build:
+      context: ../..
+      dockerfile: apps/website/Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

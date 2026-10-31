@@ -1,0 +1,15 @@
+# Started by OnFailure=harness-notify-failure@%n.service on every harness unit.
+# %i is the failed unit. Runs as root so journalctl can read system units.
+# The env file is optional (the dash): a pager that cannot start because a file
+# is missing is worse than one that starts and logs that it could not send.
+[Unit]
+Description=Page the owner that %i failed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/harness/repo
+EnvironmentFile=-/opt/harness/harness.env
+ExecStart=/usr/bin/python3 -m infra.observability.alerts.systemd_failure_notify %i
+TimeoutStartSec=120
