@@ -2,7 +2,7 @@
 
 The setup Babon Innovations runs its company on: a Claude Code harness, and an optional self-hosted stack on one server. MIT.
 
-You make the decisions. The agent plans with you before it builds, hooks stop its known mistakes, and an index answers its questions about the code.
+You make the decisions. The agent plans with you before it builds, hooks stop its known mistakes, and an index answers its questions.
 
 <a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html">
   <picture>
