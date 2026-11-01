@@ -11,6 +11,8 @@ You make the decisions. The agent plans with you before it builds, hooks stop it
   </picture>
 </a>
 
+**[Open the full interactive loop](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html)**: step through it with the arrow keys; click a box for what it does and the bible section that explains it.
+
 ## Contents
 
 | Path | What it is |
@@ -27,6 +29,8 @@ You make the decisions. The agent plans with you before it builds, hooks stop it
     <img alt="The stack: one server behind Caddy with Nextcloud, the website, notulen, the assistant, Talk, Prometheus and auto-deploy; a media box, object storage, the vault and an optional GPU tier beside it" src="docs/diagrams/images/stack-light.png">
   </picture>
 </a>
+
+**[Open the full interactive stack](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html)**: every part, with its explanation.
 
 ## Requirements
 
