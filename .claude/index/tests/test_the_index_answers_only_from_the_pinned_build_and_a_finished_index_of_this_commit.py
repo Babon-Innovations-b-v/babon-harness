@@ -5,6 +5,9 @@ edges, put back after a rebuild drops them, and when gh cannot answer the reply 
 tests drive `cbm_issues.answer` and the server with a stand-in `gh` on PATH and a scratch index in the tool's own
 schema; the issue numbers, titles and states they expect are the stand-in's, never read from the code under test.
 
+A published index is fetched through a stand-in `gh` serving one labelled asset, into a scratch git repository; the
+cleanup runs against a scratch cache holding tree indexes, binary versions and leftovers of known ages.
+
 Driven as its callers drive it: `cbm_pin.verified` with fake binaries whose sha256 this test computes itself,
 `cbm_index.ready` and `cbm_index.build` against a scratch git repository and a scratch cache (`CBM_CACHE_DIR`), with
 the tool's indexer replaced by a stand-in that writes a `nodes` table, and the MCP server's `respond` with JSON-RPC
@@ -31,6 +34,12 @@ The break that turns each test red (applied once each, seen red, reverted):
   `cbm_issues.gh_unready`, `if done.returncode != 0:` made `if done.returncode == 0:`.
 - test_only_a_question_that_names_issues_waits_on_github: in `server.answer`, `if cbm_issues.names_issues(tool,
   given) else ""` made `if True else ""` (every question pays for a gh call).
+- test_a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_own: in
+  `cbm_fetch.rename_project`, `if qualified:` made `if False:` (qualified names keep the publisher's prefix).
+- test_a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not_installed: in
+  `cbm_fetch._check_offer`, `if not head or not is_ancestor(shared, commit, head):` made `if not head:`.
+- test_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_files: in `cbm_clean._trees`,
+  `if gone or now - _newest(directory, live) > IDLE_DAYS * 86400:` made `if gone:` (an idle tree is kept).
 """
 from __future__ import annotations
 
@@ -39,14 +48,18 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+import cbm_clean  # noqa: E402
+import cbm_fetch  # noqa: E402
 import cbm_index  # noqa: E402
 import cbm_issues  # noqa: E402
 import cbm_pin  # noqa: E402
@@ -312,3 +325,156 @@ def test_only_a_question_that_names_issues_waits_on_github(monkeypatch: pytest.M
     assert "[index] rows live" in server._as_text(asked)
     code = server.answer("query_graph", {"query": "MATCH (f:Function) RETURN f.name"})
     assert "issues" not in code and calls == ["p"]
+
+
+def _published(tmp_path: pathlib.Path, project: str, head: str) -> pathlib.Path:
+    """An index in the tool's schema built as `project` for `head`, the file a publisher uploads."""
+    database = tmp_path / "published.db"
+    database.unlink(missing_ok=True)
+    connection = sqlite3.connect(database)
+    connection.executescript("""
+        CREATE TABLE projects (name TEXT PRIMARY KEY, indexed_at TEXT, root_path TEXT);
+        CREATE TABLE nodes (id INTEGER PRIMARY KEY, project TEXT, label TEXT, name TEXT, qualified_name TEXT);
+        CREATE INDEX idx_nodes_qn ON nodes(project, qualified_name);
+        CREATE TABLE store_meta (k TEXT PRIMARY KEY, v TEXT);
+    """)
+    connection.execute("INSERT INTO projects VALUES (?, '', '/elsewhere/repo')", (project,))
+    connection.execute("INSERT INTO nodes VALUES (1, ?, 'Function', 'f', ?)", (project, f"{project}.a.f"))
+    connection.execute("INSERT INTO store_meta VALUES (?, '1')", (f"fp:{project}",))
+    connection.commit()
+    connection.close()
+    cbm_index.write_stamp(database, project, head)
+    return database
+
+
+@pytest.fixture
+def release(repo: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    """A stand-in gh serving one release asset labelled with a commit; returns a setter for that commit."""
+    served = tmp_path / "served"
+    served.mkdir()
+    label = tmp_path / "label"
+    bin_dir = tmp_path / "ghbin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(f"""#!{sys.executable}
+import json, shutil, sys
+arguments = sys.argv[1:]
+if arguments[:2] == ["release", "view"]:
+    print(json.dumps({{"assets": [{{"name": "i.db.zst", "label": open({str(label)!r}).read()}}]}}))
+elif arguments[:2] == ["release", "download"]:
+    shutil.copy({str(served / "i.db.zst")!r}, arguments[arguments.index("-D") + 1])
+else:
+    sys.exit(1)
+""")
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    # The asset is served uncompressed; what is under test is what is installed, not the codec.
+    monkeypatch.setattr(cbm_fetch, "unzstd", lambda source, into: shutil.copy(source, into))
+
+    def publish(head: str) -> None:
+        shutil.copy(_published(tmp_path, "elsewhere-repo", head), served / "i.db.zst")
+        label.write_text(head)
+    return publish
+
+
+def test_a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_own(
+        repo: pathlib.Path, release) -> None:
+    """Published for an ancestor of HEAD: placed under this checkout's project, prefix and root, its commit kept."""
+    first = _git(repo, "rev-parse", "HEAD")
+    (repo / "b.py").write_text("y = 2\n")
+    _git(repo, "add", "b.py")
+    _git(repo, "commit", "-q", "-m", "two")
+    release(first)
+    got = cbm_fetch.fetch(repo, slug="o/r", tag="t", asset="i.db.zst")
+    project = cbm_index.project_name(repo)
+    assert got["head"] == first and got["behind"] == 1 and got["project"] == project
+    database = pathlib.Path(got["path"])
+    assert cbm_index.stamp_of(database, project) == first
+    connection = sqlite3.connect(database)
+    assert connection.execute("SELECT project, qualified_name FROM nodes").fetchall() == [
+        (project, f"{project}.a.f")]
+    assert connection.execute("SELECT root_path FROM projects").fetchall() == [(str(repo),)]
+    assert connection.execute("SELECT k FROM store_meta").fetchall() == [(f"fp:{project}",)]
+    connection.close()
+
+
+def test_a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not_installed(
+        repo: pathlib.Path, release) -> None:
+    """A commit not in this history, or one no newer than the index here, places nothing."""
+    release("0" * 40)
+    with pytest.raises(cbm_fetch.FetchError, match="not HEAD or an ancestor"):
+        cbm_fetch.fetch(repo, slug="o/r", tag="t", asset="i.db.zst")
+    assert not (cbm_index.cache_dir() / f"{cbm_index.project_name(repo)}.db").exists()
+
+    first = _git(repo, "rev-parse", "HEAD")
+    release(first)
+    cbm_fetch.fetch(repo, slug="o/r", tag="t", asset="i.db.zst")
+    (repo / "b.py").write_text("y = 2\n")
+    _git(repo, "add", "b.py")
+    _git(repo, "commit", "-q", "-m", "two")
+    with pytest.raises(cbm_fetch.FetchError, match="as new as"):
+        cbm_fetch.fetch(repo, slug="o/r", tag="t", asset="i.db.zst")
+
+
+def test_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_files(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gone or idle trees, unpinned versions, dead builds' leftovers and a log's head go; the live and the pinned stay."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setenv("CBM_CACHE_DIR", str(tmp_path / "codebase-memory-mcp"))
+    cache, trees = tmp_path / "codebase-memory-mcp", tmp_path / "codebase-memory-mcp-trees"
+    cache.mkdir()
+    now = time.time()
+    old = now - 4 * 86400
+    dead_pid = 2 ** 22 + 7  # above Linux's pid_max default, so never a live process
+
+    def tree(name: str, root: pathlib.Path, when: float) -> pathlib.Path:
+        directory = trees / name
+        directory.mkdir(parents=True)
+        (directory / "meta.json").write_text(json.dumps({"root": str(root)}))
+        (cache / f"{name}.db").write_bytes(b"x" * 10)
+        for path in (directory / "meta.json", directory, cache / f"{name}.db"):
+            os.utime(path, (when, when))
+        return directory
+
+    gone = tree("gone-tree", tmp_path / "removed-worktree", now)
+    idle = tree("idle-tree", tmp_path, old)
+    kept = tree("kept-tree", tmp_path, now)
+    pinned = cbm_pin.read()["CBM_VERSION"]
+    for version in (pinned, "v0.0.1"):
+        (tmp_path / "harness/cbm" / version).mkdir(parents=True)
+        (tmp_path / "harness/cbm" / version / "codebase-memory-mcp").write_bytes(b"b" * 100)
+    legacy = tmp_path / "legacy/cbm/v0.0.2"
+    legacy.mkdir(parents=True)
+    leftovers = [tmp_path / f".cbm-build.p.{dead_pid}", kept / f".work.{dead_pid}",
+                 cache / ".p.build.lock"]
+    leftovers[0].mkdir()
+    leftovers[1].mkdir()
+    leftovers[2].write_text("")
+    young = tmp_path / f".cbm-fetch.p.{dead_pid + 1}"
+    young.mkdir()
+    for path in leftovers:
+        os.utime(path, (now - 7200, now - 7200))
+    log = cache / "gaps.jsonl"
+    log.write_text("".join(f'{{"n": {number}, "padding": "{"x" * 80}"}}\n' for number in range(30)))
+
+    removed = {path for path, _ in cbm_clean.sweep(now, older_roots=(tmp_path / "legacy/cbm",),
+                                                   capped=((log, 10),))}
+    assert [json.loads(line)["n"] for line in log.read_text().splitlines()] == list(range(20, 30))
+    for path in (gone, idle, cache / "gone-tree.db", cache / "idle-tree.db",
+                 tmp_path / "harness/cbm/v0.0.1", legacy, *leftovers):
+        assert str(path) in removed and not path.exists(), path
+    for path in (kept, cache / "kept-tree.db", tmp_path / "harness/cbm" / pinned, young):
+        assert path.exists(), path
+
+
+def test_a_checkout_whose_project_json_names_no_repository_uses_its_github_origin(tmp_path: pathlib.Path) -> None:
+    """A fresh copy of a template has an empty `repo`; its GitHub origin names the repository instead."""
+    import cbm_issues
+    root = tmp_path / "copy"
+    (root / ".claude").mkdir(parents=True)
+    (root / ".claude/project.json").write_text(json.dumps({"repo": ""}))
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "remote", "add", "origin", "git@github.com:someone/my-company.git"], check=True)
+    assert cbm_issues.repository(root) == "someone/my-company"
+    (root / ".claude/project.json").write_text(json.dumps({"repo": "o/r"}))
+    assert cbm_issues.repository(root) == "o/r"
