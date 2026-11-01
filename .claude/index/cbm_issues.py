@@ -117,13 +117,30 @@ _CHANGED_QUERY = _ISSUES_QUERY.replace("STATES", "OPEN, CLOSED")
 
 
 def repository(root: pathlib.Path) -> str:
-    """``owner/name`` from the ``repo`` key of ``.claude/project.json``, or empty."""
+    """``owner/name``: the ``repo`` key of ``.claude/project.json``, else the GitHub ``origin`` remote, or empty."""
     try:
         named = json.loads((pathlib.Path(root) / ".claude/project.json")
                            .read_text(encoding="utf-8")).get("repo")
     except (OSError, ValueError, AttributeError):
+        named = None
+    if isinstance(named, str) and "/" in named:
+        return named.strip()
+    return _origin_repository(root)
+
+
+#: ``owner/name`` out of an https or ssh GitHub remote URL.
+_GITHUB_REMOTE = re.compile(r"github\.com[:/]+([^/\s]+/[^/\s]+?)(?:\.git)?/?$")
+
+
+def _origin_repository(root: pathlib.Path) -> str:
+    """``owner/name`` of the checkout's ``origin`` remote when it is on GitHub, or empty."""
+    try:
+        url = subprocess.run(["git", "-C", str(root), "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
         return ""
-    return named.strip() if isinstance(named, str) and "/" in named else ""
+    found = _GITHUB_REMOTE.search(url)
+    return found.group(1) if found else ""
 
 
 def cache_beside(database: pathlib.Path) -> pathlib.Path:
@@ -330,7 +347,7 @@ def refresh(cache: pathlib.Path, repo: str, *, refresh_command: str = REFRESH,
         Whether a fetch landed, and one line saying what happened. Never raises.
     """
     if not repo:
-        cause = "no repository is named in .claude/project.json, so no GitHub issues are loaded"
+        cause = "no GitHub repository is named in .claude/project.json or found as the origin remote, so no GitHub issues are loaded"
         _note(cache, cause, 'set "repo": "<owner>/<name>" in .claude/project.json')
         return False, cause
     if max_age is not None and seconds_since_attempt(cache) < max_age:
@@ -375,7 +392,7 @@ def sync(cache: pathlib.Path | None, repo: str, *, timeout: float = SYNC_TIMEOUT
     since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(last - SYNC_OVERLAP))
     if not repo:
         return {"synced": False, "fetched": [], "say": _stale_line(
-            last, "no repository is named in .claude/project.json",
+            last, "no GitHub repository is named in .claude/project.json or found as the origin remote",
             'set "repo": "<owner>/<name>" in .claude/project.json, then ask again')}
     try:
         if shutil.which("gh", path=_gh_environment()["PATH"]) is None:
