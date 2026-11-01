@@ -60,7 +60,7 @@
   [
    "spark",
    "dump",
-   "nothing has to be broken",
+   "",
    {
     "variant": "emphasis"
    }

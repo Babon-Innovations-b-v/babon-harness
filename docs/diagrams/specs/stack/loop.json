@@ -18,7 +18,7 @@
    "label": "A new idea",
    "sublabel": "or change what runs",
    "note": "A turn starts because someone wants something that is not there yet, or wants what already runs changed. Nothing has to be broken, and no ticket exists first: the issue is written later in the turn.",
-   "bible": "Nothing has to be broken and no ticket exists first: the issue is written later in the turn."
+   "bible": "No ticket exists first: the issue is written later in the turn."
   },
   "dump": {
    "type": "external",
@@ -125,7 +125,7 @@
  },
  "slides": [
   {
-   "label": "It starts with one messy prompt, and nothing has to be broken first",
+   "label": "It starts with one messy prompt",
    "add": [
     "spark",
     "dump",

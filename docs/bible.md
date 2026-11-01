@@ -470,7 +470,7 @@ to-prd, code, close.
 | A person using it | what they found by hand |
 | A page from the assistant | the watch, no person |
 
-Nothing has to be broken and no ticket exists first: the issue is written later in the turn.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=spark) All
+No ticket exists first: the issue is written later in the turn.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=spark) All
 three arrive as one messy prompt: pasted conversations, screenshots, links.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=dump) A page of thinking
 rather than a task goes to `/brain-dump`, which sorts it into claims, questions, decisions and
 vision. An effort too big and too foggy for one session goes to `/wayfinder`, which charts it as

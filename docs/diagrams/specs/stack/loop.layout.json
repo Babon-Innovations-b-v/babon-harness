@@ -22,7 +22,7 @@
   {"label": "After the push", "wraps": ["live", "check", "watch"]}
  ],
  "edges": [
-  ["spark", "dump", "nothing has to be broken", {"variant": "emphasis", "fromSide": "right", "toSide": "top", "via": [[425, 231]], "labelAt": [345, 218]}],
+  ["spark", "dump", "", {"variant": "emphasis", "fromSide": "right", "toSide": "top", "via": [[425, 231]]}],
   ["dump", "orient", "", {"fromSide": "right", "toSide": "bottom", "via": [[555, 431], [555, 246], [685, 246]]}],
   ["orient", "decision", "one question at a time"],
   ["decision", "capture", "written the moment it settles"],

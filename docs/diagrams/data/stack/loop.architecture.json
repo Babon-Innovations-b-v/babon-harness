@@ -218,7 +218,6 @@
    "id": "spark-dump",
    "from": "spark",
    "to": "dump",
-   "label": "nothing has to be broken",
    "variant": "emphasis",
    "fromSide": "right",
    "toSide": "top",
@@ -227,10 +226,6 @@
      425,
      231
     ]
-   ],
-   "labelAt": [
-    345,
-    276
    ]
   },
   {

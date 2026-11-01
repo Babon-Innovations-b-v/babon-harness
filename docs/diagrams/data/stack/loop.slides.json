@@ -1,7 +1,7 @@
 {
  "steps": [
   {
-   "label": "It starts with one messy prompt, and nothing has to be broken first",
+   "label": "It starts with one messy prompt",
    "add": [
     "spark",
     "dump",
