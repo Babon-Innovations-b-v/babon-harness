@@ -1,0 +1,400 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "The stack",
+  "subtitle": "One server behind one front door, a few rented pieces beside it, and the laptop where every change starts. Push to main is the deploy.",
+  "visual_preset": "editorial",
+  "quality_profile": "standard",
+  "viewBox": [
+   1340,
+   880
+  ],
+  "legend": {
+   "mode": "auto",
+   "entries": {
+    "external": {
+     "label": "People and outside services"
+    },
+    "frontend": {
+     "label": "Public"
+    },
+    "backend": {
+     "label": "The apps and the deploy loop"
+    },
+    "security": {
+     "label": "The front door and the login"
+    },
+    "messagebus": {
+     "label": "The watch"
+    },
+    "database": {
+     "label": "Kept on Scaleway"
+    },
+    "cloud": {
+     "label": "Rented only while used"
+    },
+    "edge-default": {
+     "label": "A request"
+    },
+    "edge-emphasis": {
+     "label": "A change on its way to production"
+    },
+    "edge-dashed": {
+     "label": "Periodic or optional"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "people",
+   "type": "external",
+   "label": "People",
+   "sublabel": "browser and Signal",
+   "pos": [
+    60,
+    260
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "laptop",
+   "type": "external",
+   "label": "Your laptop",
+   "sublabel": "Claude Code + harness",
+   "pos": [
+    60,
+    540
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "github",
+   "type": "external",
+   "label": "GitHub",
+   "sublabel": "main, issues, board",
+   "pos": [
+    60,
+    680
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "caddy",
+   "type": "security",
+   "label": "Caddy",
+   "sublabel": "the only public door",
+   "pos": [
+    320,
+    260
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "website",
+   "type": "frontend",
+   "label": "website",
+   "sublabel": "the bare domain",
+   "pos": [
+    580,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "sso",
+   "type": "security",
+   "label": "Nextcloud",
+   "sublabel": "accounts and one login",
+   "pos": [
+    580,
+    260
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "notulen",
+   "type": "backend",
+   "label": "notulen",
+   "sublabel": "meetings in, minutes out",
+   "pos": [
+    580,
+    400
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "assistant",
+   "type": "backend",
+   "label": "The assistant",
+   "sublabel": "OpenClaw on Signal",
+   "pos": [
+    840,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "observability",
+   "type": "messagebus",
+   "label": "Prometheus",
+   "sublabel": "alerts and deadmen",
+   "pos": [
+    840,
+    260
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "deploy",
+   "type": "backend",
+   "label": "auto-deploy",
+   "sublabel": "tests, then ships",
+   "pos": [
+    840,
+    680
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "storage",
+   "type": "database",
+   "label": "Object storage",
+   "sublabel": "meeting audio",
+   "pos": [
+    1110,
+    400
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "gpu",
+   "type": "cloud",
+   "label": "GPU tier",
+   "sublabel": "optional, Kubernetes",
+   "pos": [
+    1110,
+    540
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "vault",
+   "type": "database",
+   "label": "The vault",
+   "sublabel": "Secret Manager",
+   "pos": [
+    1110,
+    680
+   ],
+   "size": [
+    150,
+    62
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "people-caddy",
+   "from": "people",
+   "to": "caddy",
+   "label": "HTTPS",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "people-assistant",
+   "from": "people",
+   "to": "assistant",
+   "label": "Signal, both ways",
+   "fromSide": "left",
+   "toSide": "top",
+   "via": [
+    [
+     12,
+     291
+    ],
+    [
+     12,
+     70
+    ],
+    [
+     915,
+     70
+    ]
+   ],
+   "labelAt": [
+    520,
+    58
+   ]
+  },
+  {
+   "id": "caddy-website",
+   "from": "caddy",
+   "to": "website",
+   "label": "public",
+   "fromSide": "top",
+   "toSide": "left",
+   "via": [
+    [
+     395.0,
+     151.0
+    ]
+   ]
+  },
+  {
+   "id": "caddy-sso",
+   "from": "caddy",
+   "to": "sso",
+   "label": "logged in?",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "caddy-notulen",
+   "from": "caddy",
+   "to": "notulen",
+   "label": "after login",
+   "fromSide": "bottom",
+   "toSide": "left",
+   "via": [
+    [
+     395.0,
+     431.0
+    ]
+   ]
+  },
+  {
+   "id": "observability-assistant",
+   "from": "observability",
+   "to": "assistant",
+   "label": "alerts",
+   "fromSide": "top",
+   "toSide": "bottom"
+  },
+  {
+   "id": "notulen-storage",
+   "from": "notulen",
+   "to": "storage",
+   "label": "audio",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "notulen-gpu",
+   "from": "notulen",
+   "to": "gpu",
+   "label": "a Job",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "left",
+   "via": [
+    [
+     655.0,
+     571.0
+    ]
+   ]
+  },
+  {
+   "id": "laptop-github",
+   "from": "laptop",
+   "to": "github",
+   "label": "push to main",
+   "variant": "emphasis",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    135,
+    616
+   ]
+  },
+  {
+   "id": "github-deploy",
+   "from": "github",
+   "to": "deploy",
+   "label": "webhook",
+   "variant": "emphasis",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "deploy-vault",
+   "from": "deploy",
+   "to": "vault",
+   "label": "every cycle",
+   "variant": "dashed",
+   "fromSide": "right",
+   "toSide": "left"
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "Outside the server",
+   "wraps": [
+    "people",
+    "laptop",
+    "github"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "One server, behind Caddy",
+   "wraps": [
+    "caddy",
+    "website",
+    "sso",
+    "notulen",
+    "assistant",
+    "observability",
+    "deploy"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "Rented beside it",
+   "wraps": [
+    "storage",
+    "gpu",
+    "vault"
+   ]
+  }
+ ]
+}

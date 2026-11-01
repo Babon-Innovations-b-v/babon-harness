@@ -1,0 +1,36 @@
+{
+ "assistant": [
+  "apps/assistant"
+ ],
+ "caddy": [
+  "infra/caddy"
+ ],
+ "deploy": [
+  "infra/auto-deploy",
+  "infra/webhook"
+ ],
+ "gpu": [
+  "infra/gpu",
+  "infra/gpu-jobs"
+ ],
+ "laptop": [
+  ".claude/skills",
+  ".claude/hooks"
+ ],
+ "notulen": [
+  "apps/notulen"
+ ],
+ "observability": [
+  "infra/observability"
+ ],
+ "sso": [
+  "infra/nextcloud"
+ ],
+ "vault": [
+  "infra/secrets"
+ ],
+ "website": [
+  "apps/website",
+  "design"
+ ]
+}

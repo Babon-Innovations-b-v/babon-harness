@@ -1,0 +1,74 @@
+{
+ "steps": [
+  {
+   "label": "People reach it two ways: a browser through Caddy, and Signal to the assistant",
+   "add": [
+    "people",
+    "caddy",
+    "assistant",
+    "people-caddy",
+    "people-assistant"
+   ]
+  },
+  {
+   "label": "Caddy is the only public door, and one Nextcloud login opens every private name",
+   "add": [
+    "website",
+    "sso",
+    "notulen",
+    "caddy-website",
+    "caddy-sso",
+    "caddy-notulen"
+   ]
+  },
+  {
+   "label": "Notulen keeps its audio in object storage and can borrow a GPU while it transcribes",
+   "add": [
+    "storage",
+    "gpu",
+    "notulen-storage",
+    "notulen-gpu"
+   ]
+  },
+  {
+   "label": "Prometheus watches all of it and hands every alert to the assistant",
+   "add": [
+    "observability",
+    "observability-assistant"
+   ]
+  },
+  {
+   "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
+   "add": [
+    "laptop",
+    "github",
+    "deploy",
+    "vault",
+    "laptop-github",
+    "github-deploy",
+    "deploy-vault"
+   ]
+  }
+ ],
+ "regions": [
+  [
+   "people",
+   "laptop",
+   "github"
+  ],
+  [
+   "caddy",
+   "website",
+   "sso",
+   "notulen",
+   "assistant",
+   "observability",
+   "deploy"
+  ],
+  [
+   "storage",
+   "gpu",
+   "vault"
+  ]
+ ]
+}

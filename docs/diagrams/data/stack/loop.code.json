@@ -1,0 +1,21 @@
+{
+ "board": [
+  ".claude/skills/to-prd"
+ ],
+ "capture": [
+  "CONTEXT.md"
+ ],
+ "live": [
+  "infra/auto-deploy"
+ ],
+ "orient": [
+  ".claude/skills/grill"
+ ],
+ "verify": [
+  ".claude/hooks/pre-commit",
+  ".claude/hooks/local/pre-commit"
+ ],
+ "watch": [
+  "apps/assistant"
+ ]
+}

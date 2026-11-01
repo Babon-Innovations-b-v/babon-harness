@@ -1,0 +1,547 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "The conversation loop",
+  "subtitle": "One task is one conversation. Three things can start it and all three arrive at the same door, the turn runs clockwise from the dump, and the quiet lines across the middle are what building, testing and writing send back into the turn.",
+  "visual_preset": "editorial",
+  "quality_profile": "standard",
+  "viewBox": [
+   2060,
+   980
+  ],
+  "legend": {
+   "mode": "auto",
+   "entries": {
+    "external": {
+     "label": "The person"
+    },
+    "backend": {
+     "label": "The assistant"
+    },
+    "database": {
+     "label": "The repository"
+    },
+    "security": {
+     "label": "The nets"
+    },
+    "cloud": {
+     "label": "Live"
+    },
+    "messagebus": {
+     "label": "The watch"
+    },
+    "edge-default": {
+     "label": "One turn, clockwise"
+    },
+    "edge-emphasis": {
+     "label": "Three ways a turn starts"
+    },
+    "edge-dashed": {
+     "label": "What the turn sends back into itself"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "spark",
+   "type": "external",
+   "label": "A new idea",
+   "sublabel": "or change what runs",
+   "pos": [
+    140,
+    200
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "dump",
+   "type": "external",
+   "label": "The dump",
+   "sublabel": "one messy prompt",
+   "pos": [
+    350,
+    400
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "orient",
+   "type": "backend",
+   "label": "Read first",
+   "sublabel": "before it answers",
+   "pos": [
+    610,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "decision",
+   "type": "external",
+   "label": "Decisions",
+   "sublabel": "judgment, never facts",
+   "pos": [
+    880,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "capture",
+   "type": "database",
+   "label": "Written down",
+   "sublabel": "glossary, ADR, bible",
+   "pos": [
+    1150,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "board",
+   "type": "database",
+   "label": "The board",
+   "sublabel": "plans become issues",
+   "pos": [
+    1420,
+    120
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "build",
+   "type": "backend",
+   "label": "Build",
+   "sublabel": "straight on main",
+   "pos": [
+    1420,
+    310
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "deleted",
+   "type": "database",
+   "label": "Delete the old",
+   "sublabel": "a step, not cleanup",
+   "pos": [
+    1420,
+    500
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "verify",
+   "type": "security",
+   "label": "Test",
+   "sublabel": "every net at once",
+   "pos": [
+    1420,
+    690
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "live",
+   "type": "cloud",
+   "label": "Ship it",
+   "sublabel": "push is the deploy",
+   "pos": [
+    1080,
+    690
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "check",
+   "type": "external",
+   "label": "Try it by hand",
+   "sublabel": "the last net is a person",
+   "pos": [
+    740,
+    690
+   ],
+   "size": [
+    150,
+    62
+   ]
+  },
+  {
+   "id": "watch",
+   "type": "messagebus",
+   "label": "The assistant",
+   "sublabel": "watches production",
+   "pos": [
+    350,
+    690
+   ],
+   "size": [
+    150,
+    62
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "spark-dump",
+   "from": "spark",
+   "to": "dump",
+   "label": "nothing has to be broken",
+   "variant": "emphasis",
+   "fromSide": "right",
+   "toSide": "top",
+   "via": [
+    [
+     425,
+     231
+    ]
+   ],
+   "labelAt": [
+    345,
+    276
+   ]
+  },
+  {
+   "id": "dump-orient",
+   "from": "dump",
+   "to": "orient",
+   "fromSide": "right",
+   "toSide": "bottom",
+   "via": [
+    [
+     555,
+     431
+    ],
+    [
+     555,
+     246
+    ],
+    [
+     685,
+     246
+    ]
+   ]
+  },
+  {
+   "id": "orient-decision",
+   "from": "orient",
+   "to": "decision",
+   "label": "one question at a time",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "decision-capture",
+   "from": "decision",
+   "to": "capture",
+   "label": "written the moment it settles",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    1090,
+    196
+   ]
+  },
+  {
+   "id": "capture-board",
+   "from": "capture",
+   "to": "board",
+   "label": "the plan leaves the chat",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    1360,
+    196
+   ]
+  },
+  {
+   "id": "board-build",
+   "from": "board",
+   "to": "build",
+   "label": "one issue at a time",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    1495,
+    196
+   ]
+  },
+  {
+   "id": "build-deleted",
+   "from": "build",
+   "to": "deleted",
+   "label": "the old version, same commit",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    1495,
+    386
+   ]
+  },
+  {
+   "id": "deleted-verify",
+   "from": "deleted",
+   "to": "verify",
+   "label": "what is left gets proved",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    1495,
+    576
+   ]
+  },
+  {
+   "id": "verify-live",
+   "from": "verify",
+   "to": "live",
+   "label": "green, and the push is the deploy",
+   "fromSide": "left",
+   "toSide": "right"
+  },
+  {
+   "id": "live-check",
+   "from": "live",
+   "to": "check",
+   "label": "the person opens it",
+   "fromSide": "left",
+   "toSide": "right"
+  },
+  {
+   "id": "live-watch",
+   "from": "live",
+   "to": "watch",
+   "label": "watched around the clock",
+   "fromSide": "bottom",
+   "toSide": "bottom",
+   "via": [
+    [
+     1155,
+     812
+    ],
+    [
+     425,
+     812
+    ]
+   ],
+   "labelAt": [
+    790,
+    800
+   ]
+  },
+  {
+   "id": "watch-dump",
+   "from": "watch",
+   "to": "dump",
+   "label": "an alert, any hour",
+   "variant": "emphasis",
+   "fromSide": "left",
+   "toSide": "left",
+   "via": [
+    [
+     270,
+     721
+    ],
+    [
+     270,
+     431
+    ]
+   ],
+   "labelAt": [
+    335,
+    520
+   ]
+  },
+  {
+   "id": "check-dump",
+   "from": "check",
+   "to": "dump",
+   "label": "what they found by hand",
+   "variant": "emphasis",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "via": [
+    [
+     815,
+     570
+    ],
+    [
+     425,
+     570
+    ]
+   ],
+   "labelAt": [
+    620,
+    558
+   ]
+  },
+  {
+   "id": "build-decision",
+   "from": "build",
+   "to": "decision",
+   "label": "what building teaches",
+   "variant": "dashed",
+   "fromSide": "left",
+   "toSide": "bottom",
+   "via": [
+    [
+     1330,
+     341
+    ],
+    [
+     1330,
+     265
+    ],
+    [
+     955,
+     265
+    ]
+   ],
+   "labelAt": [
+    1140,
+    253
+   ]
+  },
+  {
+   "id": "verify-build",
+   "from": "verify",
+   "to": "build",
+   "label": "what fails goes back",
+   "variant": "dashed",
+   "fromSide": "right",
+   "toSide": "right",
+   "via": [
+    [
+     1660,
+     721
+    ],
+    [
+     1660,
+     341
+    ]
+   ],
+   "labelAt": [
+    1722,
+    530
+   ]
+  },
+  {
+   "id": "verify-board",
+   "from": "verify",
+   "to": "board",
+   "label": "every verdict, pass or fail",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "right",
+   "via": [
+    [
+     1495,
+     812
+    ],
+    [
+     1830,
+     812
+    ],
+    [
+     1830,
+     151
+    ]
+   ],
+   "labelAt": [
+    1892,
+    430
+   ]
+  },
+  {
+   "id": "capture-orient",
+   "from": "capture",
+   "to": "orient",
+   "label": "written now, read first next turn",
+   "variant": "dashed",
+   "fromSide": "top",
+   "toSide": "top",
+   "via": [
+    [
+     1225,
+     62
+    ],
+    [
+     685,
+     62
+    ]
+   ],
+   "labelAt": [
+    955,
+    50
+   ]
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "Where a turn starts",
+   "wraps": [
+    "spark",
+    "dump"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "Nothing is built before this",
+   "wraps": [
+    "decision",
+    "capture",
+    "board"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "Write it, cut the old, prove it",
+   "wraps": [
+    "build",
+    "deleted",
+    "verify"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "After the push",
+   "wraps": [
+    "live",
+    "check",
+    "watch"
+   ]
+  }
+ ]
+}

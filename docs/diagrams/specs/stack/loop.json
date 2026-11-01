@@ -1,0 +1,187 @@
+{
+ "title": "The conversation loop",
+ "subtitle": "One task is one conversation. Three things can start it and all three arrive at the same door, the turn runs clockwise from the dump, and the quiet lines across the middle are what building, testing and writing send back into the turn.",
+ "legend": {
+  "external": "The person",
+  "backend": "The assistant",
+  "database": "The repository",
+  "security": "The nets",
+  "cloud": "Live",
+  "messagebus": "The watch",
+  "edge-default": "One turn, clockwise",
+  "edge-emphasis": "Three ways a turn starts",
+  "edge-dashed": "What the turn sends back into itself"
+ },
+ "nodes": {
+  "spark": {
+   "type": "external",
+   "label": "A new idea",
+   "sublabel": "or change what runs",
+   "note": "A turn starts because someone wants something that is not there yet, or wants what already runs changed. Nothing has to be broken, and no ticket exists first: the issue is written later in the turn.",
+   "bible": "Nothing has to be broken and no ticket exists first: the issue is written later in the turn."
+  },
+  "dump": {
+   "type": "external",
+   "label": "The dump",
+   "sublabel": "one messy prompt",
+   "note": "Every turn arrives here whichever way it came in: the thought as it comes, with pasted conversations, screenshots and links, no template. A page of thinking rather than a task goes through `/brain-dump` first, and an effort too big for one session goes to `/wayfinder`.",
+   "bible": "three arrive as one messy prompt: pasted conversations, screenshots, links."
+  },
+  "orient": {
+   "type": "backend",
+   "label": "Read first",
+   "sublabel": "before it answers",
+   "note": "Before answering, the assistant reads the repository: the glossary in `CONTEXT.md`, the bible chapters that apply, the area overlays, the decision records and prior issues. The `grill` skill forces those reads, because a session remembers nothing of the last one.",
+   "code": [
+    ".claude/skills/grill"
+   ],
+   "bible": "question, not a summary; a session remembers nothing of the last one.",
+   "code_seen": "45d126ec2065"
+  },
+  "decision": {
+   "type": "external",
+   "label": "Decisions",
+   "sublabel": "judgment, never facts",
+   "note": "The person decides. Facts are looked up, never asked; what reaches the person is judgment, taste, priority and risk, one question at a time. What building teaches comes back here as a question rather than a silent choice.",
+   "bible": "What reaches the person is judgment, taste, priority and risk."
+  },
+  "capture": {
+   "type": "database",
+   "label": "Written down",
+   "sublabel": "glossary, ADR, bible",
+   "note": "What settles is written where the next session will read it: a term in `CONTEXT.md`, a trade-off on its issue or as a proposed ADR, an invariant in its bible chapter. **Watch out:** a new markdown file needs a yes first, and `md_guard` blocks one without it.",
+   "code": [
+    "CONTEXT.md"
+   ],
+   "bible": "as a proposed ADR, an invariant in its chapter.",
+   "code_seen": "0cd4bfed49ce"
+  },
+  "board": {
+   "type": "database",
+   "label": "The board",
+   "sublabel": "plans become issues",
+   "note": "The plan leaves the chat as a GitHub issue written like a PRD, by the `to-prd` skill. The issue outlives the conversation, and the GitHub Projects board over it is where work is tracked. Every issue gets an assignee when it is created.",
+   "code": [
+    ".claude/skills/to-prd"
+   ],
+   "bible": "is where work is tracked.",
+   "code_seen": "2752463baa24"
+  },
+  "build": {
+   "type": "backend",
+   "label": "Build",
+   "sublabel": "straight on main",
+   "note": "Code and documents are written straight on `main`: no feature branches, no pull requests. A session that writes files works in its own worktree. The module's drawing and its bible section are written in the same pass, every box claimed by one sentence.",
+   "bible": "(ADR-0001)."
+  },
+  "deleted": {
+   "type": "database",
+   "label": "Delete the old",
+   "sublabel": "a step, not cleanup",
+   "note": "Whatever the new work replaces comes out in the commit that adds it. Dead code is a defect, not an archive: a module exists only while deleting it would scatter real complexity across its callers.",
+   "bible": "**Dead code is a defect, not an archive.**"
+  },
+  "verify": {
+   "type": "security",
+   "label": "Test",
+   "sublabel": "every net at once",
+   "note": "Before the push a commit meets the pre-commit hook (torn commits, the test register and its break replay) and the `audit-*` skills. After the push the deploy gate on the server tests the commit in its own tree. A red ships nothing and sends the turn back to building.",
+   "code": [
+    ".claude/hooks/pre-commit",
+    ".claude/hooks/local/pre-commit"
+   ],
+   "bible": "A red sends the turn back to building.",
+   "code_seen": "a56e6df66e94"
+  },
+  "live": {
+   "type": "cloud",
+   "label": "Ship it",
+   "sublabel": "push is the deploy",
+   "note": "Pushing to `main` is the deploy: a timer on the server every two minutes, and the push webhook, run `infra/auto-deploy/auto-deploy.sh`, which rebuilds only the services that changed and checks that they boot. The commit's GitHub page shows `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy`.",
+   "code": [
+    "infra/auto-deploy"
+   ],
+   "bible": "Pushing to main is the whole deploy interface.",
+   "code_seen": "1e6bf6c92a15"
+  },
+  "check": {
+   "type": "external",
+   "label": "Try it by hand",
+   "sublabel": "the last net is a person",
+   "note": "The person takes the shipped thing in hand and reads the module's drawing to see whether it says what the code does. The tests answer whether it broke; the person answers whether it is right.",
+   "bible": "against the code."
+  },
+  "watch": {
+   "type": "messagebus",
+   "label": "The assistant",
+   "sublabel": "watches production",
+   "note": "The assistant on Signal watches production around the clock: Alertmanager hands it every alert, it decides what reaches a phone, and it writes a weekday brief. What it catches comes back as the next messy prompt.",
+   "code": [
+    "apps/assistant"
+   ],
+   "bible": "| The assistant on Signal",
+   "code_seen": "3321055aafca"
+  }
+ },
+ "slides": [
+  {
+   "label": "It starts with one messy prompt, and nothing has to be broken first",
+   "add": [
+    "spark",
+    "dump",
+    "spark-dump"
+   ]
+  },
+  {
+   "label": "The assistant reads the repository before it answers, then asks the person",
+   "add": [
+    "orient",
+    "decision",
+    "dump-orient",
+    "orient-decision"
+   ]
+  },
+  {
+   "label": "What settles is written down at once, and the plan leaves the chat as an issue",
+   "add": [
+    "capture",
+    "board",
+    "decision-capture",
+    "capture-board"
+   ]
+  },
+  {
+   "label": "Built straight on main, the old taken out in the same commit, then every net at once",
+   "add": [
+    "build",
+    "deleted",
+    "verify",
+    "board-build",
+    "build-deleted",
+    "deleted-verify"
+   ]
+  },
+  {
+   "label": "The push is the deploy, the person opens what shipped, and the assistant watches it from then on",
+   "add": [
+    "live",
+    "check",
+    "watch",
+    "verify-live",
+    "live-check",
+    "live-watch",
+    "watch-dump",
+    "check-dump"
+   ]
+  },
+  {
+   "label": "And the quiet lines across the middle: building changes the plan, testing sends work back and every verdict to the board, what is written is read first",
+   "add": [
+    "build-decision",
+    "verify-build",
+    "verify-board",
+    "capture-orient"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,43 @@
+{
+ "_comment": "A ring with chords. The plain turn is one ring walked clockwise from the dump, and the cross-links are drawn inside it as quieter dashed chords, so the page is a simple circle when it opens and a loop that feeds itself when it finishes. The three ways a turn can start are thick arrows into the same door from the west. The long chord, build back to decisions, runs through an interior kept empty, the two verdict rails run outside the right column, and the watch is reached from the push along a lane under the bottom row.",
+ "canvas": [2060, 980],
+ "boxes": {
+  "spark": [140, 200],
+  "dump": [350, 400],
+  "orient": [610, 120],
+  "decision": [880, 120],
+  "capture": [1150, 120],
+  "board": [1420, 120],
+  "build": [1420, 310],
+  "deleted": [1420, 500],
+  "verify": [1420, 690],
+  "live": [1080, 690],
+  "check": [740, 690],
+  "watch": [350, 690]
+ },
+ "boundaries": [
+  {"label": "Where a turn starts", "wraps": ["spark", "dump"]},
+  {"label": "Nothing is built before this", "wraps": ["decision", "capture", "board"]},
+  {"label": "Write it, cut the old, prove it", "wraps": ["build", "deleted", "verify"]},
+  {"label": "After the push", "wraps": ["live", "check", "watch"]}
+ ],
+ "edges": [
+  ["spark", "dump", "nothing has to be broken", {"variant": "emphasis", "fromSide": "right", "toSide": "top", "via": [[425, 231]], "labelAt": [345, 218]}],
+  ["dump", "orient", "", {"fromSide": "right", "toSide": "bottom", "via": [[555, 431], [555, 246], [685, 246]]}],
+  ["orient", "decision", "one question at a time"],
+  ["decision", "capture", "written the moment it settles"],
+  ["capture", "board", "the plan leaves the chat"],
+  ["board", "build", "one issue at a time"],
+  ["build", "deleted", "the old version, same commit"],
+  ["deleted", "verify", "what is left gets proved"],
+  ["verify", "live", "green, and the push is the deploy"],
+  ["live", "check", "the person opens it"],
+  ["live", "watch", "watched around the clock", {"fromSide": "bottom", "toSide": "bottom", "via": [[1155, 812], [425, 812]], "labelAt": [790, 800]}],
+  ["watch", "dump", "an alert, any hour", {"variant": "emphasis", "fromSide": "left", "toSide": "left", "via": [[270, 721], [270, 431]], "labelAt": [335, 520]}],
+  ["check", "dump", "what they found by hand", {"variant": "emphasis", "fromSide": "top", "toSide": "bottom", "via": [[815, 570], [425, 570]], "labelAt": [620, 558]}],
+  ["build", "decision", "what building teaches", {"variant": "dashed", "fromSide": "left", "toSide": "bottom", "via": [[1330, 341], [1330, 265], [955, 265]], "labelAt": [1140, 253]}],
+  ["verify", "build", "what fails goes back", {"variant": "dashed", "fromSide": "right", "toSide": "right", "via": [[1660, 721], [1660, 341]], "labelAt": [1722, 530]}],
+  ["verify", "board", "every verdict, pass or fail", {"variant": "dashed", "fromSide": "bottom", "toSide": "right", "via": [[1495, 812], [1830, 812], [1830, 151]], "labelAt": [1892, 430]}],
+  ["capture", "orient", "written now, read first next turn", {"variant": "dashed", "fromSide": "top", "toSide": "top", "via": [[1225, 62], [685, 62]], "labelAt": [955, 50]}]
+ ]
+}

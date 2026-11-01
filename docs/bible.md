@@ -38,7 +38,7 @@ laptop: Claude Code in this repository
     Scaleway: object storage, Secret Manager, optional GPU cluster
 ```
 
-Nothing deploys from the laptop. Work lands on `main`, the server pulls it, the deploy gate tests
+Nothing deploys from the laptop.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=laptop) Work lands on `main`, the server pulls it, the deploy gate tests
 the commit against its own tree, and only a green commit is swapped in. A red one holds the old
 version, and with `EJECT_ENABLED=1` it is reverted on `main` and handed back to its author.
 
@@ -46,9 +46,9 @@ version, and with `EJECT_ENABLED=1` it is reverted on `main` and handed back to 
 
 | Who | Through | Reaches |
 |---|---|---|
-| The owner and the team | a browser, one Nextcloud login | files, calendar, Notulen, gated pages |
+| The owner and the team | a browser, one Nextcloud login[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=people) | files, calendar, Notulen, gated pages |
 | The owner and the team | Signal | the assistant |
-| A session | git and `gh` | the repository, issues, the board |
+| A session | git and `gh` | the repository, issues, the board[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=github) |
 | The public | HTTPS | the website at the root domain |
 
 Every name is a subdomain of `DOMAIN`. Caddy terminates HTTPS for all of them. A gated name sends
@@ -86,7 +86,7 @@ private copy as they happen.
 | `signal-cli` | signal-cli-rest-api, pinned | the Signal account both of them use |
 | `assistant-whisper` | speaches, profile `voice` | turns a voice note into text |
 
-The gateway is someone else's software, run unmodified. It answers people. The door is this repository's code, and it decides what reaches a phone. Neither container is reachable from the internet: the gateway and the door publish only on the server's loopback, and Alertmanager, Prometheus and the gateway reach the door by its name, `assistant`, on the compose network. The door keeps its memory in one SQLite file on a named volume and runs a single worker, because that file has one writer.
+The gateway is someone else's software, run unmodified. It answers people. The door is this repository's code, and it decides what reaches a phone.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=assistant) Neither container is reachable from the internet: the gateway and the door publish only on the server's loopback, and Alertmanager, Prometheus and the gateway reach the door by its name, `assistant`, on the compose network. The door keeps its memory in one SQLite file on a named volume and runs a single worker, because that file has one writer.
 
 ### How an alert reaches Signal
 
@@ -139,11 +139,11 @@ phone browser -> 5 s chunks -> /api/upload/chunk -> /tmp/notulen/<job>/audio.web
 stop -> /api/upload/finalize -> stitch -> loudness boost -> S3 -> process_job
 ```
 
-The recorder is a single page at `notulen.$DOMAIN`, behind the Nextcloud single sign-on. Pressing record opens a row in `notulen_jobs` with status `recording`. From then on the browser sends five seconds of audio at a time. Each piece is kept in the phone's IndexedDB until the server confirms it, so a locked screen or a closed tab loses nothing. The next visit offers "Resume upload".
+The recorder is a single page at `notulen.$DOMAIN`, behind the Nextcloud single sign-on.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=notulen) Pressing record opens a row in `notulen_jobs` with status `recording`. From then on the browser sends five seconds of audio at a time. Each piece is kept in the phone's IndexedDB until the server confirms it, so a locked screen or a closed tab loses nothing. The next visit offers "Resume upload".
 
 The server appends the pieces to one file on a volume, so a redeploy does not wipe a meeting in progress. Gates refuse a chunk out of order (409 asks the browser to re-send from the gap), a chunk over 10 MB, a recording under 10 KB, and a third concurrent job.
 
-When the microphone dies mid-meeting, the page beeps, vibrates and keeps asking for it; recording resumes into the same session. At finalize the server stitches the pieces and boosts a near-silent recording. The audio goes to S3 before any check that could end the session, so every failed job can be retried.
+When the microphone dies mid-meeting, the page beeps, vibrates and keeps asking for it; recording resumes into the same session. At finalize the server stitches the pieces and boosts a near-silent recording. The audio goes to S3 before any check that could end the session, so every failed job can be retried.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=storage)
 
 ### Transcription and minutes
 
@@ -210,7 +210,7 @@ WeasyPrint loads pango, pangoft2, harfbuzz and fontconfig at import time. When t
 browser -> Caddy (HTTPS, bare domain) -> website:80 (nginx) -> apps/website/ + /design/
 ```
 
-The public site is static files in `apps/website/`, served by a stock `nginx:alpine` image. The Dockerfile sits beside the page and builds from the repository root, so it can copy both the page and `design/`. The page links `/design/index.css` and nothing else from the design system, so a change to `design/tokens.css` restyles the website, the documents and the dashboards together. The company profile and the build files are removed from the image, so they are never served.
+The public site is static files in `apps/website/`, served by a stock `nginx:alpine` image.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=website) The Dockerfile sits beside the page and builds from the repository root, so it can copy both the page and `design/`. The page links `/design/index.css` and nothing else from the design system, so a change to `design/tokens.css` restyles the website, the documents and the dashboards together. The company profile and the build files are removed from the image, so they are never served.
 
 ### How it changes
 
@@ -239,9 +239,9 @@ Brand colors appear in both `company.yaml` and `tokens.css`, and onboarding keep
 | `notulen.DOMAIN` | notulen | single sign-on |
 | `deploy.DOMAIN/hooks/*` | webhook service on the host | HMAC signature, no login |
 
-Caddy is the only container with public ports. It gets certificates from Let's Encrypt on its own once DNS for these names points at the server.
+Caddy is the only container with public ports.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=caddy) It gets certificates from Let's Encrypt on its own once DNS for these names points at the server.
 
-Nextcloud is where accounts live. You create a person there, they set a password and enrol an authenticator app, and from then on that one account opens every private subdomain. Nextcloud's oidc app makes it an identity provider; oauth2-proxy is the client that logs in against it.
+Nextcloud is where accounts live.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=sso) You create a person there, they set a password and enrol an authenticator app, and from then on that one account opens every private subdomain. Nextcloud's oidc app makes it an identity provider; oauth2-proxy is the client that logs in against it.
 
 On every request to a private subdomain, Caddy asks oauth2-proxy whether the browser carries a valid login cookie. Yes means Caddy forwards the request with the person's account id in `Remote-User` and their email in `Remote-Email`. No means a redirect to Nextcloud and back. Caddy first deletes any `Remote-User` the browser sent itself, so an app can trust the header.
 
@@ -260,7 +260,7 @@ laptop: config/harness.env + secrets   (a private file)
   -> docker compose --env-file
 ```
 
-All configuration is in three places. `.claude/project.json` names the GitHub repository and the people. `config/harness.env` holds settings that are not secret, such as the domain and the region. The vault is one Scaleway Secret Manager secret holding the whole environment: those settings again, plus every password and token listed in `config/vault.env.example`.
+All configuration is in three places. `.claude/project.json` names the GitHub repository and the people. `config/harness.env` holds settings that are not secret, such as the domain and the region. The vault is one Scaleway Secret Manager secret holding the whole environment: those settings again, plus every password and token listed in `config/vault.env.example`.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=vault)
 
 Each change is a new version of that secret. The server pulls the latest version every deploy cycle, so a pushed change is live a few minutes later without logging in to the server. If the pull fails, the server keeps the file it already has and the stack carries on.
 
@@ -287,7 +287,7 @@ push to main -> webhook -> cycle: lock -> fresh -> pick one commit -> export -> 
 
 ### The loop
 
-Pushing to `main` is the deploy. On the server, `harness-auto-deploy.timer` runs `infra/auto-deploy/auto-deploy.sh` every two minutes, and the push webhook starts it at once. A cycle takes the lock, fast-forwards the clone, and picks ONE commit past the deploy bookmark (`/var/lib/harness/last-deployed-sha`): the newest commit that already has a green verdict for its exact tree, otherwise the next one. It is never the tip and never a batch, because a red on a batch names nobody's commit.
+Pushing to `main` is the deploy.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=deploy) On the server, `harness-auto-deploy.timer` runs `infra/auto-deploy/auto-deploy.sh` every two minutes, and the push webhook starts it at once. A cycle takes the lock, fast-forwards the clone, and picks ONE commit past the deploy bookmark (`/var/lib/harness/last-deployed-sha`): the newest commit that already has a green verdict for its exact tree, otherwise the next one. It is never the tip and never a batch, because a red on a batch names nobody's commit.
 
 The commit is exported with `git archive` into a tree of its own. The gate tests that tree, and the images are built and started from it, never from the clone the webhook keeps moving. `docker compose` rebuilds only the services whose fragment folder changed, then checks that each one boots: healthy if it has a healthcheck, still running after 20 seconds if not. A service that does not boot is rolled back to the image and tree it ran before. The bookmark moves only when everything shipped.
 
@@ -329,7 +329,7 @@ Prometheus (rules, every 30 s)
       -> or, while the assistant-down flag is fresh: signal-cli /v2/send -> SIGNAL_RECIPIENT
 ```
 
-Prometheus scrapes itself, Alertmanager, node-exporter and the blackbox exporter, and probes every subdomain in `PROBE_SUBDOMAINS` over HTTPS. When a rule fires, Alertmanager posts the group to the alert-relay, which hands it unchanged to the assistant. The assistant decides what reaches the phone and how it is worded. Severity changes how often a still-firing group is repeated; it never decides whether it is delivered.
+Prometheus scrapes itself, Alertmanager, node-exporter and the blackbox exporter, and probes every subdomain in `PROBE_SUBDOMAINS` over HTTPS. When a rule fires, Alertmanager posts the group to the alert-relay, which hands it unchanged to the assistant.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=observability) The assistant decides what reaches the phone and how it is worded. Severity changes how often a still-firing group is repeated; it never decides whether it is delivered.
 
 ### Rules
 
@@ -390,7 +390,7 @@ record pressed -> placeholder Pod (holds a GPU)
 recording done -> notulen Job (preempts it) -> worker writes row -> dashboard commits
 ```
 
-The GPU tier is optional. Without it notulen transcribes on the server's CPU, which takes hours for a long meeting; with it a meeting takes minutes. It is a Scaleway Kapsule cluster with one or two GPU node pools that scale to zero, so a node bills only while it transcribes.
+The GPU tier is optional. Without it notulen transcribes on the server's CPU, which takes hours for a long meeting; with it a meeting takes minutes. It is a Scaleway Kapsule cluster with one or two GPU node pools that scale to zero, so a node bills only while it transcribes.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=gpu)
 
 The dashboard talks to it with its own service account. The worker writes its result straight into the stack's Postgres, which therefore listens beyond the server (`POSTGRES_BIND_ADDRESS=0.0.0.0`), with the database password as the only guard.
 
@@ -444,8 +444,8 @@ to-prd, code, close.
 | A person using it | what they found by hand |
 | A page from the assistant | the watch, no person |
 
-Nothing has to be broken and no ticket exists first: the issue is written later in the turn. All
-three arrive as one messy prompt: pasted conversations, screenshots, links. A page of thinking
+Nothing has to be broken and no ticket exists first: the issue is written later in the turn.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=spark) All
+three arrive as one messy prompt: pasted conversations, screenshots, links.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=dump) A page of thinking
 rather than a task goes to `/brain-dump`, which sorts it into claims, questions, decisions and
 vision. An effort too big and too foggy for one session goes to `/wayfinder`, which charts it as
 a PRD whose route is unknown.
@@ -461,13 +461,13 @@ a PRD whose route is unknown.
 | Prior issues | GitHub, open and closed |
 
 The `grill` skill forces those reads before the assistant answers, and what comes back is one
-question, not a summary; a session remembers nothing of the last one. **Facts are looked up, never
-asked.** What reaches the person is judgment, taste, priority and risk.
+question, not a summary; a session remembers nothing of the last one.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=orient) **Facts are looked up, never
+asked.** What reaches the person is judgment, taste, priority and risk.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=decision)
 
 **Whatever settles is written down at once**: a term in the glossary, a trade-off on its issue or
-as a proposed ADR, an invariant in its chapter. The plan leaves the chat as a GitHub issue written
+as a proposed ADR, an invariant in its chapter.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=capture) The plan leaves the chat as a GitHub issue written
 like a PRD (`to-prd`); conversations are throwaway, the issue outlives them, and the board over it
-is where work is tracked.
+is where work is tracked.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=board)
 
 ### Write it, cut the old, prove it
 
@@ -481,12 +481,12 @@ one commit, straight on main
 ```
 
 No branch and no pull request keeps a task in one conversation and leaves no review queue
-(ADR-0001). A session that writes files works in its own worktree, set up with
+(ADR-0001).[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=build) A session that writes files works in its own worktree, set up with
 `bash .claude/scripts/worktree-setup.sh`, and pushes with `git push origin HEAD:main`. The drawing
 and the chapter are written in the same pass as the code, through the `diagram` MCP and the
 `case-study` skill, and linked into the issue only when a human is needed.
 
-**Dead code is a defect, not an archive.** A module exists only while deleting it would scatter
+**Dead code is a defect, not an archive.**[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=deleted) A module exists only while deleting it would scatter
 real complexity across its callers.
 
 ### What stops a bad commit
@@ -499,8 +499,8 @@ real complexity across its callers.
 | The deploy gate | the server | every commit on `main` |
 
 A test and the change that makes it pass go in one commit: the gate runs every commit against its
-own tree, so a test that arrives one commit before its fix is red for ever. A red sends the turn
-back to building.
+own tree, so a test that arrives one commit before its fix is red for ever.
+A red sends the turn back to building.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=verify)
 
 ### After the push
 
@@ -509,12 +509,12 @@ back to building.
 | auto-deploy on the server | a short timer, plus a push webhook | nothing ships |
 | The eject, `EJECT_ENABLED=1` | on a red gate | bad commits stay on main |
 | A person on the page | per change | nobody says it is right |
-| The assistant on Signal | around the clock | production runs unwatched |
+| The assistant on Signal[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=watch) | around the clock | production runs unwatched |
 
-Pushing to main is the whole deploy interface. GitHub Actions never build or test; the server
+Pushing to main is the whole deploy interface.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=live) GitHub Actions never build or test; the server
 posts its own commit statuses, so the commit page shows what was verified, built and made live.
 The tests answer whether it broke; the person answers whether it is right, reading the drawing
-against the code. What they find becomes the next messy prompt.
+against the code.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html#focus=check) What they find becomes the next messy prompt.
 
 ### Tuning Claude
 

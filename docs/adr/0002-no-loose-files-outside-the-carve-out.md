@@ -33,10 +33,12 @@ breaks the tool. It is not for files that are merely conventional.
 - `LICENSE`
 - `THIRD_PARTY_NOTICES.md`
 - `docs/bible.md`
+- `docs/diagrams/stack.html`
 
 `Dockerfile*` covers a named Dockerfile beside the default one. `compose.yml` is a component's
 fragment of the stack, which the root `docker-compose.yml` includes; the deploy loop finds a
-service's folder by it.
+service's folder by it. `docs/diagrams/stack.html` is the diagram set's top page: the drawing tools
+build it there, every other page hangs under it, and the published site links to it.
 
 The list is append-only by ADR amendment: a new entry is an edit to this file and to root
 `CLAUDE.md`, which keeps its own copy so a session reads the rule without opening the ADR. The two

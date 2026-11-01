@@ -1,0 +1,84 @@
+{
+ "steps": [
+  {
+   "label": "It starts with one messy prompt, and nothing has to be broken first",
+   "add": [
+    "spark",
+    "dump",
+    "spark-dump"
+   ]
+  },
+  {
+   "label": "The assistant reads the repository before it answers, then asks the person",
+   "add": [
+    "orient",
+    "decision",
+    "dump-orient",
+    "orient-decision"
+   ]
+  },
+  {
+   "label": "What settles is written down at once, and the plan leaves the chat as an issue",
+   "add": [
+    "capture",
+    "board",
+    "decision-capture",
+    "capture-board"
+   ]
+  },
+  {
+   "label": "Built straight on main, the old taken out in the same commit, then every net at once",
+   "add": [
+    "build",
+    "deleted",
+    "verify",
+    "board-build",
+    "build-deleted",
+    "deleted-verify"
+   ]
+  },
+  {
+   "label": "The push is the deploy, the person opens what shipped, and the assistant watches it from then on",
+   "add": [
+    "live",
+    "check",
+    "watch",
+    "verify-live",
+    "live-check",
+    "live-watch",
+    "watch-dump",
+    "check-dump"
+   ]
+  },
+  {
+   "label": "And the quiet lines across the middle: building changes the plan, testing sends work back and every verdict to the board, what is written is read first",
+   "add": [
+    "build-decision",
+    "verify-build",
+    "verify-board",
+    "capture-orient"
+   ]
+  }
+ ],
+ "regions": [
+  [
+   "spark",
+   "dump"
+  ],
+  [
+   "decision",
+   "capture",
+   "board"
+  ],
+  [
+   "build",
+   "deleted",
+   "verify"
+  ],
+  [
+   "live",
+   "check",
+   "watch"
+  ]
+ ]
+}

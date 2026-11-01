@@ -1,0 +1,50 @@
+{
+ "board": {
+  "chapter": "workflow/loop",
+  "section": "Nothing is built before this"
+ },
+ "build": {
+  "chapter": "workflow/loop",
+  "section": "Write it, cut the old, prove it"
+ },
+ "capture": {
+  "chapter": "workflow/loop",
+  "section": "Nothing is built before this"
+ },
+ "check": {
+  "chapter": "workflow/loop",
+  "section": "After the push"
+ },
+ "decision": {
+  "chapter": "workflow/loop",
+  "section": "Nothing is built before this"
+ },
+ "deleted": {
+  "chapter": "workflow/loop",
+  "section": "Write it, cut the old, prove it"
+ },
+ "dump": {
+  "chapter": "workflow/loop",
+  "section": "Where a turn starts"
+ },
+ "live": {
+  "chapter": "workflow/loop",
+  "section": "After the push"
+ },
+ "orient": {
+  "chapter": "workflow/loop",
+  "section": "Nothing is built before this"
+ },
+ "spark": {
+  "chapter": "workflow/loop",
+  "section": "Where a turn starts"
+ },
+ "verify": {
+  "chapter": "workflow/loop",
+  "section": "What stops a bad commit"
+ },
+ "watch": {
+  "chapter": "workflow/loop",
+  "section": "After the push"
+ }
+}

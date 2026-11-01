@@ -1,0 +1,205 @@
+{
+ "title": "The stack",
+ "subtitle": "One server behind one front door, a few rented pieces beside it, and the laptop where every change starts. Push to main is the deploy.",
+ "legend": {
+  "external": "People and outside services",
+  "frontend": "Public",
+  "backend": "The apps and the deploy loop",
+  "security": "The front door and the login",
+  "messagebus": "The watch",
+  "database": "Kept on Scaleway",
+  "cloud": "Rented only while used",
+  "edge-default": "A request",
+  "edge-emphasis": "A change on its way to production",
+  "edge-dashed": "Periodic or optional"
+ },
+ "nodes": {
+  "people": {
+   "type": "external",
+   "label": "People",
+   "sublabel": "browser and Signal",
+   "note": "The owner and the team. In a browser, one Nextcloud login with a second factor opens every private subdomain; on Signal they talk to the assistant. The public sees only the website at the bare domain.",
+   "bible": "| The owner and the team | a browser, one Nextcloud login"
+  },
+  "laptop": {
+   "type": "external",
+   "label": "Your laptop",
+   "sublabel": "Claude Code + harness",
+   "note": "Claude Code running in this repository, with the harness: skills, guards, overlays and the code index. Every change starts here as one conversation; open this box for the loop it follows. Nothing deploys from the laptop.",
+   "module": "stack/loop.html",
+   "code": [
+    ".claude/skills",
+    ".claude/hooks"
+   ],
+   "bible": "Nothing deploys from the laptop.",
+   "code_seen": "264c39e288e4"
+  },
+  "github": {
+   "type": "external",
+   "label": "GitHub",
+   "sublabel": "main, issues, board",
+   "note": "Holds `main`, the issues and the Projects board. A push to `main` fires the webhook at `deploy.$DOMAIN/hooks/deploy`. The server posts each commit's `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy` status back to its commit page.",
+   "bible": "| A session | git and `gh` | the repository, issues, the board"
+  },
+  "caddy": {
+   "type": "security",
+   "label": "Caddy",
+   "sublabel": "the only public door",
+   "note": "`caddy`, ports 80 and 443, the only container with public ports. It gets its own Let's Encrypt certificates and asks oauth2-proxy about every request to a private subdomain. **Watch out:** it deletes any `Remote-User` header the browser sent, which is why an app can trust that header.",
+   "code": [
+    "infra/caddy"
+   ],
+   "bible": "Caddy is the only container with public ports.",
+   "code_seen": "67169e875d52"
+  },
+  "sso": {
+   "type": "security",
+   "label": "Nextcloud",
+   "sublabel": "accounts and one login",
+   "note": "`nextcloud` on `cloud.$DOMAIN` with its Postgres, and `oauth2-proxy` on `auth.$DOMAIN`. Accounts live here: Nextcloud is the identity provider, oauth2-proxy the client. The login cookie lasts 8 hours, the Nextcloud session behind it 7 days. Files and calendar live here too.",
+   "code": [
+    "infra/nextcloud"
+   ],
+   "bible": "Nextcloud is where accounts live.",
+   "code_seen": "7f646e166af9"
+  },
+  "website": {
+   "type": "frontend",
+   "label": "website",
+   "sublabel": "the bare domain",
+   "note": "`website`, nginx serving the static files in `apps/website/` at the bare domain, public. It links `/design/index.css`, so an edit to `design/tokens.css` restyles it together with the documents and the dashboards.",
+   "code": [
+    "apps/website",
+    "design"
+   ],
+   "bible": "served by a stock `nginx:alpine` image.",
+   "code_seen": "532cd5d3f087"
+  },
+  "notulen": {
+   "type": "backend",
+   "label": "notulen",
+   "sublabel": "meetings in, minutes out",
+   "note": "`notulen` on `notulen.$DOMAIN`, behind the login. A phone records in five-second chunks; the server stitches them, stores the audio, transcribes, and Claude writes the minutes, committed to `NOTULEN_TARGET_REPO`. CPU transcription works by default and takes hours for a long meeting.",
+   "code": [
+    "apps/notulen"
+   ],
+   "bible": "behind the Nextcloud single sign-on.",
+   "code_seen": "804993b8d127"
+  },
+  "assistant": {
+   "type": "backend",
+   "label": "The assistant",
+   "sublabel": "OpenClaw on Signal",
+   "note": "The upstream OpenClaw gateway holds the Signal conversation, and this repository's door (`apps/assistant`) triages alerts, decides what reaches a phone and serves the gateway its tools. `signal-cli` is the Signal account both use. It ships empty: no people, no memory.",
+   "code": [
+    "apps/assistant"
+   ],
+   "bible": "The door is this repository's code, and it decides what reaches a phone.",
+   "code_seen": "3321055aafca"
+  },
+  "observability": {
+   "type": "messagebus",
+   "label": "Prometheus",
+   "sublabel": "alerts and deadmen",
+   "note": "Prometheus evaluates its rules every 30 seconds and probes each subdomain over HTTPS; Alertmanager hands a firing group to the alert-relay, and the relay to the assistant. Deadmen run as systemd timers and page straight to Signal when the assistant itself is down. Loopback only: Prometheus on 9090.",
+   "code": [
+    "infra/observability"
+   ],
+   "bible": "which hands it unchanged to the assistant.",
+   "code_seen": "20a52f7e13de"
+  },
+  "deploy": {
+   "type": "backend",
+   "label": "auto-deploy",
+   "sublabel": "tests, then ships",
+   "note": "`harness-auto-deploy.timer`, every two minutes, plus the push webhook, runs `infra/auto-deploy/auto-deploy.sh`. It picks one commit, the gate tests it in its own tree, and only the changed services are rebuilt and must boot. Red or amber ships nothing. The eject ships off.",
+   "code": [
+    "infra/auto-deploy",
+    "infra/webhook"
+   ],
+   "bible": "Pushing to `main` is the deploy.",
+   "code_seen": "cc4cffb45cbb"
+  },
+  "vault": {
+   "type": "database",
+   "label": "The vault",
+   "sublabel": "Secret Manager",
+   "note": "One Scaleway Secret Manager secret holding the whole environment, secrets included. `infra/secrets/push-env.sh` writes a new version from the laptop; the server pulls it every deploy cycle into `$HARNESS_ROOT/harness.env`, mode 600. A failed pull keeps the old file.",
+   "code": [
+    "infra/secrets"
+   ],
+   "bible": "plus every password and token listed in `config/vault.env.example`.",
+   "code_seen": "004aa3f34d20"
+  },
+  "storage": {
+   "type": "database",
+   "label": "Object storage",
+   "sublabel": "meeting audio",
+   "note": "A Scaleway Object Storage bucket (`S3_BUCKET`) for meeting audio. Notulen uploads the stitched recording before any check that could end the session, so every failed job can be retried. **Watch out:** it keeps billing after the server is deleted.",
+   "bible": "The audio goes to S3 before any check that could end the session, so every failed job can be retried."
+  },
+  "gpu": {
+   "type": "cloud",
+   "label": "GPU tier",
+   "sublabel": "optional, Kubernetes",
+   "note": "Optional. A Scaleway Kapsule cluster whose GPU pools scale to zero, so a node bills only while it transcribes. Notulen submits a Kubernetes Job; the worker writes its result to the stack's Postgres, which then listens beyond the server with only its password as guard.",
+   "code": [
+    "infra/gpu",
+    "infra/gpu-jobs"
+   ],
+   "bible": "so a node bills only while it transcribes.",
+   "code_seen": "8cda8187a25b"
+  }
+ },
+ "slides": [
+  {
+   "label": "People reach it two ways: a browser through Caddy, and Signal to the assistant",
+   "add": [
+    "people",
+    "caddy",
+    "assistant",
+    "people-caddy",
+    "people-assistant"
+   ]
+  },
+  {
+   "label": "Caddy is the only public door, and one Nextcloud login opens every private name",
+   "add": [
+    "website",
+    "sso",
+    "notulen",
+    "caddy-website",
+    "caddy-sso",
+    "caddy-notulen"
+   ]
+  },
+  {
+   "label": "Notulen keeps its audio in object storage and can borrow a GPU while it transcribes",
+   "add": [
+    "storage",
+    "gpu",
+    "notulen-storage",
+    "notulen-gpu"
+   ]
+  },
+  {
+   "label": "Prometheus watches all of it and hands every alert to the assistant",
+   "add": [
+    "observability",
+    "observability-assistant"
+   ]
+  },
+  {
+   "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
+   "add": [
+    "laptop",
+    "github",
+    "deploy",
+    "vault",
+    "laptop-github",
+    "github-deploy",
+    "deploy-vault"
+   ]
+  }
+ ]
+}

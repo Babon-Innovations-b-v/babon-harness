@@ -1,52 +1,62 @@
 # babon-harness
 
-A Claude Code harness and the small self-hosted company stack it was built against.
+Working with Claude Code across many sessions drifts: each session starts with no memory of the
+last, asks for or guesses facts the repository already holds, and repeats mistakes that were
+corrected a week earlier. This repository is a harness against that. Every task runs one fixed
+loop, grill → to-prd → code → close: the plan is checked against what the repository already
+says, written down as a GitHub issue, built straight on `main`, and closed. Hooks block the
+mistakes the loop has learned to expect, a code index answers questions before files are
+opened, and the same harness files are shared across several repositories. The repository
+holds the harness and, optionally, a self-hosted company stack on one server that the harness
+deploys and watches. It is the setup Babon Innovations works in every day, published with the
+company taken out: 29 skills, 15 hooks, and 134 test files, each registered with an edit that
+must turn it red.
 
-The **harness** is a way of working with Claude Code: every conversation starts by interviewing
-the plan against what the repository already says, writes the agreed plan down as a GitHub issue,
-builds it, and closes it. Skills carry the method, hooks enforce the rules the method learned the
-hard way, per-directory `CLAUDE.md` files carry local rules, and one bible file explains how the
-system works.
+[![The conversation loop: a task starts as one messy prompt, is read against the repository, decided, written down as an issue, built, tested, shipped and watched](docs/diagrams/images/loop.png)](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html)
 
-The **stack** is what the harness runs in production: one server with a website, Nextcloud as the
-single sign-on and file cloud, a meeting recorder that writes minutes into the repository, an
-assistant you message on Signal, monitoring that pages you, and a deploy loop that tests every
-commit before it ships. You can use the harness without the stack.
+*The loop. Click the picture for the interactive page: walk it step by step with the arrow keys,
+and click a box for what it is and the bible section that explains it.*
 
 This is published as is. No support is promised; see [Support](#support).
 
 ## What you get
 
-**Workflow skills** (`.claude/skills/`, run as `/<name>`)
-- The loop: `grill` (interview the plan), `to-prd` (write it up as a GitHub issue), `close` (ship
-  and record where the work stands), plus `brain-dump` and `wayfinder` for thinking that is not
-  yet a task.
-- Trades a session falls into: `diagnose`, `tdd`, `triage`, `ralph` (works the ready queue
-  unattended), `prototype`, `tour`, `handoff`, `zoom-out`, `retro`, `caveman`, `write-a-skill`,
-  `codebase-design`, `improve-codebase-architecture`, `audit-dead-code`,
-  `audit-function-purposes`, `my-issues`.
-- The stack: `onboard` (builds everything from a fresh laptop), `update` (takes in upstream
-  changes), `troubleshoot`, `add-a-page`, `make-document`, `case-study` and `archify` (diagrams).
+| Part | What it does for you | Where it lives |
+|---|---|---|
+| Workflow skills | Take a request through the same steps every time: check the plan, write it down as an issue, build it, close it. | `.claude/skills/`, run as `/<name>` |
+| Guards | Stop the mistakes sessions make before they land: torn commits, tests that cannot fail, force pushes, stray markdown files, long waits. | `.claude/hooks/` |
+| Code index | Answers "where is this defined" and "who calls this" from an index, so an agent does not open or grep files to find out. | `.claude/index/`, the `index` server in `.mcp.json` |
+| Diagrams | Draw a module as an interactive page in which every box is explained by a sentence in the bible. | `docs/diagrams/` |
+| Shared-harness sync | Keep the harness files the same in every repository you run it in, while each keeps its own hooks, glossary and bible. | `/update`, `.claude/hooks/local/` |
+| The stack (optional) | Run a small company on one server: website, single sign-on, meeting minutes, an assistant on Signal, monitoring, and deploys that test every commit. | `apps/`, `infra/`, `docker-compose.yml` |
 
-**Guards** (`.claude/hooks/`)
-- `md_guard` blocks new markdown files without a yes; `issue_guard` blocks an issue with no
-  assignee and blocks force pushes and other destructive git.
-- `commit_guard` and the `pre-commit` hook stop torn commits and commits whose tests or register
-  rows disagree.
-- `wait_guard` stops foreground waits; `output_cap` keeps long command output out of the context.
-- `bible_guard` and `overlay_guard` hold the bible to 900 words per chapter and each overlay to
-  500 words.
+**Workflow skills.** The ones a task passes through:
 
-**The code index.** `.claude/index/server.py`, registered in `.mcp.json` as `index`, answers
-symbol, call-graph and text questions from [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp).
+- `grill` reads the glossary, the bible, the area rules and past issues, then asks you about the plan one question at a time.
+- `to-prd` writes the agreed plan as a GitHub issue and splits off sub-issues that can be picked up alone.
+- `close` ships the work, records where the issue stands, and closes it only when the work is done.
+- `brain-dump` sorts a page of thinking into claims, questions, decisions and issues.
+- `wayfinder` plans an effort too unclear for one session as a set of investigation issues.
+- `diagnose` and `tdd` are a reproduce-first debugging loop and red-green test writing.
+- `ralph` works through the issues marked ready for an agent, unattended.
+- `onboard` builds the whole stack from a fresh laptop; `update` takes in upstream changes.
+
+The other skills (audits, triage, handoff, prototype, diagrams and more) each say what they do
+in the first lines of their `SKILL.md`.
+
+**Guards.** `md_guard` blocks a new markdown file without your yes. `issue_guard` blocks an
+issue with no assignee and force pushes or other destructive git. `commit_guard` and the
+`pre-commit` hook stop torn commits and commits whose tests and register rows disagree.
+`wait_guard` stops foreground waits, and `output_cap` keeps long command output out of the
+context. `bible_guard` and `overlay_guard` hold each bible chapter to 900 words and each
+per-directory `CLAUDE.md` to 500.
+
+**Code index.** Built on [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp).
 The binary is pinned and checksummed, installed on first use, and the index follows each commit.
 
-**Diagrams.** `docs/diagrams/` draws a module as an HTML page whose every box is claimed by a
-sentence in the bible. See [Diagrams](#diagrams).
-
-**The stack** (see [Components](#components)): website, Nextcloud single sign-on, notulen
-(meeting minutes), the assistant (OpenClaw on Signal), documents (PDF invoices and letters),
-observability, auto-deploy with a test gate, and an optional GPU tier for transcription.
+**Diagrams** and the **shared-harness sync** have their own sections below:
+[Diagrams](#diagrams) and [One harness across several repositories](#one-harness-across-several-repositories).
+The stack is described under [Components](#components).
 
 ## Requirements and costs
 
@@ -121,6 +131,10 @@ Push the vault with `infra/secrets/push-env.sh <file>`. The server pulls it into
 `$HARNESS_ROOT/harness.env` every deploy cycle, so a change is live a few minutes later.
 
 ## Components
+
+[![The stack: people reach one server through Caddy or over Signal; notulen, the assistant, Nextcloud and Prometheus run behind it; a push from the laptop reaches the deploy loop through GitHub; object storage, the vault and an optional GPU tier are rented beside it](docs/diagrams/images/stack.png)](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html)
+
+*The stack. Click the picture for the interactive page; the laptop box opens the loop.*
 
 ### Platform
 
@@ -197,6 +211,14 @@ the internet with the database password as the only guard.
   and `TEM_FROM` in `config/harness.env`. Nothing is sent without your explicit yes.
 
 ### Diagrams
+
+The two pages above are the set's first: `docs/diagrams/stack.html` and
+`docs/diagrams/stack/loop.html`, drawn from the specs in `docs/diagrams/specs/` with
+`python3 docs/diagrams/tools/build_free.py stack stack/loop`, and published with GitHub Pages
+from the `docs/` folder. They were delivered with
+`BIBLE_BASE_URL=https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs`, so a
+box's bible link opens the section on GitHub; set your own address before you re-deliver them.
+The pictures in this README are screenshots in `docs/diagrams/images/`.
 
 `python3 docs/diagrams/tools/linkmap.py` checks the set. The `diagram` MCP server (in `.mcp.json`)
 draws through `draw_module`, `link_module` and `check_diagrams`. Drawing needs `node` for the
