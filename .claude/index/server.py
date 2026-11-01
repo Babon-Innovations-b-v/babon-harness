@@ -6,7 +6,10 @@ nothing installed can start it. Each tool call goes through ``cbm_index.ready``
 (the first question on a box installs the pinned binary and builds the index;
 a question after a new commit brings the index up to it) and then through
 ``cbm_index.ask``, one call to the pinned binary's cli. The arguments are
-upstream's own; ``project`` defaults to this repository's.
+upstream's own; ``project`` defaults to this repository's. A ``query_graph``
+or ``search_graph`` that names issues first brings the index's ``Issue`` rows
+up to GitHub through ``cbm_issues.answer`` and carries one line saying whether
+they are live.
 
 WHY NOT THE TOOL'S OWN SERVER. codebase-memory-mcp allows one daemon version per
 user account. A long-running server from one repository refuses every other
@@ -31,6 +34,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import cbm_index  # noqa: E402 - the sibling module, found through the line above
+import cbm_issues  # noqa: E402 - the sibling module, found through the line above
 
 #: The protocol version answered when the client asks for none.
 _PROTOCOL = "2025-06-18"
@@ -75,7 +79,9 @@ TOOLS = {
             "(who calls this, what imports this file, is this dead). A malformed "
             "query floods rather than failing: write -[:TYPE]-> or -[]->, never "
             "-->; no second MATCH after a WITH. Edge types include CALLS, "
-            "IMPORTS, DEFINES, CONTAINS_FILE."),
+            "IMPORTS, DEFINES, CONTAINS_FILE. GitHub issues are Issue rows "
+            "(number, state, labels, assignees, open_tasks, last_comment) with "
+            "CHILD_OF edges, synced with gh before a query that names them."),
         "inputSchema": _schema(
             ["query"], query="string: the Cypher query", project=_PROJECT,
             max_rows="integer: rows to return", offset="integer: rows to skip",
@@ -108,7 +114,13 @@ def answer(tool: str, arguments: dict) -> dict:
         return {"ok": False, **place}
     given = dict(arguments or {})
     given.setdefault("project", place["project"])
+    # A question that names issues gets them as GitHub has them now: one gh
+    # call before the read. Every other question skips it and pays nothing.
+    issues = (cbm_issues.answer(pathlib.Path(place["path"]), place["project"], cbm_index.REPO)
+              if cbm_issues.names_issues(tool, given) else "")
     result = cbm_index.ask(tool, given)
+    if issues:
+        result["issues"] = issues
     for key in ("worktree", "rebuilt"):
         if place.get(key):
             result[key] = place[key]
@@ -122,6 +134,8 @@ def _as_text(result: dict) -> str:
     body = result["result"]
     text = body if isinstance(body, str) else json.dumps(body)
     notes = []
+    if result.get("issues"):
+        notes.append(result["issues"])
     if result.get("rebuilt"):
         notes.append("the index was built or brought up to this commit for this call")
     if result.get("worktree"):

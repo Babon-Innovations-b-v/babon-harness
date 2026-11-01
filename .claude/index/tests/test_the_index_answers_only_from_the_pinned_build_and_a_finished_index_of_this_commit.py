@@ -1,5 +1,10 @@
 """The code index answers only through the pinned binary and from a finished index of the commit asked about.
 
+Its GitHub issues are part of that answer: fetched with `gh`, written into the index as Issue rows with CHILD_OF
+edges, put back after a rebuild drops them, and when gh cannot answer the reply says why and names the fix. Those
+tests drive `cbm_issues.answer` and the server with a stand-in `gh` on PATH and a scratch index in the tool's own
+schema; the issue numbers, titles and states they expect are the stand-in's, never read from the code under test.
+
 Driven as its callers drive it: `cbm_pin.verified` with fake binaries whose sha256 this test computes itself,
 `cbm_index.ready` and `cbm_index.build` against a scratch git repository and a scratch cache (`CBM_CACHE_DIR`), with
 the tool's indexer replaced by a stand-in that writes a `nodes` table, and the MCP server's `respond` with JSON-RPC
@@ -19,6 +24,13 @@ The break that turns each test red (applied once each, seen red, reverted):
 - test_a_failed_question_answers_its_cause_and_the_fix: in `server._called`, `"isError": False`.
 - test_a_malformed_call_is_answered_and_the_server_keeps_reading: the `isinstance(arguments, dict)` refusal in
   `server.answer` deleted (a string as arguments raised and ended the server).
+- test_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows: in
+  `cbm_issues.answer`, `everything = _held(database, project) < len(cached["issues"])` made `everything = False`
+  (a rebuilt index stays without its Issue rows).
+- test_without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_names_the_fix: in
+  `cbm_issues.gh_unready`, `if done.returncode != 0:` made `if done.returncode == 0:`.
+- test_only_a_question_that_names_issues_waits_on_github: in `server.answer`, `if cbm_issues.names_issues(tool,
+  given) else ""` made `if True else ""` (every question pays for a gh call).
 """
 from __future__ import annotations
 
@@ -36,6 +48,7 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import cbm_index  # noqa: E402
+import cbm_issues  # noqa: E402
 import cbm_pin  # noqa: E402
 import server  # noqa: E402
 
@@ -176,3 +189,126 @@ def test_a_malformed_call_is_answered_and_the_server_keeps_reading(monkeypatch: 
                           capture_output=True, text=True, timeout=30, check=False)
     replies = [json.loads(line) for line in done.stdout.splitlines()]
     assert [reply.get("id") for reply in replies] == [5, None, 6] and done.returncode == 0
+
+
+_ISSUE_PAGE = {"data": {"repository": {"issues": {"pageInfo": {"hasNextPage": False}, "nodes": [
+    {"number": 10, "url": "https://github.com/o/r/issues/10", "title": "The effort", "state": "OPEN",
+     "createdAt": "2026-10-01T00:00:00Z", "updatedAt": "2026-10-02T00:00:00Z", "closedAt": None,
+     "body": "- [ ] first open task\n- [x] done task", "labels": {"nodes": [{"name": "PRD"}]},
+     "assignees": {"nodes": [{"login": "someone"}]}, "parent": None,
+     "comments": {"totalCount": 0, "nodes": []}, "latest": {"nodes": []}},
+    {"number": 11, "url": "https://github.com/o/r/issues/11", "title": "A piece of it", "state": "CLOSED",
+     "createdAt": "2026-10-01T00:00:00Z", "updatedAt": "2026-10-03T00:00:00Z",
+     "closedAt": "2099-01-01T00:00:00Z", "body": "", "labels": {"nodes": []}, "assignees": {"nodes": []},
+     "parent": {"number": 10}, "comments": {"totalCount": 0, "nodes": []}, "latest": {"nodes": []}},
+]}}}}
+
+
+@pytest.fixture
+def issues_box(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    """A checkout naming `o/r`, a stand-in gh logged in or not, and an empty index in the tool's schema."""
+    root = tmp_path / "checkout"
+    (root / ".claude").mkdir(parents=True)
+    (root / ".claude/project.json").write_text(json.dumps({"repo": "o/r"}))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    page = tmp_path / "page.json"
+    page.write_text(json.dumps(_ISSUE_PAGE))
+    gh = bin_dir / "gh"
+    gh.write_text(f"""#!{sys.executable}
+import sys, os
+if sys.argv[1:2] == ["auth"]:
+    sys.exit(int(os.environ.get("FAKE_GH_AUTH", "0")))
+if any("OPEN, CLOSED" in argument for argument in sys.argv):  # the live sync: nothing changed since
+    print('{{"data": {{"repository": {{"issues": {{"pageInfo": {{"hasNextPage": false}}, "nodes": []}}}}}}}}')
+else:
+    print(open({str(page)!r}).read())
+""")
+    gh.chmod(0o755)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    database = tmp_path / "cache" / "p.db"
+    database.parent.mkdir()
+    connection = sqlite3.connect(database)
+    connection.executescript("""
+        CREATE TABLE nodes (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, label TEXT NOT NULL,
+            name TEXT NOT NULL, qualified_name TEXT NOT NULL, file_path TEXT DEFAULT '',
+            start_line INTEGER DEFAULT 0, end_line INTEGER DEFAULT 0, properties TEXT DEFAULT '{}',
+            UNIQUE(project, qualified_name));
+        CREATE TABLE edges (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, source_id INTEGER NOT NULL,
+            target_id INTEGER NOT NULL, type TEXT NOT NULL, properties TEXT DEFAULT '{}',
+            UNIQUE(source_id, target_id, type));
+        CREATE VIRTUAL TABLE nodes_fts USING fts5(name, qualified_name, label, file_path, body, content='');
+    """)
+    connection.close()
+    return root, database
+
+
+def _issue_rows(database: pathlib.Path) -> dict:
+    """Issue number to (title, properties, parent number) as the index holds them."""
+    connection = sqlite3.connect(database)
+    try:
+        rows = {json.loads(props)["number"]: (name, json.loads(props), None) for name, props in connection.execute(
+            "SELECT name, properties FROM nodes WHERE label = 'Issue'")}
+        for child, parent in connection.execute(
+                "SELECT c.qualified_name, p.qualified_name FROM edges e JOIN nodes c ON c.id = e.source_id "
+                "JOIN nodes p ON p.id = e.target_id WHERE e.type = 'CHILD_OF'"):
+            number = int(child.split(":")[1])
+            rows[number] = (*rows[number][:2], int(parent.split(":")[1]))
+        return rows
+    finally:
+        connection.close()
+
+
+def test_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows(issues_box) -> None:
+    """gh's issues land as Issue rows with their fields and CHILD_OF edge, and come back after a rebuild."""
+    root, database = issues_box
+    said = cbm_issues.answer(database, "p", root)
+    assert "live" in said and "NOT" not in said and "0 changed" in said
+    rows = _issue_rows(database)
+    assert set(rows) == {10, 11}
+    title, props, parent = rows[10]
+    assert title == "The effort" and props["state"] == "open" and props["is_prd"] is True
+    assert props["open_tasks"] == "- [ ] first open task" and props["done_tasks_count"] == 1
+    assert props["assignees"] == ["someone"] and props["url"].endswith("/issues/10")
+    assert rows[11][1]["state"] == "closed" and rows[11][2] == 10
+    assert cbm_issues.cache_beside(database).exists()
+
+    connection = sqlite3.connect(database)
+    connection.execute("DELETE FROM nodes WHERE label = 'Issue'")
+    connection.execute("DELETE FROM edges")
+    connection.commit()
+    connection.close()
+    cbm_issues.answer(database, "p", root)
+    assert set(_issue_rows(database)) == {10, 11} and _issue_rows(database)[11][2] == 10
+
+
+def test_without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_names_the_fix(
+        issues_box, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No login and no cache: "not loaded" and gh auth login. A cache and a failing gh: its age and the fix."""
+    root, database = issues_box
+    monkeypatch.setenv("FAKE_GH_AUTH", "1")
+    said = cbm_issues.answer(database, "p", root)
+    assert "not loaded" in said and "not logged in" in said and "gh auth login" in said
+    assert _issue_rows(database) == {}
+
+    monkeypatch.setenv("FAKE_GH_AUTH", "0")
+    cbm_issues.status_of(cbm_issues.cache_beside(database)).unlink()
+    cbm_issues.answer(database, "p", root)
+    monkeypatch.setenv("PATH", "/nonexistent")
+    stale = cbm_issues.answer(database, "p", root)
+    assert "NOT live" in stale and "minutes ago" in stale and "gh auth login" in stale
+    assert set(_issue_rows(database)) == {10, 11}
+
+
+def test_only_a_question_that_names_issues_waits_on_github(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An Issue query carries the sync's line; a question about code never calls it."""
+    calls = []
+    monkeypatch.setattr(cbm_index, "ready", lambda here: {"path": "/x/p.db", "project": "p", "head": ""})
+    monkeypatch.setattr(cbm_index, "ask", lambda tool, given: {"ok": True, "result": "rows: 1"})
+    monkeypatch.setattr(cbm_issues, "answer", lambda database, project, root: calls.append(project) or "rows live")
+    asked = server.answer("query_graph", {"query": "MATCH (i:Issue) RETURN i.number"})
+    assert asked["issues"] == "rows live" and calls == ["p"]
+    assert "[index] rows live" in server._as_text(asked)
+    code = server.answer("query_graph", {"query": "MATCH (f:Function) RETURN f.name"})
+    assert "issues" not in code and calls == ["p"]
