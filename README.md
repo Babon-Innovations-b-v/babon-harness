@@ -4,12 +4,19 @@ The setup Babon Innovations runs its company on: a Claude Code harness, and an o
 
 You make the decisions. The agent plans with you before it builds, hooks stop its known mistakes, and an index answers its questions.
 
-<a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/images/loop-dark.png">
-    <img alt="The loop: a request is checked against the repository, decided, written down as an issue, built, tested, shipped and watched" src="docs/diagrams/images/loop-light.png">
-  </picture>
-</a>
+```mermaid
+flowchart LR
+    A[Your request] --> B[/grill: agree the plan/]
+    B --> C[/to-prd: written as an issue/]
+    C --> D[Build on main]
+    D --> E{Tests and hooks}
+    E -- red --> D
+    E -- green --> F[Push = deploy]
+    F --> G[Assistant watches production]
+    G -. something to fix .-> A
+```
+
+[Open the interactive loop](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html): step through it and click a box for its explanation.
 
 ## Contents
 
@@ -21,12 +28,29 @@ You make the decisions. The agent plans with you before it builds, hooks stop it
 | `docs/` | How it all works: one bible chapter and one interactive diagram per part. |
 | `apps/`, `infra/` | The optional stack: website, Nextcloud sign-in, meeting minutes, a Signal assistant that keeps the agenda, recorded video calls, monitoring, and deploys that run the tests first. |
 
-<a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/images/stack-dark.png">
-    <img alt="The stack: one server behind Caddy with Nextcloud, the website, notulen, the assistant, Talk, Prometheus and auto-deploy; a media box, object storage, the vault and an optional GPU tier beside it" src="docs/diagrams/images/stack-light.png">
-  </picture>
-</a>
+```mermaid
+flowchart LR
+    P[People: browser and Signal] --> CA[Caddy]
+    subgraph S[One server]
+      CA --> NC[Nextcloud: login, files, calendar]
+      CA --> W[Website]
+      CA --> N[Notulen: minutes]
+      AS[Assistant on Signal] --> NC
+      AS --> T[Talk: video calls]
+      T --> N
+      PR[Prometheus] --> AS
+      AD[Auto-deploy: tests, then ships]
+    end
+    T --> M[(Media box: recording)]
+    N --> O[(Object storage)]
+    O -.-> G[(GPU, optional)]
+    AD -.-> V[(Vault: secrets)]
+    N --> GH[GitHub]
+    GH --> AD
+    L[Your laptop: Claude Code] --> GH
+```
+
+[Open the interactive stack](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html).
 
 ## Requirements
 
@@ -63,7 +87,7 @@ Built on Claude Code and Scaleway. Skills are markdown, hooks and the index are 
 
 ## Support
 
-None promised. Issues are welcome. Report security problems through the Security tab.
+None promised. Issues are welcome. Questions: support@babon.eu. Security problems: see [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Credits
 
