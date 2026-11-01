@@ -9,8 +9,10 @@ question in seconds rather than after a build of half a minute or more.
 
 THE FILE. One zstd-compressed SQLite index, the tool's own schema, carrying
 ``cbm_index``'s stamp table with exactly one row: the project it was built as
-and the commit it describes. The release asset's label is that commit, so the
-offer is read with one API call before anything is downloaded.
+and the commit it describes. The release asset's label is that commit, so a box
+that already has an index reads the offer with one API call before deciding to
+download; a box with none downloads straight away and checks the file's own
+stamp, which saves that call on the first question.
 
 WHAT IS CHECKED, in order, and any failure raises ``FetchError`` and places
 nothing:
@@ -117,8 +119,9 @@ def fetch(root: pathlib.Path | None = None, *, slug: str, tag: str, asset: str,
     have = cbm_index.stamp_of(target, project)
     if have and have == head:
         raise FetchError("the index here already describes HEAD")
-    commit = offered(slug, tag, asset)
-    _check_offer(shared, commit, head, have)
+    commit = offered(slug, tag, asset) if have else ""
+    if commit:
+        _check_offer(shared, commit, head, have)
     scratch = cbm_index.cache_dir().parent / f".cbm-fetch.{project}.{os.getpid()}"
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir(parents=True)
@@ -126,7 +129,8 @@ def fetch(root: pathlib.Path | None = None, *, slug: str, tag: str, asset: str,
         _gh(["release", "download", tag, "-R", slug, "-p", asset, "-D", str(scratch), "--clobber"])
         database = scratch / f"{project}.db"
         unzstd(scratch / asset, database)
-        theirs = _verified(database, commit)
+        theirs, commit = _verified(database, commit)
+        _check_offer(shared, commit, head, have)
         if accept is not None:
             accept(database, theirs, commit)
         rename_project(database, theirs, project, qualified=True)
@@ -185,8 +189,8 @@ def unzstd(source: pathlib.Path, into: pathlib.Path) -> None:
         raise FetchError(f"zstd could not decompress {source.name}: {done.stderr.strip()}")
 
 
-def _verified(database: pathlib.Path, commit: str) -> str:
-    """The project the file was built as, once its own stamp names ``commit``."""
+def _verified(database: pathlib.Path, commit: str) -> tuple[str, str]:
+    """The project the file was built as and its commit, once its one stamp names ``commit`` (any when empty)."""
     try:
         connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
         try:
@@ -196,9 +200,9 @@ def _verified(database: pathlib.Path, commit: str) -> str:
             connection.close()
     except sqlite3.Error as failed:
         raise FetchError(f"the downloaded index cannot be read: {failed}") from failed
-    if len(rows) != 1 or rows[0][1] != commit:
-        raise FetchError(f"the downloaded index is stamped {rows!r}, not {commit[:12]} alone")
-    return rows[0][0]
+    if len(rows) != 1 or not rows[0][1] or (commit and rows[0][1] != commit):
+        raise FetchError(f"the downloaded index is stamped {rows!r}, not {commit[:12] or 'one commit'} alone")
+    return rows[0][0], rows[0][1]
 
 
 def rename_project(database: pathlib.Path, old: str, new: str, *, qualified: bool) -> None:
