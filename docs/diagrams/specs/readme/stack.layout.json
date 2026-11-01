@@ -1,0 +1,45 @@
+{
+ "_comment": "The README's picture of the stack: the same fifteen boxes, four regions and sixteen edges as specs/stack.layout.json, stacked into three narrow columns so the picture stays readable in GitHub's 840 px README column. Outside on the left, the server in the middle and right, the media box and the rented pieces underneath.",
+ "canvas": [720, 1110],
+ "boxes": {
+  "people": [30, 190],
+  "github": [30, 520],
+  "laptop": [30, 630],
+  "sso": [275, 80],
+  "caddy": [275, 190],
+  "website": [275, 300],
+  "deploy": [275, 520],
+  "observability": [520, 80],
+  "assistant": [520, 190],
+  "talk": [520, 300],
+  "notulen": [520, 410],
+  "media": [520, 670],
+  "vault": [275, 800],
+  "storage": [520, 800],
+  "gpu": [520, 910]
+ },
+ "boundaries": [
+  {"label": "Outside the server", "wraps": ["people", "github", "laptop"]},
+  {"label": "One server, behind Caddy", "wraps": ["website", "caddy", "sso", "assistant", "talk", "observability", "notulen", "deploy"]},
+  {"label": "Media box", "wraps": ["media"]},
+  {"label": "Rented beside it", "wraps": ["storage", "gpu", "vault"]}
+ ],
+ "edges": [
+  ["people", "caddy", "HTTPS"],
+  ["people", "assistant", "Signal, both ways", {"fromSide": "left", "toSide": "right", "via": [[12, 221], [12, 30], [705, 30], [705, 221]], "labelAt": [400, 30]}],
+  ["caddy", "website", "public"],
+  ["caddy", "sso", "logged in?"],
+  ["caddy", "notulen", "after login", {"fromSide": "right", "toSide": "left", "via": [[455, 221], [455, 441]]}],
+  ["assistant", "sso", "agenda, CalDAV", {"fromSide": "left", "toSide": "right", "via": [[490, 221], [490, 111]]}],
+  ["assistant", "talk", "call link"],
+  ["observability", "assistant", "alerts"],
+  ["talk", "media", "calls", {"fromSide": "right", "toSide": "right", "via": [[680, 331], [680, 701]]}],
+  ["talk", "notulen", "call over: recording"],
+  ["notulen", "storage", "audio", {"fromSide": "right", "toSide": "right", "via": [[705, 441], [705, 831]]}],
+  ["storage", "gpu", "the audio", {"variant": "dashed"}],
+  ["notulen", "github", "minutes", {"variant": "emphasis", "fromSide": "bottom", "toSide": "top", "via": [[595, 495], [105, 495]]}],
+  ["laptop", "github", "push to main", {"variant": "emphasis"}],
+  ["github", "deploy", "webhook", {"variant": "emphasis"}],
+  ["deploy", "vault", "every cycle", {"variant": "dashed"}]
+ ]
+}

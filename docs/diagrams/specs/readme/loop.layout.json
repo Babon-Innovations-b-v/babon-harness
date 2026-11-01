@@ -1,0 +1,154 @@
+{
+ "_comment": "The README's picture of the loop: the same twelve boxes, four regions and seventeen edges as specs/stack/loop.layout.json, folded into two columns so the picture stays readable in GitHub's 840 px README column. The turn runs down the right column and back up the left.",
+ "canvas": [680, 1160],
+ "legend": {
+  "edge-default": "One turn"
+ },
+ "boxes": {
+  "spark": [60, 50],
+  "dump": [60, 190],
+  "orient": [420, 190],
+  "decision": [420, 330],
+  "capture": [420, 440],
+  "board": [420, 550],
+  "build": [420, 700],
+  "deleted": [420, 810],
+  "verify": [420, 920],
+  "watch": [60, 700],
+  "check": [60, 810],
+  "live": [60, 920]
+ },
+ "boundaries": [
+  {
+   "label": "Where a turn starts",
+   "wraps": ["spark", "dump"]
+  },
+  {
+   "label": "Nothing is built before this",
+   "wraps": ["decision", "capture", "board"]
+  },
+  {
+   "label": "Write it, cut the old, prove it",
+   "wraps": ["build", "deleted", "verify"]
+  },
+  {
+   "label": "After the push",
+   "wraps": ["watch", "check", "live"]
+  }
+ ],
+ "edges": [
+  ["spark", "dump", "nothing has to be broken", { "variant": "emphasis" }],
+  ["dump", "orient", ""],
+  ["orient", "decision", "one question at a time"],
+  ["decision", "capture", "written the moment it settles"],
+  ["capture", "board", "the plan leaves the chat"],
+  ["board", "build", "one issue at a time"],
+  ["build", "deleted", "the old version, same commit"],
+  ["deleted", "verify", "what is left gets proved"],
+  ["verify", "live", "green, and the push is the deploy"],
+  ["live", "check", "the person opens it"],
+  [
+   "live",
+   "watch",
+   "watched around the clock",
+   {
+    "fromSide": "bottom",
+    "toSide": "left",
+    "via": [
+     [135, 1030],
+     [16, 1030],
+     [16, 731]
+    ],
+    "labelAt": [86, 1030]
+   }
+  ],
+  [
+   "watch",
+   "dump",
+   "an alert, any hour",
+   {
+    "variant": "emphasis",
+    "fromSide": "top",
+    "toSide": "bottom",
+    "labelAt": [135, 470]
+   }
+  ],
+  [
+   "check",
+   "dump",
+   "what they found by hand",
+   {
+    "variant": "emphasis",
+    "fromSide": "right",
+    "toSide": "right",
+    "via": [
+     [260, 841],
+     [260, 221]
+    ],
+    "labelAt": [260, 600]
+   }
+  ],
+  [
+   "build",
+   "decision",
+   "what building teaches",
+   {
+    "variant": "dashed",
+    "fromSide": "left",
+    "toSide": "left",
+    "via": [
+     [340, 731],
+     [340, 361]
+    ],
+    "labelAt": [340, 490]
+   }
+  ],
+  [
+   "verify",
+   "build",
+   "what fails goes back",
+   {
+    "variant": "dashed",
+    "fromSide": "right",
+    "toSide": "right",
+    "via": [
+     [610, 951],
+     [610, 731]
+    ],
+    "labelAt": [622, 841]
+   }
+  ],
+  [
+   "verify",
+   "board",
+   "every verdict, pass or fail",
+   {
+    "variant": "dashed",
+    "fromSide": "bottom",
+    "toSide": "right",
+    "via": [
+     [495, 1010],
+     [645, 1010],
+     [645, 581]
+    ],
+    "labelAt": [560, 1010]
+   }
+  ],
+  [
+   "capture",
+   "orient",
+   "written now, read first next turn",
+   {
+    "variant": "dashed",
+    "fromSide": "right",
+    "toSide": "top",
+    "via": [
+     [610, 471],
+     [610, 160],
+     [495, 160]
+    ],
+    "labelAt": [552, 160]
+   }
+  ]
+ ]
+}
