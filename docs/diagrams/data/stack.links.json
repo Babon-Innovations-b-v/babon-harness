@@ -35,10 +35,6 @@
   "chapter": "infra/observability",
   "section": "Alert path"
  },
- "people": {
-  "chapter": "architecture/system-context",
-  "section": "Who talks to it"
- },
  "sso": {
   "chapter": "infra/platform",
   "section": "One login across subdomains"

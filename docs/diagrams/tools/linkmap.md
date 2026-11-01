@@ -8,52 +8,51 @@ change. Do not edit by hand.
 
 | Page | Box | Bible |
 |---|---|---|
-| stack | [`people`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=people) | [architecture/system-context § Who talks to it](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it) |
-| stack | [`github`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=github) | [architecture/system-context § Who talks to it](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it) |
-| stack | [`laptop`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=laptop) | [architecture/system-context § The pieces](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-pieces) |
-| stack | [`website`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=website) | [apps/website § What it serves](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-it-serves) |
-| stack | [`caddy`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=caddy) | [infra/platform § One login across subdomains](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains) |
-| stack | [`sso`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=sso) | [infra/platform § One login across subdomains](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains) |
-| stack | [`assistant`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=assistant) | [apps/assistant § What runs](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-runs) |
-| stack | [`talk`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=talk) | [infra/media § How a call becomes minutes](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#how-a-call-becomes-minutes) |
-| stack | [`observability`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=observability) | [infra/observability § Alert path](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#alert-path) |
-| stack | [`notulen`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=notulen) | [apps/notulen § The recording path](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path) |
-| stack | [`deploy`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=deploy) | [infra/deploy § The loop](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-loop) |
-| stack | [`media`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=media) | [infra/media § What runs on the box](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-runs-on-the-box) |
-| stack | [`storage`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=storage) | [apps/notulen § The recording path](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path) |
-| stack | [`gpu`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=gpu) | [infra/gpu § What the tier is](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-the-tier-is) |
-| stack | [`vault`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=vault) | [infra/platform § The vault](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-vault) |
-| stack/loop | [`spark`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=spark) | [workflow/loop § Where a turn starts](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#where-a-turn-starts) |
-| stack/loop | [`dump`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=dump) | [workflow/loop § Where a turn starts](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#where-a-turn-starts) |
-| stack/loop | [`orient`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=orient) | [workflow/loop § Nothing is built before this](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#nothing-is-built-before-this) |
-| stack/loop | [`decision`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=decision) | [workflow/loop § Nothing is built before this](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#nothing-is-built-before-this) |
-| stack/loop | [`capture`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=capture) | [workflow/loop § Nothing is built before this](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#nothing-is-built-before-this) |
-| stack/loop | [`board`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=board) | [workflow/loop § Nothing is built before this](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#nothing-is-built-before-this) |
-| stack/loop | [`build`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=build) | [workflow/loop § Write it, cut the old, prove it](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#write-it-cut-the-old-prove-it) |
-| stack/loop | [`deleted`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=deleted) | [workflow/loop § Write it, cut the old, prove it](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#write-it-cut-the-old-prove-it) |
-| stack/loop | [`verify`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=verify) | [workflow/loop § What stops a bad commit](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-stops-a-bad-commit) |
-| stack/loop | [`live`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=live) | [workflow/loop § After the push](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#after-the-push) |
-| stack/loop | [`check`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=check) | [workflow/loop § After the push](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#after-the-push) |
-| stack/loop | [`watch`](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=watch) | [workflow/loop § After the push](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#after-the-push) |
+| stack | [`github`](../stack.html#focus=github) | [architecture/system-context § Who talks to it](../../bible.md#who-talks-to-it) |
+| stack | [`laptop`](../stack.html#focus=laptop) | [architecture/system-context § The pieces](../../bible.md#the-pieces) |
+| stack | [`website`](../stack.html#focus=website) | [apps/website § What it serves](../../bible.md#what-it-serves) |
+| stack | [`caddy`](../stack.html#focus=caddy) | [infra/platform § One login across subdomains](../../bible.md#one-login-across-subdomains) |
+| stack | [`sso`](../stack.html#focus=sso) | [infra/platform § One login across subdomains](../../bible.md#one-login-across-subdomains) |
+| stack | [`assistant`](../stack.html#focus=assistant) | [apps/assistant § What runs](../../bible.md#what-runs) |
+| stack | [`talk`](../stack.html#focus=talk) | [infra/media § How a call becomes minutes](../../bible.md#how-a-call-becomes-minutes) |
+| stack | [`observability`](../stack.html#focus=observability) | [infra/observability § Alert path](../../bible.md#alert-path) |
+| stack | [`notulen`](../stack.html#focus=notulen) | [apps/notulen § The recording path](../../bible.md#the-recording-path) |
+| stack | [`deploy`](../stack.html#focus=deploy) | [infra/deploy § The loop](../../bible.md#the-loop) |
+| stack | [`media`](../stack.html#focus=media) | [infra/media § What runs on the box](../../bible.md#what-runs-on-the-box) |
+| stack | [`storage`](../stack.html#focus=storage) | [apps/notulen § The recording path](../../bible.md#the-recording-path) |
+| stack | [`gpu`](../stack.html#focus=gpu) | [infra/gpu § What the tier is](../../bible.md#what-the-tier-is) |
+| stack | [`vault`](../stack.html#focus=vault) | [infra/platform § The vault](../../bible.md#the-vault) |
+| stack/loop | [`spark`](../stack/loop.html#focus=spark) | [workflow/loop § Where a turn starts](../../bible.md#where-a-turn-starts) |
+| stack/loop | [`dump`](../stack/loop.html#focus=dump) | [workflow/loop § Where a turn starts](../../bible.md#where-a-turn-starts) |
+| stack/loop | [`orient`](../stack/loop.html#focus=orient) | [workflow/loop § Nothing is built before this](../../bible.md#nothing-is-built-before-this) |
+| stack/loop | [`decision`](../stack/loop.html#focus=decision) | [workflow/loop § Nothing is built before this](../../bible.md#nothing-is-built-before-this) |
+| stack/loop | [`capture`](../stack/loop.html#focus=capture) | [workflow/loop § Nothing is built before this](../../bible.md#nothing-is-built-before-this) |
+| stack/loop | [`board`](../stack/loop.html#focus=board) | [workflow/loop § Nothing is built before this](../../bible.md#nothing-is-built-before-this) |
+| stack/loop | [`build`](../stack/loop.html#focus=build) | [workflow/loop § Write it, cut the old, prove it](../../bible.md#write-it-cut-the-old-prove-it) |
+| stack/loop | [`deleted`](../stack/loop.html#focus=deleted) | [workflow/loop § Write it, cut the old, prove it](../../bible.md#write-it-cut-the-old-prove-it) |
+| stack/loop | [`verify`](../stack/loop.html#focus=verify) | [workflow/loop § What stops a bad commit](../../bible.md#what-stops-a-bad-commit) |
+| stack/loop | [`live`](../stack/loop.html#focus=live) | [workflow/loop § After the push](../../bible.md#after-the-push) |
+| stack/loop | [`check`](../stack/loop.html#focus=check) | [workflow/loop § After the push](../../bible.md#after-the-push) |
+| stack/loop | [`watch`](../stack/loop.html#focus=watch) | [workflow/loop § After the push](../../bible.md#after-the-push) |
 
 ## Bible section -> diagram boxes
 
 | Chapter | Section | Boxes |
 |---|---|---|
-| architecture/system-context | The pieces | [stack#laptop](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=laptop) |
-| architecture/system-context | Who talks to it | [stack#people](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=people) · [stack#github](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=github) |
-| apps/assistant | What runs | [stack#assistant](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=assistant) |
-| apps/notulen | The recording path | [stack#notulen](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=notulen) · [stack#storage](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=storage) |
-| apps/website | What it serves | [stack#website](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=website) |
-| infra/platform | One login across subdomains | [stack#caddy](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=caddy) · [stack#sso](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=sso) |
-| infra/platform | The vault | [stack#vault](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=vault) |
-| infra/deploy | The loop | [stack#deploy](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=deploy) |
-| infra/observability | Alert path | [stack#observability](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=observability) |
-| infra/gpu | What the tier is | [stack#gpu](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=gpu) |
-| infra/media | What runs on the box | [stack#media](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=media) |
-| infra/media | How a call becomes minutes | [stack#talk](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack.html#focus=talk) |
-| workflow/loop | Where a turn starts | [stack/loop#spark](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=spark) · [stack/loop#dump](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=dump) |
-| workflow/loop | Nothing is built before this | [stack/loop#orient](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=orient) · [stack/loop#decision](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=decision) · [stack/loop#capture](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=capture) · [stack/loop#board](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=board) |
-| workflow/loop | Write it, cut the old, prove it | [stack/loop#build](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=build) · [stack/loop#deleted](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=deleted) |
-| workflow/loop | What stops a bad commit | [stack/loop#verify](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=verify) |
-| workflow/loop | After the push | [stack/loop#watch](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=watch) · [stack/loop#live](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=live) · [stack/loop#check](https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/diagrams/stack/loop.html#focus=check) |
+| architecture/system-context | The pieces | [stack#laptop](../stack.html#focus=laptop) |
+| architecture/system-context | Who talks to it | [stack#github](../stack.html#focus=github) |
+| apps/assistant | What runs | [stack#assistant](../stack.html#focus=assistant) |
+| apps/notulen | The recording path | [stack#notulen](../stack.html#focus=notulen) · [stack#storage](../stack.html#focus=storage) |
+| apps/website | What it serves | [stack#website](../stack.html#focus=website) |
+| infra/platform | One login across subdomains | [stack#caddy](../stack.html#focus=caddy) · [stack#sso](../stack.html#focus=sso) |
+| infra/platform | The vault | [stack#vault](../stack.html#focus=vault) |
+| infra/deploy | The loop | [stack#deploy](../stack.html#focus=deploy) |
+| infra/observability | Alert path | [stack#observability](../stack.html#focus=observability) |
+| infra/gpu | What the tier is | [stack#gpu](../stack.html#focus=gpu) |
+| infra/media | What runs on the box | [stack#media](../stack.html#focus=media) |
+| infra/media | How a call becomes minutes | [stack#talk](../stack.html#focus=talk) |
+| workflow/loop | Where a turn starts | [stack/loop#spark](../stack/loop.html#focus=spark) · [stack/loop#dump](../stack/loop.html#focus=dump) |
+| workflow/loop | Nothing is built before this | [stack/loop#orient](../stack/loop.html#focus=orient) · [stack/loop#decision](../stack/loop.html#focus=decision) · [stack/loop#capture](../stack/loop.html#focus=capture) · [stack/loop#board](../stack/loop.html#focus=board) |
+| workflow/loop | Write it, cut the old, prove it | [stack/loop#build](../stack/loop.html#focus=build) · [stack/loop#deleted](../stack/loop.html#focus=deleted) |
+| workflow/loop | What stops a bad commit | [stack/loop#verify](../stack/loop.html#focus=verify) |
+| workflow/loop | After the push | [stack/loop#watch](../stack/loop.html#focus=watch) · [stack/loop#live](../stack/loop.html#focus=live) · [stack/loop#check](../stack/loop.html#focus=check) |

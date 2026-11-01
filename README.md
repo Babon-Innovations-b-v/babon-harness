@@ -26,7 +26,7 @@ You make the decisions. The agent plans with you before it builds, hooks stop it
 <a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/images/stack-dark.png">
-    <img alt="The stack: one server behind Caddy with Nextcloud, the website, notulen, the assistant, Talk, Prometheus and auto-deploy; a media box, object storage, the vault and an optional GPU tier beside it" src="docs/diagrams/images/stack-light.png">
+    <img alt="The stack: your system, Claude Code with the harness, reaches one server through Caddy and talks with the assistant over Signal both ways; the server runs Nextcloud, the website, notulen, the assistant, Talk, Prometheus and auto-deploy; a media box, object storage, the vault and an optional GPU tier beside it" src="docs/diagrams/images/stack-light.png">
   </picture>
 </a>
 

@@ -28,7 +28,7 @@ loop a person and Claude Code use to change it. Push to `main` is the deploy.
 ### The pieces
 
 ```
-laptop: Claude Code in this repository
+your system: Claude Code in this repository
   GitHub: main, issues, the board
     the server: one Scaleway VM, the compose stack behind Caddy
       Nextcloud: files, calendar, the single sign-on
@@ -38,7 +38,7 @@ laptop: Claude Code in this repository
     Scaleway: object storage, Secret Manager, optional GPU cluster
 ```
 
-Nothing deploys from the laptop.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=laptop) Work lands on `main`, the server pulls it, the deploy gate tests
+Nothing deploys from your system.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=laptop) Work lands on `main`, the server pulls it, the deploy gate tests
 the commit against its own tree, and only a green commit is swapped in. A red one holds the old
 version, and with `EJECT_ENABLED=1` it is reverted on `main` and handed back to its author.
 
@@ -46,8 +46,8 @@ version, and with `EJECT_ENABLED=1` it is reverted on `main` and handed back to 
 
 | Who | Through | Reaches |
 |---|---|---|
-| The owner and the team | a browser, one Nextcloud login[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=people) | files, calendar, Notulen, gated pages |
-| The owner and the team | Signal | the assistant |
+| The owner and the team | a browser, one Nextcloud login | files, calendar, Notulen, gated pages |
+| The owner and the team | Signal, both ways | the assistant, which asks, pages and briefs back |
 | A session | git and `gh` | the repository, issues, the board[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=github) |
 | The public | HTTPS | the website at the root domain |
 
@@ -723,11 +723,11 @@ They exist only as prose an agent reads, and no script replaces them.
 <a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/images/stack-dark.png">
-    <img alt="The stack: people reach one server through Caddy or over Signal; behind it run Nextcloud with Talk, notulen, the assistant and Prometheus; the assistant books meetings on the calendar and makes Talk call links; calls run through the media box and a recorded call becomes minutes committed to GitHub; a push from the laptop reaches the deploy loop; object storage, the vault and an optional GPU tier are rented beside it" src="docs/diagrams/images/stack-light.png">
+    <img alt="The stack: your system, Claude Code with the harness, reaches one server through Caddy in a browser and talks with the assistant over Signal both ways, so its questions, pages and briefs come back; behind it run Nextcloud with Talk, notulen, the assistant and Prometheus; the assistant books meetings on the calendar and makes Talk call links; calls run through the media box and a recorded call becomes minutes committed to GitHub; a push from your system reaches the deploy loop; object storage, the vault and an optional GPU tier are rented beside it" src="docs/diagrams/images/stack-light.png">
   </picture>
 </a>
 
-*The stack. The picture opens the interactive page; its laptop box opens the loop.*
+*The stack. The picture opens the interactive page; its Your system box opens the loop.*
 
 #### Platform
 

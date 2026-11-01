@@ -1,13 +1,13 @@
 {
  "steps": [
   {
-   "label": "People reach it two ways: a browser through Caddy, and Signal to the assistant",
+   "label": "Your system reaches it two ways: a browser through Caddy, and Signal both ways with the assistant",
    "add": [
-    "people",
+    "laptop",
     "caddy",
     "assistant",
-    "people-caddy",
-    "people-assistant"
+    "laptop-caddy",
+    "assistant-laptop"
    ]
   },
   {
@@ -51,9 +51,8 @@
    ]
   },
   {
-   "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
+   "label": "Every change starts on your system as a push; the server tests it, pulls the vault and ships",
    "add": [
-    "laptop",
     "deploy",
     "vault",
     "laptop-github",
@@ -64,9 +63,8 @@
  ],
  "regions": [
   [
-   "people",
-   "github",
-   "laptop"
+   "laptop",
+   "github"
   ],
   [
    "website",

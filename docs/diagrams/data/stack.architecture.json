@@ -3,7 +3,7 @@
  "diagram_type": "architecture",
  "meta": {
   "title": "The stack",
-  "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and the laptop where every change starts. Push to main is the deploy.",
+  "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
   "visual_preset": "editorial",
   "quality_profile": "standard",
   "viewBox": [
@@ -14,7 +14,7 @@
    "mode": "auto",
    "entries": {
     "external": {
-     "label": "People, outside services"
+     "label": "Your system, outside services"
     },
     "frontend": {
      "label": "Public, video calls"
@@ -48,20 +48,6 @@
  },
  "components": [
   {
-   "id": "people",
-   "type": "external",
-   "label": "People",
-   "sublabel": "browser and Signal",
-   "pos": [
-    60,
-    260
-   ],
-   "size": [
-    150,
-    62
-   ]
-  },
-  {
    "id": "github",
    "type": "external",
    "label": "GitHub",
@@ -78,11 +64,11 @@
   {
    "id": "laptop",
    "type": "external",
-   "label": "Your laptop",
+   "label": "Your system",
    "sublabel": "Claude Code + harness",
    "pos": [
     60,
-    680
+    260
    ],
    "size": [
     150,
@@ -260,32 +246,32 @@
  ],
  "connections": [
   {
-   "id": "people-caddy",
-   "from": "people",
+   "id": "laptop-caddy",
+   "from": "laptop",
    "to": "caddy",
-   "label": "HTTPS",
+   "label": "HTTPS, browser",
    "fromSide": "right",
    "toSide": "left"
   },
   {
-   "id": "people-assistant",
-   "from": "people",
-   "to": "assistant",
-   "label": "Signal, both ways",
-   "fromSide": "left",
-   "toSide": "top",
+   "id": "assistant-laptop",
+   "from": "assistant",
+   "to": "laptop",
+   "label": "Signal both ways: questions, pages, briefs",
+   "fromSide": "top",
+   "toSide": "left",
    "via": [
-    [
-     12,
-     291
-    ],
-    [
-     12,
-     70
-    ],
     [
      915,
      70
+    ],
+    [
+     12,
+     70
+    ],
+    [
+     12,
+     291
     ]
    ],
    "labelAt": [
@@ -431,8 +417,12 @@
    "to": "github",
    "label": "push to main",
    "variant": "emphasis",
-   "fromSide": "top",
-   "toSide": "bottom"
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    135,
+    336
+   ]
   },
   {
    "id": "github-deploy",
@@ -476,9 +466,8 @@
    "kind": "region",
    "label": "Outside the server",
    "wraps": [
-    "people",
-    "github",
-    "laptop"
+    "laptop",
+    "github"
    ]
   },
   {

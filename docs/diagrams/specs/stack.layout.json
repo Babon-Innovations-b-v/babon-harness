@@ -1,21 +1,17 @@
 {
- "_comment": "Four columns read left to right: who and what is outside the server, the server behind its one door, and beside it the media box above the rented Scaleway pieces. Requests enter through Caddy on the left; Signal reaches the assistant over the top; the assistant reaches down into the calendar and Talk; a call leaves right for the media box and comes back down into notulen; minutes and pushes meet GitHub on the left, and a push reaches the deploy loop along the bottom.",
+ "_comment": "Four columns read left to right: your system and GitHub outside the server, the server behind its one door, and beside it the media box above the rented Scaleway pieces. Your system reaches Caddy on the left and talks with the assistant over Signal across the top; the assistant reaches down into the calendar and Talk; a call leaves right for the media box and comes back down into notulen; minutes and pushes meet GitHub on the left, and a push reaches the deploy loop along the bottom.",
  "canvas": [
   1600,
   960
  ],
  "boxes": {
-  "people": [
-   60,
-   260
-  ],
   "github": [
    60,
    540
   ],
   "laptop": [
    60,
-   680
+   260
   ],
   "website": [
    320,
@@ -70,9 +66,8 @@
   {
    "label": "Outside the server",
    "wraps": [
-    "people",
-    "github",
-    "laptop"
+    "laptop",
+    "github"
    ]
   },
   {
@@ -105,29 +100,29 @@
  ],
  "edges": [
   [
-   "people",
+   "laptop",
    "caddy",
-   "HTTPS"
+   "HTTPS, browser"
   ],
   [
-   "people",
    "assistant",
-   "Signal, both ways",
+   "laptop",
+   "Signal both ways: questions, pages, briefs",
    {
-    "fromSide": "left",
-    "toSide": "top",
+    "fromSide": "top",
+    "toSide": "left",
     "via": [
-     [
-      12,
-      291
-     ],
-     [
-      12,
-      70
-     ],
      [
       915,
       70
+     ],
+     [
+      12,
+      70
+     ],
+     [
+      12,
+      291
      ]
     ],
     "labelAt": [

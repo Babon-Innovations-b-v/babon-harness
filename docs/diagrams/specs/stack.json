@@ -1,8 +1,8 @@
 {
  "title": "The stack",
- "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and the laptop where every change starts. Push to main is the deploy.",
+ "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
  "legend": {
-  "external": "People, outside services",
+  "external": "Your system, outside services",
   "frontend": "Public, video calls",
   "backend": "Apps, deploy loop",
   "security": "Door and login",
@@ -14,24 +14,17 @@
   "edge-dashed": "Periodic or optional"
  },
  "nodes": {
-  "people": {
-   "type": "external",
-   "label": "People",
-   "sublabel": "browser and Signal",
-   "note": "The owner and the team. In a browser, one Nextcloud login with a second factor opens every private subdomain; on Signal they talk to the assistant. The public sees only the website at the bare domain.",
-   "bible": "| The owner and the team | a browser, one Nextcloud login"
-  },
   "laptop": {
    "type": "external",
-   "label": "Your laptop",
+   "label": "Your system",
    "sublabel": "Claude Code + harness",
-   "note": "Claude Code running in this repository, with the harness: skills, guards, overlays and the code index. Every change starts here as one conversation; open this box for the loop it follows. Nothing deploys from the laptop.",
+   "note": "Claude Code running in this repository, with the harness: skills, guards, overlays and the code index. Every change starts here as one conversation; open this box for the loop it follows. From here the browser reaches the private pages through Caddy, and Signal carries the assistant's questions, pages and briefs both ways. Nothing deploys from your system.",
    "module": "stack/loop.html",
    "code": [
     ".claude/skills",
     ".claude/hooks"
    ],
-   "bible": "Nothing deploys from the laptop.",
+   "bible": "Nothing deploys from your system.",
    "code_seen": "b84fe6268cef"
   },
   "github": {
@@ -175,13 +168,13 @@
  },
  "slides": [
   {
-   "label": "People reach it two ways: a browser through Caddy, and Signal to the assistant",
+   "label": "Your system reaches it two ways: a browser through Caddy, and Signal both ways with the assistant",
    "add": [
-    "people",
+    "laptop",
     "caddy",
     "assistant",
-    "people-caddy",
-    "people-assistant"
+    "laptop-caddy",
+    "assistant-laptop"
    ]
   },
   {
@@ -225,9 +218,8 @@
    ]
   },
   {
-   "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
+   "label": "Every change starts on your system as a push; the server tests it, pulls the vault and ships",
    "add": [
-    "laptop",
     "deploy",
     "vault",
     "laptop-github",
