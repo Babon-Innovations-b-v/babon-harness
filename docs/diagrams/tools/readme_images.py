@@ -3,10 +3,13 @@
 
 The served pages are laid out wide for a screen. GitHub scales a README image
 to its 840 px column, so a wide page shrinks until its text cannot be read.
-Each README picture therefore has its own narrow layout in
-specs/readme/<page>.layout.json, with the same boxes, regions and edges as the
-page; the labels and notes still come from specs/<page>.json, and nothing in
-data/ or the served tree is touched.
+Each README picture therefore has its own compact layout in
+specs/readme/<page>.layout.json, with the same boxes and regions as the page
+and every edge that can be routed cleanly at that size (the layout's _comment
+names any it leaves out); the labels and notes still come from
+specs/<page>.json, and nothing in data/ or the served tree is touched. A layout
+may set `scale` (pixels per unit) and `title_size` (box title size in units),
+and a region its `pad`.
 
     python3 docs/diagrams/tools/readme_images.py stack stack/loop
 
@@ -73,7 +76,8 @@ def architecture_doc(page):
         },
         'components': components,
         'connections': connections,
-        'boundaries': [{'kind': 'region', 'label': b['label'], 'wraps': b['wraps']}
+        'boundaries': [{'kind': 'region', 'label': b['label'], 'wraps': b['wraps'],
+                        **({'pad': b['pad']} if 'pad' in b else {})}
                        for b in layout.get('boundaries', [])],
     }
 
@@ -103,14 +107,24 @@ def export_svg(html, out):
         browser.close()
 
 
-def raster(svg, canvas, theme, out):
-    """Draw the exported SVG in one theme at EXPORT_SCALE pixels per unit."""
+def enlarge_titles(svg, size):
+    """Draw the box titles at `size` units instead of archify's 11.
+
+    A picture squeezed into the README column shrinks every word with it; the
+    titles have room to spare inside their boxes, so they alone are enlarged.
+    """
+    rule = f'<style>text.t-primary[font-size="11"][text-anchor="middle"] {{ font-size: {size}px; }}</style>'
+    svg.write_text(svg.read_text().replace('</svg>', rule + '</svg>', 1))
+
+
+def raster(svg, canvas, theme, out, scale=EXPORT_SCALE):
+    """Draw the exported SVG in one theme at `scale` pixels per unit."""
     from playwright.sync_api import sync_playwright
     width, height = canvas
     with sync_playwright() as play:
         browser = play.chromium.launch(executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM'))
         page = browser.new_page(viewport={'width': width, 'height': height},
-                                device_scale_factor=EXPORT_SCALE, color_scheme=theme)
+                                device_scale_factor=scale, color_scheme=theme)
         page.goto(svg.as_uri())
         page.screenshot(path=out)
         browser.close()
@@ -120,13 +134,16 @@ def main(pages):
     IMAGES.mkdir(exist_ok=True)
     for page in pages:
         name = pathlib.PurePosixPath(page).name
-        canvas = json.loads((SPECS / 'readme' / f'{name}.layout.json').read_text())['canvas']
+        layout = json.loads((SPECS / 'readme' / f'{name}.layout.json').read_text())
+        canvas = layout['canvas']
         with tempfile.TemporaryDirectory() as tmp:
             svg = pathlib.Path(tmp) / 'readme.svg'
             export_svg(render_html(page, pathlib.Path(tmp)), svg)
+            if 'title_size' in layout:
+                enlarge_titles(svg, layout['title_size'])
             for theme in THEMES:
                 out = IMAGES / f'{name}-{theme}.png'
-                raster(svg, canvas, theme, out)
+                raster(svg, canvas, theme, out, layout.get('scale', EXPORT_SCALE))
                 print(f'wrote {out}')
 
 

@@ -829,7 +829,7 @@ stack/loop` and served by GitHub Pages from `docs/`. They were delivered with
 `BIBLE_BASE_URL=https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs`, so a box's
 bible link opens the section on GitHub; set your own address before re-delivering them.
 
-The README pictures in `docs/diagrams/images/` are narrower layouts of the same pages
+The README pictures in `docs/diagrams/images/` are compact layouts of the same pages
 (`docs/diagrams/specs/readme/`), rendered dark and light by
 `python3 docs/diagrams/tools/readme_images.py stack stack/loop`, which also needs the Python
 `playwright` package.
