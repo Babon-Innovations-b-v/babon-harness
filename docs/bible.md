@@ -638,3 +638,202 @@ is a finding in either tier. At `gates/`, failure is a return value, not an exce
 8. Every test has a register row whose break turns it red.
 9. Tier-1 writes propagate; every Tier-2 swallow has its reason at the site.
 10. Overlay, bible and docstring agree with the code; a sanctioned exception is written in both the overlay and the chapter.
+
+## setup/reference
+<!-- Budget: the operator reference moved out of the README (2026-11-01); a reader looks things up here rather than reading it through. -->
+
+### Requirements and costs
+
+The harness alone needs Linux or macOS (Windows through WSL2), `git`, `curl`, `python3` 3.12 or
+later, [`uv`](https://docs.astral.sh/uv/), the GitHub CLI, Claude Code on a Claude subscription,
+and a GitHub account, since the backlog lives in GitHub issues and a GitHub Projects board.
+
+The stack also needs a Scaleway account paid by a normal bank card (prepaid and most virtual cards
+are refused), a domain whose DNS you control, and an Anthropic API key for the assistant and the
+minutes writer, billed apart from the subscription. The assistant needs a Signal number. `node` is
+needed only to draw diagrams.
+
+Rough monthly cost, as a shape and not a quote; check Scaleway's current prices.
+
+| Item | When | Roughly |
+|---|---|---|
+| One server (DEV1-M class) and its IP | always | 15 to 25 euro a month |
+| Secret Manager, one secret | always | cents |
+| Object storage for meeting audio | always, grows | usage-based |
+| GPU node | only while transcribing | depends on the card the picker finds |
+| Media box (PRO2-XS class) | only with recorded video calls | a second server, all month |
+| Anthropic API | per message and per meeting | usage-based |
+| Domain | yearly | about 10 euro |
+
+Deleting the server does not stop the bill. The bucket, the secret, a registry namespace, a GPU
+cluster and the media box keep billing until they are deleted too, so set a budget alert in the
+Scaleway console.
+
+### Configuration
+
+Nothing is read from anywhere but these three places.
+
+| Where | Holds | Committed |
+|---|---|---|
+| `.claude/project.json` | repository, owner, board, people, areas | yes, filled by `setup-github.py` |
+| `config/harness.env` | settings that are not secret: domain, region, names, switches | no; copy from `config/harness.env.example` |
+| the vault | the full environment including every secret, one Scaleway Secret Manager secret | no; keys listed in `config/vault.env.example` |
+
+`infra/secrets/push-env.sh <file>` pushes the vault. The server pulls it into
+`$HARNESS_ROOT/harness.env` each deploy cycle, so a change is live a few minutes later.
+
+### Permissions and blast radius
+
+The workflow assumes an unattended agent, which means `claude --dangerously-skip-permissions`. That
+hands the agent your shell with your rights. During setup it holds an account-wide Scaleway key and
+can create and delete servers, buckets and clusters and run up a bill. It holds GitHub
+credentials, and a push to `main` is a deploy.
+
+The hooks block a handful of shapes (force pushes, `git reset --hard`, new markdown files, torn
+commits). They are not a sandbox, and nothing stops `rm -rf` or a Scaleway delete. With the flag
+on, you are the review step. The alternatives are running without the flag and answering the
+prompts, or running the agent in a container or virtual machine you are willing to lose. WSL2 is
+not a boundary, since your Windows drives are writable from inside it.
+
+### One harness across several repositories
+
+The shared harness is `.claude/settings.json`, `.claude/soul.md`, the skills, the index and the
+hooks beside the settings. Those files stay as they came. A repository's own hooks go in
+`.claude/hooks/local/`, listed in `local/hooks.json` and run by `.claude/hooks/dispatch.py`. A
+change to a shared file is made once, in the repository treated as the source, and copied to the
+others, while each keeps its local hooks, its `project.json`, its glossary and its bible.
+
+For a copy of this repository, the source is this repository. `/update` fetches it as the
+`upstream` remote and merges, keeping your website, design, business folder, memory, glossary and
+any file you created, and taking upstream's machinery. The authors keep their own repositories in
+step with a lock file that pins each shared file by hash and refuses hand edits; that script is
+not in this repository.
+
+### Without a Claude subscription
+
+The server keeps running, since the stack, the deploy loop, monitoring and the gate never call
+Claude Code. The assistant and the minutes writer keep working on the separately billed Anthropic
+API key.
+
+The loop, the skills, the hooks, setup, `/update`, `/troubleshoot` and adding a page all stop.
+They exist only as prose an agent reads, and no script replaces them.
+
+### Components
+
+<a href="https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/images/stack-dark.png">
+    <img alt="The stack: people reach one server through Caddy or over Signal; behind it run Nextcloud with Talk, notulen, the assistant and Prometheus; the assistant books meetings on the calendar and makes Talk call links; calls run through the media box and a recorded call becomes minutes committed to GitHub; a push from the laptop reaches the deploy loop; object storage, the vault and an optional GPU tier are rented beside it" src="docs/diagrams/images/stack-light.png">
+  </picture>
+</a>
+
+*The stack. The picture opens the interactive page; its laptop box opens the loop.*
+
+#### Platform
+
+Caddy is the only public container. Accounts live in Nextcloud, and oauth2-proxy logs each private
+subdomain in through it, so one login with a second factor opens everything. The dashboards are
+built on the shared library `lib/dashkit`. `onboard` does the setup below; by hand it is:
+
+1. Fill in `config/harness.env`, then assemble the vault file following `config/vault.env.example`.
+2. Push it with `infra/secrets/push-env.sh`.
+3. Point DNS for the domain and its `cloud`, `auth`, `notulen` and `deploy` subdomains at the server.
+4. Run `docker compose --env-file $HARNESS_ROOT/harness.env up -d`.
+5. Run `infra/nextcloud/oidc-setup.sh` on the server, put the two keys it writes into the vault,
+   and push again.
+6. Enrol a second factor for each account, then set `NEXTCLOUD_2FA_ENFORCE=1`.
+
+#### Deploy
+
+A timer on the server and the GitHub push webhook both run `infra/auto-deploy/auto-deploy.sh`. It
+takes one commit per cycle, tests it in its own tree, rebuilds only the services that changed and
+checks they boot. A red or amber verdict ships nothing. The commit's GitHub page shows `vm/gate`,
+`vm/build`, `vm/boot` and `vm/deploy`.
+
+- First-time setup: `sudo HARNESS_ROOT=/opt/harness /opt/harness/repo/infra/auto-deploy/install.sh`,
+  then register the GitHub webhook with the `gh api` command the script prints, pointing at
+  `https://deploy.$DOMAIN/hooks/deploy`. Keep port 9000 closed in the firewall.
+- `DEPLOY_STATUS_TOKEN` needs commit statuses and deployments write.
+- A test needs a row in the register: `python3 -m tools.test_register --new <module> --says "<invariant>"`.
+- The eject ships off. `EJECT_ENABLED=1` in `config/harness.env` (and so in the vault) arms it,
+  with contents and pull-request write added to `DEPLOY_STATUS_TOKEN`; `EJECT_DRY_RUN=1` tries it
+  first.
+- `AUTO_DEPLOY_ENABLED=0` in `config/harness.env` and the vault pauses deploys; `systemctl disable`
+  is undone within two minutes.
+- The gate narrows to the tests a change can reach only after the first green nightly audit
+  (`harness-gate-audit.timer`).
+
+#### Observability
+
+A page goes out when a target or endpoint is down, a disk is almost full, memory runs short, a
+container keeps restarting, a `harness-*` unit fails, the deploy loop stops, a certificate nears
+expiry, the assistant or its gateway is down, or the alerting pipeline itself goes quiet. Pages
+reach `SIGNAL_RECIPIENT` through the assistant while it is up and straight over Signal while it is
+down. Prometheus listens on loopback only: `ssh -L 9090:127.0.0.1:9090 <server>`.
+
+#### Assistant
+
+Upstream [OpenClaw](https://github.com/openclaw/openclaw), unmodified, holds the Signal
+conversation. The tool door in `apps/assistant` triages alerts, decides what reaches a phone, and
+hands the gateway its tools: calendars, the board, Prometheus, deploy status and the repository's
+documents. It ships empty, with no people and no memory.
+
+Over CalDAV against Nextcloud it reads the calendars in `AGENDA_CALENDARS`. Three switches, all
+off until turned on, let it book a meeting on each attendee's calendar
+(`ASSISTANT_AGENDA_WRITE=1`), put a Nextcloud Talk call link in a video meeting's location
+(`ASSISTANT_VIDEO_CALL=1`), and send attendees that link on Signal shortly before the start
+(`ASSISTANT_MEETING_REMINDERS=1`).
+
+It needs `SIGNAL_*`, `ANTHROPIC_API_KEY`, `OPENCLAW_WEBHOOK_SECRET`, `OPENCLAW_GATEWAY_TOKEN` and
+`AGENDA_*` in the vault. Link the bot number with signal-cli in native mode once, then run
+`docker compose up -d` and `apps/assistant/workspace/apply.sh`; the deploy loop reruns `apply.sh`
+after each deploy.
+
+#### Meeting minutes (notulen)
+
+A recording made on the phone at `notulen.$DOMAIN` becomes minutes in `NOTULEN_TARGET_REPO`,
+under `NOTULEN_TARGET_PATH` (default `business/minutes`). Transcription runs on the CPU by
+default, where an hour of audio takes hours. The optional GPU tier takes four steps in
+[`infra/gpu/CLAUDE.md`](infra/gpu/CLAUDE.md); it costs GPU node hours and opens Postgres to the
+internet with only the database password in the way.
+
+#### Video calls and recording (optional)
+
+Calls run on Nextcloud Talk, carried by an optional media box: a second server built from
+[`infra/media/`](infra/media/CLAUDE.md) with a signaling server, the Janus media server and the
+Talk recording server. Each call room the assistant makes has a recording bot in it. When the call
+starts notulen asks Talk to record, and when it ends notulen fetches the recording from the room
+owner's files and writes minutes, as for a browser recording. The room is told when recording
+starts; telling people beforehand is up to the organiser.
+
+`infra/media/deploy.sh <ip>` is the only way a change reaches the media box, which sits outside
+auto-deploy, and the recorder is built from a pinned upstream commit. Turning it on is four steps
+in [`infra/media/CLAUDE.md`](infra/media/CLAUDE.md), or phase 11 of `onboard`. There is no TURN
+relay, so someone on a network that blocks direct UDP cannot join.
+
+#### Documents, website and design
+
+- `uv run python -m documents invoice --sample --out out.pdf` renders a sample invoice.
+  WeasyPrint needs `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libfontconfig1` on Debian or
+  Ubuntu, `brew install pango` on macOS.
+- Edit `apps/website/index.html` and push; the site follows `design/`.
+- `design/tokens.css` styles the website, the documents and the dashboards together.
+- Email needs a domain verified in Scaleway Transactional Email, plus `TEM_PROJECT_ID` and
+  `TEM_FROM` in `config/harness.env`. Nothing is sent without an explicit yes.
+
+#### Diagrams
+
+The two pages above, `docs/diagrams/stack.html` and `docs/diagrams/stack/loop.html`, are drawn
+from the specs in `docs/diagrams/specs/` with `python3 docs/diagrams/tools/build_free.py stack
+stack/loop` and served by GitHub Pages from `docs/`. They were delivered with
+`BIBLE_BASE_URL=https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs`, so a box's
+bible link opens the section on GitHub; set your own address before re-delivering them.
+
+The README pictures in `docs/diagrams/images/` are narrower layouts of the same pages
+(`docs/diagrams/specs/readme/`), rendered dark and light by
+`python3 docs/diagrams/tools/readme_images.py stack stack/loop`, which also needs the Python
+`playwright` package.
+
+`python3 docs/diagrams/tools/linkmap.py` checks the set. The `diagram` MCP server (in `.mcp.json`)
+draws through `draw_module`, `link_module` and `check_diagrams`, with `node` for the archify
+renderer. `BIBLE_BASE_URL` and `DIAGRAM_AUTHORS` are set in `config/harness.env`.
