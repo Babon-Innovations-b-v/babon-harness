@@ -74,6 +74,11 @@ def ensure_jobs_table(conn) -> None:
         cur.execute(
             "ALTER TABLE notulen_jobs ADD COLUMN IF NOT EXISTS board_issues INTEGER[]"
         )
+        # The Talk recording a job was made from, so one recording never
+        # becomes two jobs (core/sessions/ingest_recording.py).
+        cur.execute(
+            "ALTER TABLE notulen_jobs ADD COLUMN IF NOT EXISTS source_path TEXT"
+        )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS notulen_jobs_created_idx "
             "ON notulen_jobs (created_at DESC)"

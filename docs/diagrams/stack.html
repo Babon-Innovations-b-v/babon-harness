@@ -4567,9 +4567,9 @@
 
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read">
-      <svg viewBox="0 0 1340 880" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="editorial" data-quality-profile="standard">
+      <svg viewBox="0 0 1600 960" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="editorial" data-quality-profile="standard">
         <title id="archify-diagram-title">The stack</title>
-        <desc id="archify-diagram-description">One server behind one front door, a few rented pieces beside it, and the laptop where every change starts. Push to main is the deploy.</desc>
+        <desc id="archify-diagram-description">One server behind one front door, a media box beside it for video calls, a few rented pieces, and the laptop where every change starts. Push to main is the deploy.</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -4599,24 +4599,32 @@
         <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="30" y="230" width="210" height="532" rx="12" class="c-region" stroke-width="1"/>
         <text x="38" y="248" class="t-cloud" font-size="9" font-weight="600">Outside the server</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" x="290" y="90" width="730" height="672" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" x="290" y="90" width="990" height="672" rx="12" class="c-region" stroke-width="1"/>
         <text x="298" y="108" class="t-cloud" font-size="9" font-weight="600">One server, behind Caddy</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" x="1080" y="370" width="210" height="392" rx="12" class="c-region" stroke-width="1"/>
-        <text x="1088" y="388" class="t-cloud" font-size="9" font-weight="600">Rented beside it</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" x="1350" y="230" width="210" height="112" rx="12" class="c-region" stroke-width="1"/>
+        <text x="1358" y="248" class="t-cloud" font-size="9" font-weight="600">Media box</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" x="1350" y="370" width="210" height="392" rx="12" class="c-region" stroke-width="1"/>
+        <text x="1358" y="388" class="t-cloud" font-size="9" font-weight="600">Rented beside it</text>
 
         <!-- Connection paths (before components for correct z-order) -->
         <path data-edge-from="people" data-edge-to="caddy" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="people-caddy" data-composition-points="210,291;320,291" d="M 210 291 L 320 291" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="people" data-edge-to="assistant" data-edge-label="Signal, both ways" data-edge-key="1" data-edge-id="people-assistant" data-composition-points="60,291;12,291;12,70;915,70;915,120" d="M 60 291 L 20 291 Q 12 291 12 283 L 12 78 Q 12 70 20 70 L 907 70 Q 915 70 915 78 L 915 120" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="caddy" data-edge-to="website" data-edge-label="public" data-edge-key="2" data-edge-id="caddy-website" data-composition-points="395,260;395,151;580,151" d="M 395 260 L 395 159 Q 395 151 403 151 L 580 151" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="caddy" data-edge-to="website" data-edge-label="public" data-edge-key="2" data-edge-id="caddy-website" data-composition-points="395,260;395,182" d="M 395 260 L 395 182" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="caddy" data-edge-to="sso" data-edge-label="logged in?" data-edge-key="3" data-edge-id="caddy-sso" data-composition-points="470,291;580,291" d="M 470 291 L 580 291" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="caddy" data-edge-to="notulen" data-edge-label="after login" data-edge-key="4" data-edge-id="caddy-notulen" data-composition-points="395,322;395,431;580,431" d="M 395 322 L 395 423 Q 395 431 403 431 L 580 431" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="observability" data-edge-to="assistant" data-edge-label="alerts" data-edge-key="5" data-edge-id="observability-assistant" data-composition-points="915,260;915,182" d="M 915 260 L 915 182" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="notulen" data-edge-to="storage" data-edge-label="audio" data-edge-key="6" data-edge-id="notulen-storage" data-composition-points="730,431;1110,431" d="M 730 431 L 1110 431" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="notulen" data-edge-to="gpu" data-edge-label="a Job" data-edge-key="7" data-edge-id="notulen-gpu" data-composition-points="655,462;655,571;1110,571" d="M 655 462 L 655 563 Q 655 571 663 571 L 1110 571" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="laptop" data-edge-to="github" data-edge-label="push to main" data-edge-key="8" data-edge-id="laptop-github" data-composition-points="135,602;135,680" d="M 135 602 L 135 680" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="github" data-edge-to="deploy" data-edge-label="webhook" data-edge-key="9" data-edge-id="github-deploy" data-composition-points="210,711;840,711" d="M 210 711 L 840 711" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="deploy" data-edge-to="vault" data-edge-label="every cycle" data-edge-key="10" data-edge-id="deploy-vault" data-composition-points="990,711;1110,711" d="M 990 711 L 1110 711" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="caddy" data-edge-to="notulen" data-edge-label="after login" data-edge-key="4" data-edge-id="caddy-notulen" data-composition-points="395,322;395,431;840,431" d="M 395 322 L 395 423 Q 395 431 403 431 L 840 431" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="assistant" data-edge-to="sso" data-edge-label="agenda, CalDAV" data-edge-key="5" data-edge-id="assistant-sso" data-composition-points="840,151;655,151;655,260" d="M 840 151 L 663 151 Q 655 151 655 159 L 655 260" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="assistant" data-edge-to="talk" data-edge-label="call link" data-edge-key="6" data-edge-id="assistant-talk" data-composition-points="915,182;915,260" d="M 915 182 L 915 260" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="observability" data-edge-to="assistant" data-edge-label="alerts" data-edge-key="7" data-edge-id="observability-assistant" data-composition-points="1100,151;990,151" d="M 1100 151 L 990 151" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="talk" data-edge-to="media" data-edge-label="calls" data-edge-key="8" data-edge-id="talk-media" data-composition-points="990,291;1380,291" d="M 990 291 L 1380 291" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="talk" data-edge-to="notulen" data-edge-label="call over: recording" data-edge-key="9" data-edge-id="talk-notulen" data-composition-points="915,322;915,400" d="M 915 322 L 915 400" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="notulen" data-edge-to="storage" data-edge-label="audio" data-edge-key="10" data-edge-id="notulen-storage" data-composition-points="990,431;1380,431" d="M 990 431 L 1380 431" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="storage" data-edge-to="gpu" data-edge-label="the audio" data-edge-key="11" data-edge-id="storage-gpu" data-composition-points="1455,462;1455,540" d="M 1455 462 L 1455 540" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="notulen" data-edge-to="github" data-edge-label="minutes" data-edge-key="12" data-edge-id="notulen-github" data-composition-points="915,462;915,571;210,571" d="M 915 462 L 915 563 Q 915 571 907 571 L 210 571" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="laptop" data-edge-to="github" data-edge-label="push to main" data-edge-key="13" data-edge-id="laptop-github" data-composition-points="135,680;135,602" d="M 135 680 L 135 602" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="github" data-edge-to="deploy" data-edge-label="webhook" data-edge-key="14" data-edge-id="github-deploy" data-composition-points="60,571;12,571;12,800;655,800;655,742" d="M 60 571 L 20 571 Q 12 571 12 579 L 12 792 Q 12 800 20 800 L 647 800 Q 655 800 655 792 L 655 742" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="deploy" data-edge-to="vault" data-edge-label="every cycle" data-edge-key="15" data-edge-id="deploy-vault" data-composition-points="730,711;1380,711" d="M 730 711 L 1380 711" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-people" data-node-id="people" data-node-label="People" tabindex="0" role="button" aria-label="Focus People, browser and Signal, Outside the server" aria-pressed="false" data-node-kind="external" data-node-sublabel="browser and Signal" data-node-context="Outside the server">
@@ -4631,28 +4639,42 @@
         <text data-detail="context" x="135" y="305" class="t-muted" font-size="9" text-anchor="middle">browser and Signal</text>
         </g>
 
-        <g id="node-laptop" data-node-id="laptop" data-node-label="Your laptop" tabindex="0" role="button" aria-label="Focus Your laptop, Claude Code + harness, Outside the server" aria-pressed="false" data-node-kind="external" data-node-sublabel="Claude Code + harness" data-node-context="Outside the server">
-          <title>Your laptop · Claude Code + harness · Outside the server</title>
+        <g id="node-github" data-node-id="github" data-node-label="GitHub" tabindex="0" role="button" aria-label="Focus GitHub, main, issues, board, Outside the server" aria-pressed="false" data-node-kind="external" data-node-sublabel="main, issues, board" data-node-context="Outside the server">
+          <title>GitHub · main, issues, board · Outside the server</title>
           <rect x="60" y="540" width="150" height="62" rx="6" class="c-mask"/>
           <rect x="60" y="540" width="150" height="62" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(66 546) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="135" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Your laptop</text>
-        <text data-detail="context" x="135" y="585" class="t-muted" font-size="9" text-anchor="middle">Claude Code + harness</text>
+          <text data-detail-anchor x="135" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GitHub</text>
+        <text data-detail="context" x="135" y="585" class="t-muted" font-size="9" text-anchor="middle">main, issues, board</text>
         </g>
 
-        <g id="node-github" data-node-id="github" data-node-label="GitHub" tabindex="0" role="button" aria-label="Focus GitHub, main, issues, board, Outside the server" aria-pressed="false" data-node-kind="external" data-node-sublabel="main, issues, board" data-node-context="Outside the server">
-          <title>GitHub · main, issues, board · Outside the server</title>
+        <g id="node-laptop" data-node-id="laptop" data-node-label="Your laptop" tabindex="0" role="button" aria-label="Focus Your laptop, Claude Code + harness, Outside the server" aria-pressed="false" data-node-kind="external" data-node-sublabel="Claude Code + harness" data-node-context="Outside the server">
+          <title>Your laptop · Claude Code + harness · Outside the server</title>
           <rect x="60" y="680" width="150" height="62" rx="6" class="c-mask"/>
           <rect x="60" y="680" width="150" height="62" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(66 686) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="135" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GitHub</text>
-        <text data-detail="context" x="135" y="725" class="t-muted" font-size="9" text-anchor="middle">main, issues, board</text>
+          <text data-detail-anchor x="135" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Your laptop</text>
+        <text data-detail="context" x="135" y="725" class="t-muted" font-size="9" text-anchor="middle">Claude Code + harness</text>
+        </g>
+
+        <g id="node-website" data-node-id="website" data-node-label="website" tabindex="0" role="button" aria-label="Focus website, the bare domain, One server, behind Caddy" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="the bare domain" data-node-context="One server, behind Caddy">
+          <title>website · the bare domain · One server, behind Caddy</title>
+          <rect x="320" y="120" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="320" y="120" width="150" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(326 126) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-detail-anchor x="395" y="149" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">website</text>
+        <text data-detail="context" x="395" y="165" class="t-muted" font-size="9" text-anchor="middle">the bare domain</text>
         </g>
 
         <g id="node-caddy" data-node-id="caddy" data-node-label="Caddy" tabindex="0" role="button" aria-label="Focus Caddy, the only public door, One server, behind Caddy" aria-pressed="false" data-node-kind="security" data-node-sublabel="the only public door" data-node-context="One server, behind Caddy">
@@ -4667,22 +4689,8 @@
         <text data-detail="context" x="395" y="305" class="t-muted" font-size="9" text-anchor="middle">the only public door</text>
         </g>
 
-        <g id="node-website" data-node-id="website" data-node-label="website" tabindex="0" role="button" aria-label="Focus website, the bare domain, One server, behind Caddy" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="the bare domain" data-node-context="One server, behind Caddy">
-          <title>website · the bare domain · One server, behind Caddy</title>
-          <rect x="580" y="120" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="580" y="120" width="150" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(586 126) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-detail-anchor x="655" y="149" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">website</text>
-        <text data-detail="context" x="655" y="165" class="t-muted" font-size="9" text-anchor="middle">the bare domain</text>
-        </g>
-
-        <g id="node-sso" data-node-id="sso" data-node-label="Nextcloud" tabindex="0" role="button" aria-label="Focus Nextcloud, accounts and one login, One server, behind Caddy" aria-pressed="false" data-node-kind="security" data-node-sublabel="accounts and one login" data-node-context="One server, behind Caddy">
-          <title>Nextcloud · accounts and one login · One server, behind Caddy</title>
+        <g id="node-sso" data-node-id="sso" data-node-label="Nextcloud" tabindex="0" role="button" aria-label="Focus Nextcloud, files, calendar, login, One server, behind Caddy" aria-pressed="false" data-node-kind="security" data-node-sublabel="files, calendar, login" data-node-context="One server, behind Caddy">
+          <title>Nextcloud · files, calendar, login · One server, behind Caddy</title>
           <rect x="580" y="260" width="150" height="62" rx="6" class="c-mask"/>
           <rect x="580" y="260" width="150" height="62" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(586 266) scale(0.6875)">
@@ -4690,18 +4698,7 @@
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
           <text data-detail-anchor x="655" y="289" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Nextcloud</text>
-        <text data-detail="context" x="655" y="305" class="t-muted" font-size="9" text-anchor="middle">accounts and one login</text>
-        </g>
-
-        <g id="node-notulen" data-node-id="notulen" data-node-label="notulen" tabindex="0" role="button" aria-label="Focus notulen, meetings in, minutes out, One server, behind Caddy" aria-pressed="false" data-node-kind="backend" data-node-sublabel="meetings in, minutes out" data-node-context="One server, behind Caddy">
-          <title>notulen · meetings in, minutes out · One server, behind Caddy</title>
-          <rect x="580" y="400" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="580" y="400" width="150" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(586 406) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="655" y="429" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">notulen</text>
-        <text data-detail="context" x="655" y="445" class="t-muted" font-size="9" text-anchor="middle">meetings in, minutes out</text>
+        <text data-detail="context" x="655" y="305" class="t-muted" font-size="9" text-anchor="middle">files, calendar, login</text>
         </g>
 
         <g id="node-assistant" data-node-id="assistant" data-node-label="The assistant" tabindex="0" role="button" aria-label="Focus The assistant, OpenClaw on Signal, One server, behind Caddy" aria-pressed="false" data-node-kind="backend" data-node-sublabel="OpenClaw on Signal" data-node-context="One server, behind Caddy">
@@ -4715,64 +4712,100 @@
         <text data-detail="context" x="915" y="165" class="t-muted" font-size="9" text-anchor="middle">OpenClaw on Signal</text>
         </g>
 
+        <g id="node-talk" data-node-id="talk" data-node-label="Nextcloud Talk" tabindex="0" role="button" aria-label="Focus Nextcloud Talk, video calls, One server, behind Caddy" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="video calls" data-node-context="One server, behind Caddy">
+          <title>Nextcloud Talk · video calls · One server, behind Caddy</title>
+          <rect x="840" y="260" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="840" y="260" width="150" height="62" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(846 266) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-detail-anchor x="915" y="289" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Nextcloud Talk</text>
+        <text data-detail="context" x="915" y="305" class="t-muted" font-size="9" text-anchor="middle">video calls</text>
+        </g>
+
         <g id="node-observability" data-node-id="observability" data-node-label="Prometheus" tabindex="0" role="button" aria-label="Focus Prometheus, alerts and deadmen, One server, behind Caddy" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="alerts and deadmen" data-node-context="One server, behind Caddy">
           <title>Prometheus · alerts and deadmen · One server, behind Caddy</title>
-          <rect x="840" y="260" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="840" y="260" width="150" height="62" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(846 266) scale(0.6875)">
+          <rect x="1100" y="120" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="1100" y="120" width="150" height="62" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(1106 126) scale(0.6875)">
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
             <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
             <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="915" y="289" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Prometheus</text>
-        <text data-detail="context" x="915" y="305" class="t-muted" font-size="9" text-anchor="middle">alerts and deadmen</text>
+          <text data-detail-anchor x="1175" y="149" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Prometheus</text>
+        <text data-detail="context" x="1175" y="165" class="t-muted" font-size="9" text-anchor="middle">alerts and deadmen</text>
+        </g>
+
+        <g id="node-notulen" data-node-id="notulen" data-node-label="notulen" tabindex="0" role="button" aria-label="Focus notulen, meetings in, minutes out, One server, behind Caddy" aria-pressed="false" data-node-kind="backend" data-node-sublabel="meetings in, minutes out" data-node-context="One server, behind Caddy">
+          <title>notulen · meetings in, minutes out · One server, behind Caddy</title>
+          <rect x="840" y="400" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="840" y="400" width="150" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(846 406) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="915" y="429" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">notulen</text>
+        <text data-detail="context" x="915" y="445" class="t-muted" font-size="9" text-anchor="middle">meetings in, minutes out</text>
         </g>
 
         <g id="node-deploy" data-node-id="deploy" data-node-label="auto-deploy" tabindex="0" role="button" aria-label="Focus auto-deploy, tests, then ships, One server, behind Caddy" aria-pressed="false" data-node-kind="backend" data-node-sublabel="tests, then ships" data-node-context="One server, behind Caddy">
           <title>auto-deploy · tests, then ships · One server, behind Caddy</title>
-          <rect x="840" y="680" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="840" y="680" width="150" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(846 686) scale(0.6875)">
+          <rect x="580" y="680" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="580" y="680" width="150" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(586 686) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="915" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">auto-deploy</text>
-        <text data-detail="context" x="915" y="725" class="t-muted" font-size="9" text-anchor="middle">tests, then ships</text>
+          <text data-detail-anchor x="655" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">auto-deploy</text>
+        <text data-detail="context" x="655" y="725" class="t-muted" font-size="9" text-anchor="middle">tests, then ships</text>
+        </g>
+
+        <g id="node-media" data-node-id="media" data-node-label="Media box" tabindex="0" role="button" aria-label="Focus Media box, signaling + recording, Media box" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="signaling + recording" data-node-context="Media box">
+          <title>Media box · signaling + recording · Media box</title>
+          <rect x="1380" y="260" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="1380" y="260" width="150" height="62" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1386 266) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-detail-anchor x="1455" y="289" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Media box</text>
+        <text data-detail="context" x="1455" y="305" class="t-muted" font-size="9" text-anchor="middle">signaling + recording</text>
         </g>
 
         <g id="node-storage" data-node-id="storage" data-node-label="Object storage" tabindex="0" role="button" aria-label="Focus Object storage, meeting audio, Rented beside it" aria-pressed="false" data-node-kind="database" data-node-sublabel="meeting audio" data-node-context="Rented beside it">
           <title>Object storage · meeting audio · Rented beside it</title>
-          <rect x="1110" y="400" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="1110" y="400" width="150" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1116 406) scale(0.6875)">
+          <rect x="1380" y="400" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="1380" y="400" width="150" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1386 406) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-detail-anchor x="1185" y="429" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Object storage</text>
-        <text data-detail="context" x="1185" y="445" class="t-muted" font-size="9" text-anchor="middle">meeting audio</text>
+          <text data-detail-anchor x="1455" y="429" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Object storage</text>
+        <text data-detail="context" x="1455" y="445" class="t-muted" font-size="9" text-anchor="middle">meeting audio</text>
         </g>
 
         <g id="node-gpu" data-node-id="gpu" data-node-label="GPU tier" tabindex="0" role="button" aria-label="Focus GPU tier, optional, Kubernetes, Rented beside it" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="optional, Kubernetes" data-node-context="Rented beside it">
           <title>GPU tier · optional, Kubernetes · Rented beside it</title>
-          <rect x="1110" y="540" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="1110" y="540" width="150" height="62" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1116 546) scale(0.6875)">
+          <rect x="1380" y="540" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="1380" y="540" width="150" height="62" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1386 546) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-detail-anchor x="1185" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GPU tier</text>
-        <text data-detail="context" x="1185" y="585" class="t-muted" font-size="9" text-anchor="middle">optional, Kubernetes</text>
+          <text data-detail-anchor x="1455" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GPU tier</text>
+        <text data-detail="context" x="1455" y="585" class="t-muted" font-size="9" text-anchor="middle">optional, Kubernetes</text>
         </g>
 
         <g id="node-vault" data-node-id="vault" data-node-label="The vault" tabindex="0" role="button" aria-label="Focus The vault, Secret Manager, Rented beside it" aria-pressed="false" data-node-kind="database" data-node-sublabel="Secret Manager" data-node-context="Rented beside it">
           <title>The vault · Secret Manager · Rented beside it</title>
-          <rect x="1110" y="680" width="150" height="62" rx="6" class="c-mask"/>
-          <rect x="1110" y="680" width="150" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1116 686) scale(0.6875)">
+          <rect x="1380" y="680" width="150" height="62" rx="6" class="c-mask"/>
+          <rect x="1380" y="680" width="150" height="62" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1386 686) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-detail-anchor x="1185" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">The vault</text>
-        <text data-detail="context" x="1185" y="725" class="t-muted" font-size="9" text-anchor="middle">Secret Manager</text>
+          <text data-detail-anchor x="1455" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">The vault</text>
+        <text data-detail="context" x="1455" y="725" class="t-muted" font-size="9" text-anchor="middle">Secret Manager</text>
         </g>
 
         <!-- Connection labels -->
@@ -4785,84 +4818,104 @@
           <text x="520" y="58" class="t-muted" font-size="8" text-anchor="middle">Signal, both ways</text>
         </g>
         <g data-detail="context" data-edge-from="caddy" data-edge-to="website" data-edge-label="public" data-edge-key="2" data-edge-id="caddy-website">
-          <rect x="468.1" y="131" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="487.5" y="141" class="t-muted" font-size="8" text-anchor="middle">public</text>
+          <rect x="375.6" y="240" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="395" y="250" class="t-muted" font-size="8" text-anchor="middle">public</text>
         </g>
         <g data-detail="context" data-edge-from="caddy" data-edge-to="sso" data-edge-label="logged in?" data-edge-key="3" data-edge-id="caddy-sso">
           <rect x="496" y="271" width="58" height="14" rx="3" class="c-mask"/>
           <text x="525" y="281" class="t-muted" font-size="8" text-anchor="middle">logged in?</text>
         </g>
         <g data-detail="context" data-edge-from="caddy" data-edge-to="notulen" data-edge-label="after login" data-edge-key="4" data-edge-id="caddy-notulen">
-          <rect x="456.1" y="411" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="487.5" y="421" class="t-muted" font-size="8" text-anchor="middle">after login</text>
+          <rect x="528.6" y="409" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="560" y="419" class="t-muted" font-size="8" text-anchor="middle">after login</text>
         </g>
-        <g data-detail="context" data-edge-from="observability" data-edge-to="assistant" data-edge-label="alerts" data-edge-key="5" data-edge-id="observability-assistant">
-          <rect x="895.6" y="240" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="915" y="250" class="t-muted" font-size="8" text-anchor="middle">alerts</text>
+        <g data-detail="context" data-edge-from="assistant" data-edge-to="sso" data-edge-label="agenda, CalDAV" data-edge-key="5" data-edge-id="assistant-sso">
+          <rect x="706.4" y="129" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="745" y="139" class="t-muted" font-size="8" text-anchor="middle">agenda, CalDAV</text>
         </g>
-        <g data-detail="context" data-edge-from="notulen" data-edge-to="storage" data-edge-label="audio" data-edge-key="6" data-edge-id="notulen-storage">
-          <rect x="903" y="411" width="34" height="14" rx="3" class="c-mask"/>
-          <text x="920" y="421" class="t-muted" font-size="8" text-anchor="middle">audio</text>
+        <g data-detail="context" data-edge-from="assistant" data-edge-to="talk" data-edge-label="call link" data-edge-key="6" data-edge-id="assistant-talk">
+          <rect x="888.4" y="186" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="915" y="196" class="t-muted" font-size="8" text-anchor="middle">call link</text>
         </g>
-        <g data-detail="context" data-edge-from="notulen" data-edge-to="gpu" data-edge-label="a Job" data-edge-key="7" data-edge-id="notulen-gpu">
-          <rect x="865.5" y="551" width="34" height="14" rx="3" class="c-mask"/>
-          <text x="882.5" y="561" class="t-messagebus" font-size="8" text-anchor="middle">a Job</text>
+        <g data-detail="context" data-edge-from="observability" data-edge-to="assistant" data-edge-label="alerts" data-edge-key="7" data-edge-id="observability-assistant">
+          <rect x="1025.6" y="131" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="1045" y="141" class="t-muted" font-size="8" text-anchor="middle">alerts</text>
         </g>
-        <g data-detail="context" data-edge-from="laptop" data-edge-to="github" data-edge-label="push to main" data-edge-key="8" data-edge-id="laptop-github">
-          <rect x="101.2" y="606" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="135" y="616" class="t-backend" font-size="8" text-anchor="middle">push to main</text>
+        <g data-detail="context" data-edge-from="talk" data-edge-to="media" data-edge-label="calls" data-edge-key="8" data-edge-id="talk-media">
+          <rect x="1168" y="271" width="34" height="14" rx="3" class="c-mask"/>
+          <text x="1185" y="281" class="t-muted" font-size="8" text-anchor="middle">calls</text>
         </g>
-        <g data-detail="context" data-edge-from="github" data-edge-to="deploy" data-edge-label="webhook" data-edge-key="9" data-edge-id="github-deploy">
-          <rect x="503.2" y="691" width="43.6" height="14" rx="3" class="c-mask"/>
-          <text x="525" y="701" class="t-backend" font-size="8" text-anchor="middle">webhook</text>
+        <g data-detail="context" data-edge-from="talk" data-edge-to="notulen" data-edge-label="call over: recording" data-edge-key="9" data-edge-id="talk-notulen">
+          <rect x="862" y="326" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="915" y="336" class="t-muted" font-size="8" text-anchor="middle">call over: recording</text>
         </g>
-        <g data-detail="context" data-edge-from="deploy" data-edge-to="vault" data-edge-label="every cycle" data-edge-key="10" data-edge-id="deploy-vault">
-          <rect x="1018.6" y="691" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="1050" y="701" class="t-messagebus" font-size="8" text-anchor="middle">every cycle</text>
+        <g data-detail="context" data-edge-from="notulen" data-edge-to="storage" data-edge-label="audio" data-edge-key="10" data-edge-id="notulen-storage">
+          <rect x="1168" y="411" width="34" height="14" rx="3" class="c-mask"/>
+          <text x="1185" y="421" class="t-muted" font-size="8" text-anchor="middle">audio</text>
+        </g>
+        <g data-detail="context" data-edge-from="storage" data-edge-to="gpu" data-edge-label="the audio" data-edge-key="11" data-edge-id="storage-gpu">
+          <rect x="1428.4" y="466" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="1455" y="476" class="t-messagebus" font-size="8" text-anchor="middle">the audio</text>
+        </g>
+        <g data-detail="context" data-edge-from="notulen" data-edge-to="github" data-edge-label="minutes" data-edge-key="12" data-edge-id="notulen-github">
+          <rect x="538.2" y="549" width="43.6" height="14" rx="3" class="c-mask"/>
+          <text x="560" y="559" class="t-backend" font-size="8" text-anchor="middle">minutes</text>
+        </g>
+        <g data-detail="context" data-edge-from="laptop" data-edge-to="github" data-edge-label="push to main" data-edge-key="13" data-edge-id="laptop-github">
+          <rect x="101.2" y="660" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="135" y="670" class="t-backend" font-size="8" text-anchor="middle">push to main</text>
+        </g>
+        <g data-detail="context" data-edge-from="github" data-edge-to="deploy" data-edge-label="webhook" data-edge-key="14" data-edge-id="github-deploy">
+          <rect x="308.2" y="778" width="43.6" height="14" rx="3" class="c-mask"/>
+          <text x="330" y="788" class="t-backend" font-size="8" text-anchor="middle">webhook</text>
+        </g>
+        <g data-detail="context" data-edge-from="deploy" data-edge-to="vault" data-edge-label="every cycle" data-edge-key="15" data-edge-id="deploy-vault">
+          <rect x="1023.6" y="691" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="1055" y="701" class="t-messagebus" font-size="8" text-anchor="middle">every cycle</text>
         </g>
 
         <!-- Legend -->
         <g data-legend data-legend-bridge>
-          <text x="40" y="822" class="t-primary" font-size="10" font-weight="600">Legend</text>
-          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="Public" data-legend-x="40" data-legend-baseline="842" data-legend-width="72">
-            <rect x="40" y="834" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
-            <text x="61" y="842" class="t-muted" font-size="8">Public</text>
+          <text x="40" y="924" class="t-primary" font-size="10" font-weight="600">Legend</text>
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="Public, video calls" data-legend-x="40" data-legend-baseline="944" data-legend-width="137">
+            <rect x="40" y="936" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
+            <text x="61" y="944" class="t-muted" font-size="8">Public, video calls</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="The apps and the deploy loop" data-legend-x="134" data-legend-baseline="842" data-legend-width="181">
-            <rect x="134" y="834" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-            <text x="155" y="842" class="t-muted" font-size="8">The apps and the deploy loop</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Apps, deploy loop" data-legend-x="199" data-legend-baseline="944" data-legend-width="127">
+            <rect x="199" y="936" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+            <text x="220" y="944" class="t-muted" font-size="8">Apps, deploy loop</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Kept on Scaleway" data-legend-x="337" data-legend-baseline="842" data-legend-width="122">
-            <rect x="337" y="834" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
-            <text x="358" y="842" class="t-muted" font-size="8">Kept on Scaleway</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Kept on Scaleway" data-legend-x="348" data-legend-baseline="944" data-legend-width="122">
+            <rect x="348" y="936" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
+            <text x="369" y="944" class="t-muted" font-size="8">Kept on Scaleway</text>
           </g>
-          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Rented only while used" data-legend-x="481" data-legend-baseline="842" data-legend-width="152">
-            <rect x="481" y="834" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
-            <text x="502" y="842" class="t-muted" font-size="8">Rented only while used</text>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Separate or on demand" data-legend-x="492" data-legend-baseline="944" data-legend-width="147">
+            <rect x="492" y="936" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
+            <text x="513" y="944" class="t-muted" font-size="8">Separate or on demand</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="The front door and the login" data-legend-x="655" data-legend-baseline="842" data-legend-width="181">
-            <rect x="655" y="834" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
-            <text x="676" y="842" class="t-muted" font-size="8">The front door and the login</text>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Door and login" data-legend-x="661" data-legend-baseline="944" data-legend-width="112">
+            <rect x="661" y="936" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+            <text x="682" y="944" class="t-muted" font-size="8">Door and login</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="The watch" data-legend-x="858" data-legend-baseline="842" data-legend-width="87">
-            <rect x="858" y="834" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
-            <text x="879" y="842" class="t-muted" font-size="8">The watch</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="The watch" data-legend-x="795" data-legend-baseline="944" data-legend-width="87">
+            <rect x="795" y="936" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
+            <text x="816" y="944" class="t-muted" font-size="8">The watch</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="People and outside services" data-legend-x="967" data-legend-baseline="842" data-legend-width="176">
-            <rect x="967" y="834" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-            <text x="988" y="842" class="t-muted" font-size="8">People and outside services</text>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="People, outside services" data-legend-x="904" data-legend-baseline="944" data-legend-width="162">
+            <rect x="904" y="936" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
+            <text x="925" y="944" class="t-muted" font-size="8">People, outside services</text>
           </g>
-          <g data-legend-semantic-kind="edge-emphasis" data-legend-x="40" data-legend-baseline="864" data-legend-width="207">
-            <path d="M 40 861 L 74 861" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-            <text x="83" y="864" class="t-muted" font-size="8">A change on its way to production</text>
+          <g data-legend-semantic-kind="edge-emphasis" data-legend-x="1088" data-legend-baseline="944" data-legend-width="138">
+            <path d="M 1088 941 L 1122 941" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+            <text x="1131" y="944" class="t-muted" font-size="8">Into the repository</text>
           </g>
-          <g data-legend-semantic-kind="edge-default" data-legend-x="269" data-legend-baseline="864" data-legend-width="88">
-            <path d="M 269 861 L 303 861" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-            <text x="312" y="864" class="t-muted" font-size="8">A request</text>
+          <g data-legend-semantic-kind="edge-default" data-legend-x="1248" data-legend-baseline="944" data-legend-width="88">
+            <path d="M 1248 941 L 1282 941" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+            <text x="1291" y="944" class="t-muted" font-size="8">A request</text>
           </g>
-          <g data-legend-semantic-kind="edge-dashed" data-legend-x="379" data-legend-baseline="864" data-legend-width="143">
-            <path d="M 379 861 L 413 861" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-            <text x="422" y="864" class="t-muted" font-size="8">Periodic or optional</text>
+          <g data-legend-semantic-kind="edge-dashed" data-legend-x="1358" data-legend-baseline="944" data-legend-width="143">
+            <path d="M 1358 941 L 1392 941" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+            <text x="1401" y="944" class="t-muted" font-size="8">Periodic or optional</text>
           </g>
         </g>
       </svg>
@@ -13298,7 +13351,7 @@
     });
   });
 })();</script><script>/* diagram:slides-player */(function () {
-  var DATA = {"steps": [{"label": "People reach it two ways: a browser through Caddy, and Signal to the assistant", "add": ["people", "caddy", "assistant", "people-caddy", "people-assistant"]}, {"label": "Caddy is the only public door, and one Nextcloud login opens every private name", "add": ["website", "sso", "notulen", "caddy-website", "caddy-sso", "caddy-notulen"]}, {"label": "Notulen keeps its audio in object storage and can borrow a GPU while it transcribes", "add": ["storage", "gpu", "notulen-storage", "notulen-gpu"]}, {"label": "Prometheus watches all of it and hands every alert to the assistant", "add": ["observability", "observability-assistant"]}, {"label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships", "add": ["laptop", "github", "deploy", "vault", "laptop-github", "github-deploy", "deploy-vault"]}], "regions": [["people", "laptop", "github"], ["caddy", "website", "sso", "notulen", "assistant", "observability", "deploy"], ["storage", "gpu", "vault"]]};
+  var DATA = {"steps": [{"label": "People reach it two ways: a browser through Caddy, and Signal to the assistant", "add": ["people", "caddy", "assistant", "people-caddy", "people-assistant"]}, {"label": "Caddy is the only public door, and one Nextcloud login opens every private name", "add": ["website", "sso", "notulen", "caddy-website", "caddy-sso", "caddy-notulen"]}, {"label": "The assistant keeps the agenda: it books meetings on the calendars and makes their Talk call links", "add": ["talk", "assistant-sso", "assistant-talk"]}, {"label": "Calls run through the media box, and a recorded call becomes minutes in the repository", "add": ["media", "storage", "gpu", "github", "talk-media", "talk-notulen", "notulen-storage", "storage-gpu", "notulen-github"]}, {"label": "Prometheus watches the server and hands every alert to the assistant", "add": ["observability", "observability-assistant"]}, {"label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships", "add": ["laptop", "deploy", "vault", "laptop-github", "github-deploy", "deploy-vault"]}], "regions": [["people", "github", "laptop"], ["website", "caddy", "sso", "assistant", "talk", "observability", "notulen", "deploy"], ["media"], ["storage", "gpu", "vault"]]};
   var steps = DATA.steps || [];
   var svg = document.querySelector('.diagram-container svg');
   var header = document.querySelector('.header');
@@ -13414,7 +13467,7 @@
   try { kept = sessionStorage.getItem(seat); } catch (error) {}
   go(deep ? parseInt(deep[1], 10) - 1 : (kept === null ? -1 : parseInt(kept, 10)));
 })();</script><style>/* diagram:nav */#chrome-nav{position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:10px;font:600 11.5px/1 system-ui,sans-serif;opacity:.85}#chrome-nav a{color:inherit;text-decoration:none;padding:5px 9px;border:1px solid currentColor;border-radius:999px;opacity:.6}#chrome-nav a:hover{opacity:1}#chrome-nav a.chrome-here{opacity:1;pointer-events:none}</style><nav id="chrome-nav"><a href="stack.html" class="chrome-here">The stack</a></nav><script>/* diagram:node-notes */(function () {
-  var NOTES = {"assistant": {"t": "The upstream OpenClaw gateway holds the Signal conversation, and this repository's door (`apps/assistant`) triages alerts, decides what reaches a phone and serves the gateway its tools. `signal-cli` is the Signal account both use. It ships empty: no people, no memory.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-runs", "l": "apps/assistant \u00a7 What runs"}, "caddy": {"t": "`caddy`, ports 80 and 443, the only container with public ports. It gets its own Let's Encrypt certificates and asks oauth2-proxy about every request to a private subdomain. **Watch out:** it deletes any `Remote-User` header the browser sent, which is why an app can trust that header.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains", "l": "infra/platform \u00a7 One login across subdomains"}, "deploy": {"t": "`harness-auto-deploy.timer`, every two minutes, plus the push webhook, runs `infra/auto-deploy/auto-deploy.sh`. It picks one commit, the gate tests it in its own tree, and only the changed services are rebuilt and must boot. Red or amber ships nothing. The eject ships off.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-loop", "l": "infra/deploy \u00a7 The loop"}, "github": {"t": "Holds `main`, the issues and the Projects board. A push to `main` fires the webhook at `deploy.$DOMAIN/hooks/deploy`. The server posts each commit's `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy` status back to its commit page.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it", "l": "architecture/system-context \u00a7 Who talks to it"}, "gpu": {"t": "Optional. A Scaleway Kapsule cluster whose GPU pools scale to zero, so a node bills only while it transcribes. Notulen submits a Kubernetes Job; the worker writes its result to the stack's Postgres, which then listens beyond the server with only its password as guard.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-the-tier-is", "l": "infra/gpu \u00a7 What the tier is"}, "laptop": {"t": "Claude Code running in this repository, with the harness: skills, guards, overlays and the code index. Every change starts here as one conversation; open this box for the loop it follows. Nothing deploys from the laptop.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-pieces", "l": "architecture/system-context \u00a7 The pieces", "m": "stack/loop.html"}, "notulen": {"t": "`notulen` on `notulen.$DOMAIN`, behind the login. A phone records in five-second chunks; the server stitches them, stores the audio, transcribes, and Claude writes the minutes, committed to `NOTULEN_TARGET_REPO`. CPU transcription works by default and takes hours for a long meeting.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path", "l": "apps/notulen \u00a7 The recording path"}, "observability": {"t": "Prometheus evaluates its rules every 30 seconds and probes each subdomain over HTTPS; Alertmanager hands a firing group to the alert-relay, and the relay to the assistant. Deadmen run as systemd timers and page straight to Signal when the assistant itself is down. Loopback only: Prometheus on 9090.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#alert-path", "l": "infra/observability \u00a7 Alert path"}, "people": {"t": "The owner and the team. In a browser, one Nextcloud login with a second factor opens every private subdomain; on Signal they talk to the assistant. The public sees only the website at the bare domain.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it", "l": "architecture/system-context \u00a7 Who talks to it"}, "sso": {"t": "`nextcloud` on `cloud.$DOMAIN` with its Postgres, and `oauth2-proxy` on `auth.$DOMAIN`. Accounts live here: Nextcloud is the identity provider, oauth2-proxy the client. The login cookie lasts 8 hours, the Nextcloud session behind it 7 days. Files and calendar live here too.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains", "l": "infra/platform \u00a7 One login across subdomains"}, "storage": {"t": "A Scaleway Object Storage bucket (`S3_BUCKET`) for meeting audio. Notulen uploads the stitched recording before any check that could end the session, so every failed job can be retried. **Watch out:** it keeps billing after the server is deleted.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path", "l": "apps/notulen \u00a7 The recording path"}, "vault": {"t": "One Scaleway Secret Manager secret holding the whole environment, secrets included. `infra/secrets/push-env.sh` writes a new version from the laptop; the server pulls it every deploy cycle into `$HARNESS_ROOT/harness.env`, mode 600. A failed pull keeps the old file.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-vault", "l": "infra/platform \u00a7 The vault"}, "website": {"t": "`website`, nginx serving the static files in `apps/website/` at the bare domain, public. It links `/design/index.css`, so an edit to `design/tokens.css` restyles it together with the documents and the dashboards.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-it-serves", "l": "apps/website \u00a7 What it serves"}};
+  var NOTES = {"assistant": {"t": "The upstream OpenClaw gateway holds the Signal conversation, and this repository's door (`apps/assistant`) triages alerts and serves the gateway its tools. On the agenda it reads and writes the team's calendars over CalDAV, makes a Talk call link with `create_video_call` and puts the meeting on each calendar, and sends a Signal reminder with the link before it starts.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-runs", "l": "apps/assistant \u00a7 What runs"}, "caddy": {"t": "`caddy`, ports 80 and 443, the only container with public ports. It gets its own Let's Encrypt certificates and asks oauth2-proxy about every request to a private subdomain. **Watch out:** it deletes any `Remote-User` header the browser sent, which is why an app can trust that header.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains", "l": "infra/platform \u00a7 One login across subdomains"}, "deploy": {"t": "`harness-auto-deploy.timer`, every two minutes, plus the push webhook, runs `infra/auto-deploy/auto-deploy.sh`. It picks one commit, the gate tests it in its own tree, and only the changed services are rebuilt and must boot. Red or amber ships nothing. The eject ships off.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-loop", "l": "infra/deploy \u00a7 The loop"}, "github": {"t": "Holds `main`, the issues and the Projects board, and receives the minutes notulen commits. A push to `main` fires the webhook at `deploy.$DOMAIN/hooks/deploy`. The server posts each commit's `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy` status back to its commit page.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it", "l": "architecture/system-context \u00a7 Who talks to it"}, "gpu": {"t": "Optional. A Scaleway Kapsule cluster whose GPU pools scale to zero, so a node bills only while it transcribes. Notulen submits a Kubernetes Job; the worker reads the audio from object storage and writes its result to the stack's Postgres, which then listens beyond the server with only its password as guard.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-the-tier-is", "l": "infra/gpu \u00a7 What the tier is"}, "laptop": {"t": "Claude Code running in this repository, with the harness: skills, guards, overlays and the code index. Every change starts here as one conversation; open this box for the loop it follows. Nothing deploys from the laptop.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-pieces", "l": "architecture/system-context \u00a7 The pieces", "m": "stack/loop.html"}, "media": {"t": "Optional second server: the signaling server, the Janus media server on UDP 20000 to 40000, and the Talk recording server, a headless browser that sits in the call. Built from pinned upstream commits and deployed by hand with `infra/media/deploy.sh`, never by a push. **Watch out:** no TURN relay, so a network that blocks UDP cannot join.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-runs-on-the-box", "l": "infra/media \u00a7 What runs on the box"}, "notulen": {"t": "`notulen` on `notulen.$DOMAIN`, behind the login. Two ways in: a phone recording in five-second chunks, or a recorded Talk call, fetched when the call ends. Either way the audio goes to object storage, is transcribed, and Claude writes the minutes, committed to `NOTULEN_TARGET_REPO`.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path", "l": "apps/notulen \u00a7 The recording path"}, "observability": {"t": "Prometheus evaluates its rules every 30 seconds and probes each subdomain over HTTPS; Alertmanager hands a firing group to the alert-relay, and the relay to the assistant. Deadmen run as systemd timers and page straight to Signal when the assistant itself is down. Loopback only: Prometheus on 9090.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#alert-path", "l": "infra/observability \u00a7 Alert path"}, "people": {"t": "The owner and the team. In a browser, one Nextcloud login with a second factor opens every private subdomain; on Signal they talk to the assistant. The public sees only the website at the bare domain.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#who-talks-to-it", "l": "architecture/system-context \u00a7 Who talks to it"}, "sso": {"t": "`nextcloud` on `cloud.$DOMAIN` with its Postgres, and `oauth2-proxy` on `auth.$DOMAIN`. Accounts live here: Nextcloud is the identity provider, oauth2-proxy the client, and one login with a second factor opens every private name. Files and the calendars the assistant reads and writes over CalDAV live here too.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#one-login-across-subdomains", "l": "infra/platform \u00a7 One login across subdomains"}, "storage": {"t": "A Scaleway Object Storage bucket (`S3_BUCKET`) for meeting audio. Notulen uploads the stitched recording before any check that could end the session, so every failed job can be retried. **Watch out:** it keeps billing after the server is deleted.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-recording-path", "l": "apps/notulen \u00a7 The recording path"}, "talk": {"t": "Talk is the Nextcloud app for chat and video calls, at `cloud.$DOMAIN`. Its calls run through the media box. The recording bot that `infra/media/connect-talk.sh` installs posts every call event of an assistant-made room to notulen, signed with `TALK_BOT_SECRET`.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#how-a-call-becomes-minutes", "l": "infra/media \u00a7 How a call becomes minutes"}, "vault": {"t": "One Scaleway Secret Manager secret holding the whole environment, secrets included. `infra/secrets/push-env.sh` writes a new version from the laptop; the server pulls it every deploy cycle into `$HARNESS_ROOT/harness.env`, mode 600. A failed pull keeps the old file.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#the-vault", "l": "infra/platform \u00a7 The vault"}, "website": {"t": "`website`, nginx serving the static files in `apps/website/` at the bare domain, public. It links `/design/index.css`, so an edit to `design/tokens.css` restyles it together with the documents and the dashboards.", "u": "https://github.com/Babon-Innovations-b-v/babon-harness/blob/main/docs/bible.md#what-it-serves", "l": "apps/website \u00a7 What it serves"}};
   var idEl = document.getElementById('focus-id');
   var meta = document.getElementById('focus-passport-meta');
   if (!idEl || !meta) return;

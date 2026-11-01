@@ -1,0 +1,23 @@
+# Recording server config. setup.sh renders this to ../recording.conf with
+# the values in .env (envsubst, named variables only).
+
+[http]
+listen = 127.0.0.1:8000
+
+[backend]
+backends = nc1
+videowidth = 1920
+videoheight = 1080
+directory = /tmp
+
+[nc1]
+url = https://cloud.${DOMAIN}
+secret = ${TALK_RECORDING_SECRET}
+
+[signaling]
+signalings = sig1
+
+[sig1]
+url = https://signaling.${DOMAIN}
+# Must equal the signaling server's [clients] internalsecret.
+internalsecret = ${TALK_INTERNAL_SECRET}

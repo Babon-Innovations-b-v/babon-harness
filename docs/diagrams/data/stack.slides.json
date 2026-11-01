@@ -22,16 +22,29 @@
    ]
   },
   {
-   "label": "Notulen keeps its audio in object storage and can borrow a GPU while it transcribes",
+   "label": "The assistant keeps the agenda: it books meetings on the calendars and makes their Talk call links",
    "add": [
-    "storage",
-    "gpu",
-    "notulen-storage",
-    "notulen-gpu"
+    "talk",
+    "assistant-sso",
+    "assistant-talk"
    ]
   },
   {
-   "label": "Prometheus watches all of it and hands every alert to the assistant",
+   "label": "Calls run through the media box, and a recorded call becomes minutes in the repository",
+   "add": [
+    "media",
+    "storage",
+    "gpu",
+    "github",
+    "talk-media",
+    "talk-notulen",
+    "notulen-storage",
+    "storage-gpu",
+    "notulen-github"
+   ]
+  },
+  {
+   "label": "Prometheus watches the server and hands every alert to the assistant",
    "add": [
     "observability",
     "observability-assistant"
@@ -41,7 +54,6 @@
    "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
    "add": [
     "laptop",
-    "github",
     "deploy",
     "vault",
     "laptop-github",
@@ -53,17 +65,21 @@
  "regions": [
   [
    "people",
-   "laptop",
-   "github"
+   "github",
+   "laptop"
   ],
   [
-   "caddy",
    "website",
+   "caddy",
    "sso",
-   "notulen",
    "assistant",
+   "talk",
    "observability",
+   "notulen",
    "deploy"
+  ],
+  [
+   "media"
   ],
   [
    "storage",

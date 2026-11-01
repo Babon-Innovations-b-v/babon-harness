@@ -1847,4 +1847,43 @@ ROWS: tuple[Row, ...] = (
             why='a failed unit is published as 0, so the failed-unit case fails',
         ),
     ),
+    Row(
+        test="apps/notulen/tests/test_a_talk_webhook_whose_signature_does_not_match_the_bot_secret_is_refused.py",
+        pins=("apps/notulen",),
+        runs_when=(
+            "apps/notulen/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/entrypoints/talk_routes.py",
+            old="secret.encode(), (random_header.encode() + raw_body), hashlib.sha256",
+            new="secret.encode(), raw_body, hashlib.sha256",
+            why="the correctly signed event is refused, so the first status assertion trips",
+        ),
+    ),
+    Row(
+        test="apps/notulen/tests/test_a_talk_call_that_is_not_recordable_yet_is_retried_without_paging_and_a_real_refusal_pages_once.py",
+        pins=("apps/notulen",),
+        runs_when=(
+            "apps/notulen/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/sessions/recording_guard.py",
+            old='return isinstance(data, dict) and data.get("error") == "call"',
+            new='return isinstance(data, dict) and data.get("error") == "not-the-race"',
+            why="the race reads as a real error, so the first call pages and stops after one post",
+        ),
+    ),
+    Row(
+        test="infra/media/tests/test_the_recorder_patch_swaps_the_sink_index_for_its_name_once_and_stops_when_upstream_moved_the_line.py",
+        pins=("infra/media",),
+        runs_when=(
+            "infra/media/**",
+        ),
+        proved_by=Break(
+            file="infra/media/patches/recording_pulse_sink_name.py",
+            old='if "_pulseNameLookup" in src:',
+            new='if "_pulseNameLookup" in src or True:',
+            why="every file reads as already patched, so the upstream line survives the first run",
+        ),
+    ),
 )

@@ -1,60 +1,68 @@
 {
- "_comment": "Three columns read left to right: who and what is outside the server, the server itself behind its one door, and the rented Scaleway pieces beside it. Requests enter at the top left through Caddy; Signal reaches the assistant over the top; a change enters at the bottom left as a push and arrives at the deploy loop along the bottom row.",
+ "_comment": "Four columns read left to right: who and what is outside the server, the server behind its one door, and beside it the media box above the rented Scaleway pieces. Requests enter through Caddy on the left; Signal reaches the assistant over the top; the assistant reaches down into the calendar and Talk; a call leaves right for the media box and comes back down into notulen; minutes and pushes meet GitHub on the left, and a push reaches the deploy loop along the bottom.",
  "canvas": [
-  1340,
-  880
+  1600,
+  960
  ],
  "boxes": {
   "people": [
    60,
    260
   ],
-  "laptop": [
+  "github": [
    60,
    540
   ],
-  "github": [
+  "laptop": [
    60,
    680
+  ],
+  "website": [
+   320,
+   120
   ],
   "caddy": [
    320,
    260
   ],
-  "website": [
-   580,
-   120
-  ],
   "sso": [
    580,
    260
-  ],
-  "notulen": [
-   580,
-   400
   ],
   "assistant": [
    840,
    120
   ],
-  "observability": [
+  "talk": [
    840,
    260
   ],
-  "deploy": [
+  "observability": [
+   1100,
+   120
+  ],
+  "notulen": [
    840,
+   400
+  ],
+  "deploy": [
+   580,
    680
   ],
+  "media": [
+   1380,
+   260
+  ],
   "storage": [
-   1110,
+   1380,
    400
   ],
   "gpu": [
-   1110,
+   1380,
    540
   ],
   "vault": [
-   1110,
+   1380,
    680
   ]
  },
@@ -63,20 +71,27 @@
    "label": "Outside the server",
    "wraps": [
     "people",
-    "laptop",
-    "github"
+    "github",
+    "laptop"
    ]
   },
   {
    "label": "One server, behind Caddy",
    "wraps": [
-    "caddy",
     "website",
+    "caddy",
     "sso",
-    "notulen",
     "assistant",
+    "talk",
     "observability",
+    "notulen",
     "deploy"
+   ]
+  },
+  {
+   "label": "Media box",
+   "wraps": [
+    "media"
    ]
   },
   {
@@ -134,7 +149,45 @@
   [
    "caddy",
    "notulen",
-   "after login"
+   "after login",
+   {
+    "fromSide": "bottom",
+    "toSide": "left",
+    "via": [
+     [
+      395,
+      431
+     ]
+    ],
+    "labelAt": [
+     560,
+     419
+    ]
+   }
+  ],
+  [
+   "assistant",
+   "sso",
+   "agenda, CalDAV",
+   {
+    "fromSide": "left",
+    "toSide": "top",
+    "via": [
+     [
+      655,
+      151
+     ]
+    ],
+    "labelAt": [
+     745,
+     139
+    ]
+   }
+  ],
+  [
+   "assistant",
+   "talk",
+   "call link"
   ],
   [
    "observability",
@@ -142,16 +195,46 @@
    "alerts"
   ],
   [
+   "talk",
+   "media",
+   "calls"
+  ],
+  [
+   "talk",
+   "notulen",
+   "call over: recording"
+  ],
+  [
    "notulen",
    "storage",
    "audio"
   ],
   [
-   "notulen",
+   "storage",
    "gpu",
-   "a Job",
+   "the audio",
    {
     "variant": "dashed"
+   }
+  ],
+  [
+   "notulen",
+   "github",
+   "minutes",
+   {
+    "variant": "emphasis",
+    "fromSide": "bottom",
+    "toSide": "right",
+    "via": [
+     [
+      915,
+      571
+     ]
+    ],
+    "labelAt": [
+     560,
+     559
+    ]
    }
   ],
   [
@@ -167,7 +250,27 @@
    "deploy",
    "webhook",
    {
-    "variant": "emphasis"
+    "variant": "emphasis",
+    "fromSide": "left",
+    "toSide": "bottom",
+    "via": [
+     [
+      12,
+      571
+     ],
+     [
+      12,
+      800
+     ],
+     [
+      655,
+      800
+     ]
+    ],
+    "labelAt": [
+     330,
+     788
+    ]
    }
   ],
   [

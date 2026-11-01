@@ -105,8 +105,8 @@ def create_call_room(name: str) -> str | None:
 def enable_bot(room_token: str) -> None:
     """Enable the Notulen Talk bot on `room_token` so it receives that room's
     call events. Skipped silently when `OPENCLAW_TALK_BOT_ID` is unset (before
-    the bot is installed); a failure only logs. The bot drives auto-recording
-   ."""
+    the bot is installed); a failure only logs. The bot drives the recording
+    of the call into minutes (`infra/media`, `apps/notulen`)."""
     bot_id = os.environ.get(_BOT_ID_ENV, "").strip()
     token = os.environ.get(_TOKEN_ENV, "").strip()
     if not bot_id or not token:

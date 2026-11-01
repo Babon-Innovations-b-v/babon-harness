@@ -34,6 +34,7 @@ Topic to bible chapter ID. Pick the ones the prompt touches and read them before
 | Deploy: auto-deploy, the gate, the register, the eject | `infra/deploy` |
 | Observability and paging | `infra/observability` |
 | GPU tier (worker image, cluster, gpu_jobs) | `infra/gpu` |
+| Video calls and recording (the media box) | `infra/media` |
 | Workflow: grill, plan, code, close, the mechanism stack, the board, what to run before pushing, commit style | `workflow/loop` |
 | Workflow: the house module standard (tiers, layout, interface, tests, failure tiers) | `workflow/module-standard` |
 | Glossary (canonical terms + `_Avoid_` aliases) | `CONTEXT.md` (repo root) |

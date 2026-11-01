@@ -51,6 +51,9 @@ from apps.notulen.app.entrypoints.people_routes import (
 from apps.notulen.app.entrypoints.spa_routes import (
     router as spa_router,
 )
+from apps.notulen.app.entrypoints.talk_routes import (
+    router as talk_router,
+)
 from apps.notulen.app.entrypoints.upload_routes import (
     router as upload_router,
 )
@@ -91,6 +94,7 @@ app.include_router(jobs_router)
 app.include_router(minutes_router)
 app.include_router(health_router)
 app.include_router(people_router)
+app.include_router(talk_router)
 
 
 @app.on_event("startup")

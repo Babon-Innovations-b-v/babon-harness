@@ -23,6 +23,10 @@
   "chapter": "architecture/system-context",
   "section": "The pieces"
  },
+ "media": {
+  "chapter": "infra/media",
+  "section": "What runs on the box"
+ },
  "notulen": {
   "chapter": "apps/notulen",
   "section": "The recording path"
@@ -42,6 +46,10 @@
  "storage": {
   "chapter": "apps/notulen",
   "section": "The recording path"
+ },
+ "talk": {
+  "chapter": "infra/media",
+  "section": "How a call becomes minutes"
  },
  "vault": {
   "chapter": "infra/platform",

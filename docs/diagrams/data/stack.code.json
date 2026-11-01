@@ -17,6 +17,9 @@
   ".claude/skills",
   ".claude/hooks"
  ],
+ "media": [
+  "infra/media"
+ ],
  "notulen": [
   "apps/notulen"
  ],
@@ -25,6 +28,9 @@
  ],
  "sso": [
   "infra/nextcloud"
+ ],
+ "talk": [
+  "infra/media/connect-talk.sh"
  ],
  "vault": [
   "infra/secrets"

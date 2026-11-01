@@ -113,6 +113,9 @@ services:
       # default; video calls need Talk on the file cloud.
       ASSISTANT_TEAM_MESSAGE: ${ASSISTANT_TEAM_MESSAGE:-1}
       ASSISTANT_VIDEO_CALL: ${ASSISTANT_VIDEO_CALL:-0}
+      # The Talk bot that records calls into minutes (infra/media); each call
+      # room the assistant makes gets it. Empty = rooms are made without it.
+      OPENCLAW_TALK_BOT_ID: ${OPENCLAW_TALK_BOT_ID:-}
       ASSISTANT_DOOR_WRITE: ${ASSISTANT_DOOR_WRITE:-1}
       ASSISTANT_QUIET_HOURS: ${ASSISTANT_QUIET_HOURS:-22:00-07:30}
       ASSISTANT_NAMESPACE: ${ASSISTANT_NAMESPACE:-default}

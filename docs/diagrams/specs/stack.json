@@ -1,16 +1,16 @@
 {
  "title": "The stack",
- "subtitle": "One server behind one front door, a few rented pieces beside it, and the laptop where every change starts. Push to main is the deploy.",
+ "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and the laptop where every change starts. Push to main is the deploy.",
  "legend": {
-  "external": "People and outside services",
-  "frontend": "Public",
-  "backend": "The apps and the deploy loop",
-  "security": "The front door and the login",
+  "external": "People, outside services",
+  "frontend": "Public, video calls",
+  "backend": "Apps, deploy loop",
+  "security": "Door and login",
   "messagebus": "The watch",
   "database": "Kept on Scaleway",
-  "cloud": "Rented only while used",
+  "cloud": "Separate or on demand",
   "edge-default": "A request",
-  "edge-emphasis": "A change on its way to production",
+  "edge-emphasis": "Into the repository",
   "edge-dashed": "Periodic or optional"
  },
  "nodes": {
@@ -32,13 +32,13 @@
     ".claude/hooks"
    ],
    "bible": "Nothing deploys from the laptop.",
-   "code_seen": "264c39e288e4"
+   "code_seen": "b84fe6268cef"
   },
   "github": {
    "type": "external",
    "label": "GitHub",
    "sublabel": "main, issues, board",
-   "note": "Holds `main`, the issues and the Projects board. A push to `main` fires the webhook at `deploy.$DOMAIN/hooks/deploy`. The server posts each commit's `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy` status back to its commit page.",
+   "note": "Holds `main`, the issues and the Projects board, and receives the minutes notulen commits. A push to `main` fires the webhook at `deploy.$DOMAIN/hooks/deploy`. The server posts each commit's `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy` status back to its commit page.",
    "bible": "| A session | git and `gh` | the repository, issues, the board"
   },
   "caddy": {
@@ -55,8 +55,8 @@
   "sso": {
    "type": "security",
    "label": "Nextcloud",
-   "sublabel": "accounts and one login",
-   "note": "`nextcloud` on `cloud.$DOMAIN` with its Postgres, and `oauth2-proxy` on `auth.$DOMAIN`. Accounts live here: Nextcloud is the identity provider, oauth2-proxy the client. The login cookie lasts 8 hours, the Nextcloud session behind it 7 days. Files and calendar live here too.",
+   "sublabel": "files, calendar, login",
+   "note": "`nextcloud` on `cloud.$DOMAIN` with its Postgres, and `oauth2-proxy` on `auth.$DOMAIN`. Accounts live here: Nextcloud is the identity provider, oauth2-proxy the client, and one login with a second factor opens every private name. Files and the calendars the assistant reads and writes over CalDAV live here too.",
    "code": [
     "infra/nextcloud"
    ],
@@ -79,23 +79,23 @@
    "type": "backend",
    "label": "notulen",
    "sublabel": "meetings in, minutes out",
-   "note": "`notulen` on `notulen.$DOMAIN`, behind the login. A phone records in five-second chunks; the server stitches them, stores the audio, transcribes, and Claude writes the minutes, committed to `NOTULEN_TARGET_REPO`. CPU transcription works by default and takes hours for a long meeting.",
+   "note": "`notulen` on `notulen.$DOMAIN`, behind the login. Two ways in: a phone recording in five-second chunks, or a recorded Talk call, fetched when the call ends. Either way the audio goes to object storage, is transcribed, and Claude writes the minutes, committed to `NOTULEN_TARGET_REPO`.",
    "code": [
     "apps/notulen"
    ],
    "bible": "behind the Nextcloud single sign-on.",
-   "code_seen": "804993b8d127"
+   "code_seen": "b6d8de84e95e"
   },
   "assistant": {
    "type": "backend",
    "label": "The assistant",
    "sublabel": "OpenClaw on Signal",
-   "note": "The upstream OpenClaw gateway holds the Signal conversation, and this repository's door (`apps/assistant`) triages alerts, decides what reaches a phone and serves the gateway its tools. `signal-cli` is the Signal account both use. It ships empty: no people, no memory.",
+   "note": "The upstream OpenClaw gateway holds the Signal conversation, and this repository's door (`apps/assistant`) triages alerts and serves the gateway its tools. On the agenda it reads and writes the team's calendars over CalDAV, makes a Talk call link with `create_video_call` and puts the meeting on each calendar, and sends a Signal reminder with the link before it starts.",
    "code": [
     "apps/assistant"
    ],
    "bible": "The door is this repository's code, and it decides what reaches a phone.",
-   "code_seen": "3321055aafca"
+   "code_seen": "03d154ba8717"
   },
   "observability": {
    "type": "messagebus",
@@ -142,13 +142,35 @@
    "type": "cloud",
    "label": "GPU tier",
    "sublabel": "optional, Kubernetes",
-   "note": "Optional. A Scaleway Kapsule cluster whose GPU pools scale to zero, so a node bills only while it transcribes. Notulen submits a Kubernetes Job; the worker writes its result to the stack's Postgres, which then listens beyond the server with only its password as guard.",
+   "note": "Optional. A Scaleway Kapsule cluster whose GPU pools scale to zero, so a node bills only while it transcribes. Notulen submits a Kubernetes Job; the worker reads the audio from object storage and writes its result to the stack's Postgres, which then listens beyond the server with only its password as guard.",
    "code": [
     "infra/gpu",
     "infra/gpu-jobs"
    ],
    "bible": "so a node bills only while it transcribes.",
    "code_seen": "8cda8187a25b"
+  },
+  "talk": {
+   "type": "frontend",
+   "label": "Nextcloud Talk",
+   "sublabel": "video calls",
+   "note": "Talk is the Nextcloud app for chat and video calls, at `cloud.$DOMAIN`. Its calls run through the media box. The recording bot that `infra/media/connect-talk.sh` installs posts every call event of an assistant-made room to notulen, signed with `TALK_BOT_SECRET`.",
+   "code": [
+    "infra/media/connect-talk.sh"
+   ],
+   "bible": "Nextcloud Talk runs inside Nextcloud on the main server; the media box only carries its calls and records them.",
+   "code_seen": "f93a80684dbf"
+  },
+  "media": {
+   "type": "cloud",
+   "label": "Media box",
+   "sublabel": "signaling + recording",
+   "note": "Optional second server: the signaling server, the Janus media server on UDP 20000 to 40000, and the Talk recording server, a headless browser that sits in the call. Built from pinned upstream commits and deployed by hand with `infra/media/deploy.sh`, never by a push. **Watch out:** no TURN relay, so a network that blocks UDP cannot join.",
+   "code": [
+    "infra/media"
+   ],
+   "bible": "so the main server never opens the UDP range 20000 to 40000 that media needs.",
+   "code_seen": "f1bf9ca334c8"
   }
  },
  "slides": [
@@ -174,16 +196,29 @@
    ]
   },
   {
-   "label": "Notulen keeps its audio in object storage and can borrow a GPU while it transcribes",
+   "label": "The assistant keeps the agenda: it books meetings on the calendars and makes their Talk call links",
    "add": [
-    "storage",
-    "gpu",
-    "notulen-storage",
-    "notulen-gpu"
+    "talk",
+    "assistant-sso",
+    "assistant-talk"
    ]
   },
   {
-   "label": "Prometheus watches all of it and hands every alert to the assistant",
+   "label": "Calls run through the media box, and a recorded call becomes minutes in the repository",
+   "add": [
+    "media",
+    "storage",
+    "gpu",
+    "github",
+    "talk-media",
+    "talk-notulen",
+    "notulen-storage",
+    "storage-gpu",
+    "notulen-github"
+   ]
+  },
+  {
+   "label": "Prometheus watches the server and hands every alert to the assistant",
    "add": [
     "observability",
     "observability-assistant"
@@ -193,7 +228,6 @@
    "label": "Every change starts on the laptop as a push; the server tests it, pulls the vault and ships",
    "add": [
     "laptop",
-    "github",
     "deploy",
     "vault",
     "laptop-github",

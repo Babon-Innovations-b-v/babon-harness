@@ -9,8 +9,7 @@ mistakes the loop has learned to expect, a code index answers questions before f
 opened, and the same harness files are shared across several repositories. The repository
 holds the harness and, optionally, a self-hosted company stack on one server that the harness
 deploys and watches. It is the setup Babon Innovations works in every day, published with the
-company taken out: 29 skills, 15 hooks, and 134 test files, each registered with an edit that
-must turn it red.
+company taken out: 29 skills, 15 hooks, and 137 test files.
 
 [![The conversation loop: a task starts as one messy prompt, is read against the repository, decided, written down as an issue, built, tested, shipped and watched](docs/diagrams/images/loop.png)](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack/loop.html)
 
@@ -28,7 +27,7 @@ This is published as is. No support is promised; see [Support](#support).
 | Code index | Answers "where is this defined" and "who calls this" from an index, so an agent does not open or grep files to find out. | `.claude/index/`, the `index` server in `.mcp.json` |
 | Diagrams | Draw a module as an interactive page in which every box is explained by a sentence in the bible. | `docs/diagrams/` |
 | Shared-harness sync | Keep the harness files the same in every repository you run it in, while each keeps its own hooks, glossary and bible. | `/update`, `.claude/hooks/local/` |
-| The stack (optional) | Run a small company on one server: website, single sign-on, meeting minutes, an assistant on Signal, monitoring, and deploys that test every commit. | `apps/`, `infra/`, `docker-compose.yml` |
+| The stack (optional) | Run a small company on one server: website, single sign-on, meeting minutes, an assistant on Signal that keeps the agenda and makes video-call links, video calls recorded straight into minutes, monitoring, and deploys that test every commit. | `apps/`, `infra/`, `docker-compose.yml` |
 
 **Workflow skills.** The ones a task passes through:
 
@@ -82,11 +81,12 @@ Rough monthly cost, as a shape, not a quote. Check Scaleway's current prices.
 | Secret Manager, one secret | always | cents |
 | Object storage for meeting audio | always, grows | usage-based |
 | GPU node | only while transcribing | depends on the card the picker finds |
+| Media box (PRO2-XS class) | only with recorded video calls | a second server, all month |
 | Anthropic API | per message and per meeting | usage-based |
 | Domain | yearly | about 10 euro |
 
-Deleting the server does not stop the bill: the bucket, the secret, a registry namespace and a GPU
-cluster keep billing until you delete them too. Set a budget alert in the Scaleway console.
+Deleting the server does not stop the bill: the bucket, the secret, a registry namespace, a GPU
+cluster and the media box keep billing until you delete them too. Set a budget alert in the Scaleway console.
 
 ## Quick start
 
@@ -99,9 +99,10 @@ claude --dangerously-skip-permissions
 Read [Permissions](#permissions-and-blast-radius) before using that flag.
 
 **The whole stack.** Inside Claude Code, say `set up my harness`. The `onboard` skill runs
-twelve phases ([`.claude/skills/onboard/phases.md`](.claude/skills/onboard/phases.md)): your
+thirteen phases ([`.claude/skills/onboard/phases.md`](.claude/skills/onboard/phases.md)): your
 own private copy of this repository on GitHub, the board, the Scaleway server, DNS, the vault,
-Nextcloud with two-factor login, notulen, the assistant and the GPU tier. It takes about an hour
+Nextcloud with two-factor login, notulen, the assistant, the GPU tier and the media box for
+recorded video calls. It takes about an hour
 of the agent's work and about twenty minutes of yours. It stops for what only you can do: logging
 in, the Scaleway key and card, the domain, scanning QR codes. Every phase checks whether it is
 already done, so a broken run resumes where it stopped.
@@ -132,7 +133,7 @@ Push the vault with `infra/secrets/push-env.sh <file>`. The server pulls it into
 
 ## Components
 
-[![The stack: people reach one server through Caddy or over Signal; notulen, the assistant, Nextcloud and Prometheus run behind it; a push from the laptop reaches the deploy loop through GitHub; object storage, the vault and an optional GPU tier are rented beside it](docs/diagrams/images/stack.png)](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html)
+[![The stack: people reach one server through Caddy or over Signal; behind it run Nextcloud with Talk, notulen, the assistant and Prometheus; the assistant books meetings on the calendar and makes Talk call links; calls run through the media box and a recorded call becomes minutes committed to GitHub; a push from the laptop reaches the deploy loop; object storage, the vault and an optional GPU tier are rented beside it](docs/diagrams/images/stack.png)](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html)
 
 *The stack. Click the picture for the interactive page; the laptop box opens the loop.*
 
@@ -187,6 +188,12 @@ conversation. This repository's tool door (`apps/assistant`) triages alerts, dec
 a phone, and serves the gateway its tools: your calendars, the board, Prometheus, deploy status,
 the repository's documents. It ships empty: no people, no memory.
 
+It keeps the agenda over CalDAV against Nextcloud: it reads the calendars in `AGENDA_CALENDARS`,
+books a meeting on each attendee's calendar (`ASSISTANT_AGENDA_WRITE=1`), makes one Nextcloud Talk
+call link for a video meeting and puts it in the event's location (`ASSISTANT_VIDEO_CALL=1`), and
+sends each attendee the link on Signal shortly before the meeting starts
+(`ASSISTANT_MEETING_REMINDERS=1`). All three switches are off until you turn them on.
+
 Fill `SIGNAL_*`, `ANTHROPIC_API_KEY`, `OPENCLAW_WEBHOOK_SECRET`, `OPENCLAW_GATEWAY_TOKEN` and
 `AGENDA_*` in the vault. Link the bot number with signal-cli in native mode once, then run
 `docker compose up -d` and `apps/assistant/workspace/apply.sh`. The deploy loop runs `apply.sh`
@@ -199,6 +206,21 @@ Record from the phone at `notulen.$DOMAIN`. Minutes land in `NOTULEN_TARGET_REPO
 slow: an hour of audio takes hours. The optional GPU tier is turned on with the four steps in
 [`infra/gpu/CLAUDE.md`](infra/gpu/CLAUDE.md). It costs GPU node hours, and it opens Postgres to
 the internet with the database password as the only guard.
+
+### Video calls and recording (optional)
+
+Calls run on Nextcloud Talk. The optional media box, a second server built from
+[`infra/media/`](infra/media/CLAUDE.md), carries them (a signaling server and the Janus media
+server) and records them (the Talk recording server). Every call room the assistant makes has a
+recording bot on it: when the call starts, notulen asks Talk to record; when it ends, notulen
+fetches the recording from the room owner's files and writes minutes from it, exactly as for a
+recording made in the browser. The room is told when recording starts; telling people beforehand
+is the organiser's job.
+
+The media box is outside auto-deploy: `infra/media/deploy.sh <ip>` is the only way a change gets
+there, and the recorder is built from a pinned upstream commit. Turning it on is the four steps in
+[`infra/media/CLAUDE.md`](infra/media/CLAUDE.md), or phase 11 of `onboard`. It has no TURN relay,
+so someone on a network that blocks direct UDP cannot join.
 
 ### Documents, website and design
 
@@ -285,7 +307,8 @@ taken out. The harness stands on other people's work. Licences and required text
 | [OpenClaw](https://github.com/openclaw/openclaw) | MIT | the assistant's gateway, run unmodified |
 | [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) and [signal-cli](https://github.com/AsamK/signal-cli) | MIT and GPL-3.0 | the Signal transport |
 | [speaches](https://github.com/speaches-ai/speaches), [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [pyannote.audio](https://github.com/pyannote/pyannote-audio) | MIT | transcription and speaker labels |
-| Caddy, Nextcloud, oauth2-proxy, PostgreSQL, Prometheus, Alertmanager | see the notices | the stack |
+| Caddy, Nextcloud, Nextcloud Talk, oauth2-proxy, PostgreSQL, Prometheus, Alertmanager | see the notices | the stack |
+| nextcloud-spreed-signaling, nextcloud-talk-recording, Janus, NATS | AGPL-3.0, AGPL-3.0, GPL-3.0, Apache-2.0 | the optional media box |
 
 Claude Code is Anthropic's proprietary software and is not part of this repository. This project
 is not affiliated with or endorsed by Anthropic.

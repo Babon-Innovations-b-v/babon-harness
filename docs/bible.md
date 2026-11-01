@@ -431,6 +431,32 @@ The dashboard's account may only create, list and delete Jobs and Pods in its ow
 - A dashboard restart leaves running Jobs alone.
 - A node that comes up without a usable GPU points at the provider's NVIDIA driver, not this code.
 
+## infra/media
+
+### What runs on the box
+
+| Service | Job |
+|---|---|
+| `signaling` | Nextcloud Talk's High Performance Backend, pinned image |
+| `janus` | the media server every call's audio and video passes through |
+| `nats` | the message bus between the two |
+| `recording` | the Talk recording server, a headless browser in the call |
+| `caddy` | HTTPS for `signaling.DOMAIN` and `recording.DOMAIN` |
+
+The media box is a second server that carries the calls and records them, so the main server never opens the UDP range 20000 to 40000 that media needs.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=media) It is optional and provisioned by hand from `infra/media/`, outside auto-deploy: a push to `main` changes nothing on it, and `infra/media/deploy.sh` is the only way a change gets there. Janus and the recorder are built on the box from upstream source at pinned commits, because the recorder touches every meeting's audio and video. There is no TURN relay, so a network that blocks direct UDP cannot join a call.
+
+### How a call becomes minutes
+
+```
+assistant: create_video_call -> a Talk room, the recording bot enabled on it
+call starts -> Talk webhook -> notulen /api/talk/webhook -> start recording
+call ends   -> Talk webhook -> notulen fetches the file -> S3 -> minutes job
+```
+
+Nextcloud Talk runs inside Nextcloud on the main server; the media box only carries its calls and records them.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=talk) The recording bot, installed by `infra/media/connect-talk.sh`, posts every call event to notulen, signed with `TALK_BOT_SECRET`. On `call_started` notulen asks Talk to record, retrying while Talk answers that the call is not recordable yet. On `call_ended` it finds the newest recording in the room owner's `Talk/Recording/<token>/` folder, refuses one it already holds or one older than the call, and hands it to the same pipeline as a recording made in the browser. A call over two minutes with no recording pages the assistant.
+
+The assistant's account owns every call room, which makes it the moderator allowed to start a recording and the account the file lands with. Only rooms the assistant creates are recorded, and the room is told when recording starts; telling people beforehand is the organiser's job.
+
 ## workflow/loop
 
 One task is one conversation, from "I want this" to production without leaving the chat: grill,

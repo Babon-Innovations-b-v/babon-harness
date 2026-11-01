@@ -30,4 +30,5 @@ notulen/
 - **Every page goes to the assistant's door** (`shared/assistant_door.py`, `OPENCLAW_NOTIFY_URL` plus `OPENCLAW_WEBHOOK_SECRET`) inside a Tier-2 swallow. Never page from here to Signal directly.
 - **Identity is the SSO headers only** (`Remote-User`, then `Remote-Email`, `shared/identity.py`). No Basic auth, no session of its own.
 - **Transcription without the GPU tier needs the `whisper` extra** (`faster-whisper`), which the image installs. A checkout without it imports fine and fails a CPU job with the import error, audio kept.
+- **`/api/talk/webhook` skips the login**: the `TALK_BOT_SECRET` signature is its only gate (`infra/media`).
 - **The send-to-assistant claim is taken before the call** and released only when the request never arrived.

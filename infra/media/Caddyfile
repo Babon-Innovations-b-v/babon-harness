@@ -1,0 +1,11 @@
+# Caddy on the media box: HTTPS (automatic Let's Encrypt) for its two public
+# names. reverse_proxy upgrades WebSockets, which the signaling server needs.
+# The upstreams (8080 signaling, 8000 recording) listen on the box only.
+
+signaling.{$DOMAIN} {
+	reverse_proxy 127.0.0.1:8080
+}
+
+recording.{$DOMAIN} {
+	reverse_proxy 127.0.0.1:8000
+}

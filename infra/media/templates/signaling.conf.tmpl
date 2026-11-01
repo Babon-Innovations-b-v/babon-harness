@@ -1,0 +1,32 @@
+# Signaling server (nextcloud-spreed-signaling) config. setup.sh renders this
+# to ../signaling.conf with the values in .env (envsubst, named variables only).
+
+[http]
+listen = 127.0.0.1:8080
+
+[sessions]
+hashkey = ${TALK_SESSION_HASHKEY}
+blockkey = ${TALK_SESSION_BLOCKKEY}
+
+[clients]
+# The recording server logs in with this; must equal recording.conf's.
+internalsecret = ${TALK_INTERNAL_SECRET}
+
+[backend]
+backends = nc1
+allowall = false
+
+[nc1]
+urls = https://cloud.${DOMAIN}
+secret = ${TALK_SIGNALING_SECRET}
+
+[nats]
+url = nats://127.0.0.1:4222
+
+[mcu]
+type = janus
+url = ws://127.0.0.1:8188
+
+# [turn] is left out: Janus advertises the public IP (--nat-1-1), so media
+# connects without a relay. Someone on a network that blocks direct UDP
+# cannot join until a TURN server is added.

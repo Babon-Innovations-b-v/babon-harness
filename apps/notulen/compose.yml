@@ -39,6 +39,14 @@ services:
       GPU_POOL: ${GPU_POOL:-notulen-gpu}
       NOTULEN_WORKER_IMAGE: ${NOTULEN_WORKER_IMAGE:-}
       KUBECONFIG_B64: ${KUBECONFIG_B64:-}
+      # Recorded Talk calls (infra/media). The webhook checks TALK_BOT_SECRET;
+      # the recording is fetched as the assistant's account, which owns the
+      # call rooms. Empty = call recording is off and the webhook answers 401.
+      TALK_BOT_SECRET: ${TALK_BOT_SECRET:-}
+      NC_URL: ${NC_URL:-}
+      AGENDA_USER: ${AGENDA_USER:-}
+      AGENDA_APP_PASSWORD: ${AGENDA_APP_PASSWORD:-}
+      ASSISTANT_TIMEZONE: ${ASSISTANT_TIMEZONE:-UTC}
     volumes:
       # Live recording sessions are appended here chunk by chunk; a volume
       # keeps them across a redeploy.

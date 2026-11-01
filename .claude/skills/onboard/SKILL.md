@@ -75,7 +75,7 @@ Work through the phases in [phases.md](phases.md). Each phase is idempotent and 
    If a worker fails twice, apply that phase's own fallback and keep the rest moving.
 
    **One vault writer at a time.** The vault update is an unlocked read-modify-write on one secret, so two writers silently lose one set of values. During this block the writer is worker B; A and C return values, and you fold them into one new version in the closing block.
-3. **The closing human block.** Interrupt them once, with everything that needs their hands in one sitting: Nextcloud accounts, QR codes and the single sign-on (phase 7), storage plus the Anthropic and Notulen keys in one vault version (phase 8, with the live test recording), the assistant (phase 9), the GPU wiring (phase 10 steps 3 to 9), then finish (phase 11).
+3. **The closing human block.** Interrupt them once, with everything that needs their hands in one sitting: Nextcloud accounts, QR codes and the single sign-on (phase 7), storage plus the Anthropic and Notulen keys in one vault version (phase 8, with the live test recording), the assistant (phase 9), the GPU wiring (phase 10 steps 3 to 9), video calls if they want them (phase 11), then finish (phase 12).
 
 | Phase | Does | Done when |
 |---|---|---|
@@ -90,7 +90,8 @@ Work through the phases in [phases.md](phases.md). Each phase is idempotent and 
 | 8 | Notulen | bucket live, service healthy, test recording done or skipped |
 | 9 | The assistant | Signal number registered, calendar and GitHub wired, a first message answered, or consciously skipped |
 | 10 | Fast transcription | worker image pushed, GPU cluster live, one recording through a Job (or CPU fallback recorded) |
-| 11 | Finish | memory note written, daily loop explained |
+| 11 | Video calls and recording | media box answers, Talk points at it, bot id set, or consciously skipped |
+| 12 | Finish | memory note written, daily loop explained |
 
 ## Safety rules
 

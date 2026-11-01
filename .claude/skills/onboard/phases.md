@@ -108,7 +108,7 @@ Work over ssh as root for steps 1 to 4, then as `harness` for ever after.
 7. The VM's own scoped way into the vault. **Skip if `/opt/harness/scw-secrets.env` exists on the VM.**
    - From the laptop: `scw iam application create name=harness-vm -o json` (reuse an existing one).
    - One policy, this project only: `scw iam policy create name=harness-vm-secrets application-id=<app-id> rules.0.permission-set-names.0=SecretManagerReadOnly rules.0.permission-set-names.1=SecretManagerSecretAccess rules.0.permission-set-names.2=BillingReadOnly rules.0.project-ids.0=<project-id>`. ReadOnly alone can list secrets but not read their values; both are needed.
-   - An API key for it with an expiry a year out: `scw iam api-key create application-id=<app-id> expires-at=<ISO date> -o json`. Note the renewal date for phase 11.
+   - An API key for it with an expiry a year out: `scw iam api-key create application-id=<app-id> expires-at=<ISO date> -o json`. Note the renewal date for phase 12.
    - Write `/opt/harness/scw-secrets.env` on the VM, owned by `harness`, mode 600: `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID`, `SCW_DEFAULT_REGION`, and the vault secret's id. Read `infra/secrets/pull-env.sh` for the exact variable names it expects. The laptop's own key never lands on the VM.
    - As `harness`, run `/opt/harness/repo/infra/secrets/pull-env.sh` and check `/opt/harness/harness.env` exists, mode 600.
 8. Start everything: `compose up -d --build`. Caddy fetches certificates, which takes a minute or two. oauth2-proxy stays unhealthy until phase 7 replaces the `pending` OIDC values; that is expected and nothing else depends on it.
@@ -168,7 +168,7 @@ The assistant ships as an empty template: no people, no number, no calendar. Thi
 6. **One live message.** The owner messages the bot "what is on my calendar tomorrow?" or "is anything down?" while you watch `compose logs -f` for the gateway. A first reply proves the chain: Signal, gateway, tools, calendar.
 7. Two sentences to finish: it answers from its tools or says it cannot check, and its personality, its people and its schedules live in the repository, so a change to how it behaves is a commit, not a setting on the server.
 
-**Skipped**: the containers run idle with no number, which costs nothing but memory. Record it in the phase 11 note.
+**Skipped**: the containers run idle with no number, which costs nothing but memory. Record it in the phase 12 note.
 
 **Verify**: SIGNAL_BOT_NUMBER in the vault, gateway healthy, the tool check passes, one message answered; or consciously skipped.
 
@@ -190,13 +190,30 @@ Before creating anything, the money story in two sentences: the GPU bills only w
 8. Wait for the build log's last line (the pushed image) before testing.
 9. One short test recording; watch `kubectl get jobs -n <namespace> -w`: a Job appears, a node boots (3 to 5 minutes the first time), the Job completes, the recording finishes. If dispatch fails, the CPU path still processes it; investigate before calling the phase done.
 
-If any step fails twice on the same error: stay on CPU, tell them what that means, record it in the phase 11 note.
+If any step fails twice on the same error: stay on CPU, tell them what that means, record it in the phase 12 note.
 
 **Verify**: image in the registry, cluster ready, KUBECONFIG_B64 in the vault, one recording processed through a Job, or the CPU fallback recorded.
 
-## Phase 11: finish
+## Phase 11: video calls and recording (optional, fully skippable)
 
-1. Write a memory note in `.claude/memory/` (a short file plus one index line in MEMORY.md): domain, server IP, region, instance type, bucket, cluster and registry if the GPU tier ran, which phases ran, what was skipped and why, the assistant's number if one was set up, the expiry date of the harness-vm API key, and the date. No passwords in memory, ever.
+**Already done?** `MEDIA_PUBLIC_IP` and `OPENCLAW_TALK_BOT_ID` are set, `https://signaling.<domain>/api/v1/welcome` answers, and `ASSISTANT_VIDEO_CALL=1`. Then skip. Needs phase 9: the assistant creates the call rooms.
+
+What it gives them, in two sentences: the assistant can put a video call on everyone's calendar with one link and remind them on Signal before it starts, and every such call is recorded and written up as minutes like a Notulen recording. It costs a second server running all month (`PRO2-XS` class), because calls need a wide UDP port range the main server should not carry.
+
+Read `infra/media/CLAUDE.md` first; the scripts there do the work.
+
+1. Say plainly before starting: a recorded call must be announced to the people in it. The room gets a notice when recording starts; telling them beforehand is the organiser's job.
+2. `infra/media/provision.sh`. DNS A records `signaling` and `recording` to the IP it prints (as in phase 5).
+3. One vault version: `MEDIA_PUBLIC_IP`, and the six `TALK_*` secrets from `config/vault.env.example`, each generated (`openssl rand -hex 32`; the two session keys exactly 32 and 16 characters). Never print them.
+4. `infra/media/deploy.sh <ip>`, in the background (it builds Janus and the recorder, several minutes). Wait for `https://signaling.<domain>/api/v1/welcome` to answer.
+5. On the main server: `ssh harness@<SERVER_IP> /opt/harness/repo/infra/media/connect-talk.sh`. Put the bot id it prints in `OPENCLAW_TALK_BOT_ID` and set `ASSISTANT_VIDEO_CALL=1` and `ASSISTANT_MEETING_REMINDERS=1`, one vault version, then wait one deploy cycle.
+6. A test, if they have five minutes: ask the assistant on Signal for a video call now with themselves; open the link, talk for over five minutes (shorter calls are skipped), hang up. Minutes appear in Notulen a few minutes later.
+
+**Skipped**: the assistant makes no call links and no call is recorded. Record it in the phase 12 note.
+
+## Phase 12: finish
+
+1. Write a memory note in `.claude/memory/` (a short file plus one index line in MEMORY.md): domain, server IP, region, instance type, bucket, cluster and registry if the GPU tier ran, the media box IP if phase 11 ran, which phases ran, what was skipped and why, the assistant's number if one was set up, the expiry date of the harness-vm API key, and the date. No passwords in memory, ever.
 2. Print the addresses on their own lines: the root, `cloud.`, `notulen.`.
 3. The daily loop in four lines: open a terminal, run `claude --dangerously-skip-permissions` in this folder, say what you want in plain words, and after I push to main the deploy gate tests the change and it goes live in a few minutes.
 4. Bigger work, in three lines: I first ask questions, then write the plan as an issue on their GitHub page, then build it. Show the issues address once: `gh repo view "$(git remote get-url origin)" --json url --jq .url` plus `/issues`.
