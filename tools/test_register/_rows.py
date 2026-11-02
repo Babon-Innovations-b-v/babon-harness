@@ -1886,4 +1886,17 @@ ROWS: tuple[Row, ...] = (
             why="every file reads as already patched, so the upstream line survives the first run",
         ),
     ),
+    Row(
+        test=".claude/hooks/tests/test_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes.py",
+        pins=(".claude/hooks",),
+        runs_when=(
+        ".claude/hooks/**",
+        ),
+        proved_by=Break(
+            file=".claude/hooks/local/push_queue.py",
+            old="    if unblocks or queue + pushed <= limit:\n",
+            new="    if True:\n",
+            why="the limit is ignored, so the 16-commit push is let through",
+        ),
+    ),
 )

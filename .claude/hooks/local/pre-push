@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# This repository's own pre-push check, run by .claude/hooks/pre-push: refuse a
+# push to main while the deploy queue is already long (push_queue.py says why).
+# FAILURE POLICY: fail open when python3 or the script is missing.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+guard="$root/.claude/hooks/local/push_queue.py"
+if [ -f "$guard" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$guard" || exit 1
+fi
+exit 0
