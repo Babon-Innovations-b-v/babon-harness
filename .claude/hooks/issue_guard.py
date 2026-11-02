@@ -21,6 +21,12 @@ Reads the Claude Code PreToolUse payload on stdin (``{tool_name, tool_input, ...
 Every repo-specific value (repo slug, area prefix and names, standing backlog PRDs, body rules) comes from
 ``.claude/project.json`` beside the hooks; nothing is hard-coded here. Only creations are checked, never edits.
 
+Size: every issue type has a maximum body length, sub-issue below PRD below vision PRD, and a comment has its
+   own. A new issue over its cap is refused; an edit is refused only when it grows a body that is over its cap
+   (shrinking always passes); a comment over its cap is refused. A first line starting ``<!-- Budget:`` lifts the
+   cap for that body, saying why. Numbers come from ``issue_body_caps`` in ``.claude/project.json``, with the
+   defaults in ``_DEFAULT_CAPS``. See ``_check_size``.
+
 FAILURE POLICY: fail-open. Any parse error, unknown shape, or unrelated call exits 0 (allow): a crashing guard must
 never wedge a tool call. Exit 2 + stderr is the only block path (the harness feeds stderr back as the block reason).
 """
@@ -337,11 +343,121 @@ def _check_prd_root(title, body, labels, config):
                "section), or name the number in ## Root check with one line on why it is a separate root.")
 
 
+# --- size: each issue type gets its own maximum length ------------------------------------------------------
+#
+# A body is the plan, read by someone who was not there; it is not the history, which is what comments are for.
+# A backlog whose bodies grow without a limit fills with issues nobody can scan, and done, duplicated and stale
+# work hides inside them. The defaults sit near twice a typical closed sub-issue and above a typical PRD; a
+# project sets its own numbers in project.json.
+
+_DEFAULT_CAPS = {"sub_issue": 3000, "prd": 6000, "vision_prd": 10000, "comment": 2500}
+_VISION_LABELS = ("vision", "visie")
+_BUDGET_LINE = re.compile(r"\A\s*<!--\s*Budget:", re.IGNORECASE)
+_VIEW_TIMEOUT = 3.5
+
+
+def _caps(config):
+    """The four caps, each from project.json when it names a positive number, else the default."""
+    named = config.get("issue_body_caps") or {}
+    return {kind: named[kind] if isinstance(named.get(kind), int) and named[kind] > 0 else cap
+            for kind, cap in _DEFAULT_CAPS.items()}
+
+
+def _kind(labels):
+    """``vision_prd``, ``prd`` or ``sub_issue``, from the labels alone."""
+    if "PRD" not in labels:
+        return "sub_issue"
+    return "vision_prd" if any(label in _VISION_LABELS for label in labels) else "prd"
+
+
+def _over(text, cap):
+    """True when the text is past its cap and does not open with a Budget line."""
+    return len(text) > cap and not _BUDGET_LINE.match(text)
+
+
+def _size_message(what, length, cap, kind):
+    names = {"sub_issue": "a sub-issue", "prd": "a PRD", "vision_prd": "a vision PRD", "comment": "a comment"}
+    return (f"BLOCKED: {what} is {length:,} characters; {names[kind]} may be {cap:,} "
+            f"(issue_body_caps in .claude/project.json). The body is the plan, not the history: cut it to the "
+            f"goal, the open tasks and the acceptance, put progress in a comment, and move detail to the file or "
+            f"issue it belongs to. A body that truly needs more opens with a line `<!-- Budget: <why> -->`.")
+
+
+def _check_size(body, labels, config):
+    """Refuse a new issue whose body is over its type's cap."""
+    kind = _kind(labels)
+    cap = _caps(config)[kind]
+    if body and _over(body, cap):
+        _block(_size_message("this issue's body", len(body), cap, kind))
+
+
+def _current_issue(number, config):
+    """The issue's body and labels from GitHub, or None when they cannot be read in time."""
+    command = ["gh", "issue", "view", str(number), "--json", "body,labels"]
+    if config.get("repo"):
+        command += ["--repo", config["repo"]]
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=_VIEW_TIMEOUT, check=False)
+        found = json.loads(done.stdout) if done.returncode == 0 else None
+    except Exception:
+        return None
+    if not found:
+        return None
+    return found.get("body") or "", [label.get("name", "") for label in found.get("labels") or []]
+
+
+def _check_edit_size(number, body, config):
+    """Refuse an edit that grows a body past its cap; shrinking, and anything unreadable, passes."""
+    current = _current_issue(number, config)
+    if current is None:
+        return
+    old_body, labels = current
+    kind = _kind(labels)
+    cap = _caps(config)[kind]
+    if _over(body, cap) and len(body) > len(old_body):
+        _block(_size_message(f"the new body of #{number}", len(body), cap, kind))
+
+
+def _check_comment_size(body, config):
+    """Refuse a comment over the comment cap."""
+    cap = _caps(config)["comment"]
+    if body and _over(body, cap):
+        _block(_size_message("this comment", len(body), cap, "comment"))
+
+
+def _gh_issue_action(tokens):
+    """``(action, number)`` for ``gh issue edit N`` or ``gh issue comment N``, else ``(None, None)``."""
+    if "gh" not in tokens:
+        return None, None
+    start = tokens.index("gh") + 1
+    for index in range(start, len(tokens) - 2):
+        if tokens[index] == "issue" and tokens[index + 1] in ("edit", "comment"):
+            number = tokens[index + 2].lstrip("#")
+            return (tokens[index + 1], int(number)) if number.isdigit() else (None, None)
+    return None, None
+
+
+def _check_gh_issue_change(tokens):
+    """Guard the body of a ``gh issue edit`` and of a ``gh issue comment``."""
+    action, number = _gh_issue_action(tokens)
+    if not action:
+        return
+    _, _, _, body = _gh_issue_fields(tokens)
+    if not body:
+        return
+    config = _config()
+    if action == "comment":
+        _check_comment_size(body, config)
+    else:
+        _check_edit_size(number, body, config)
+
+
 def _check_new_issue(title, labels, has_assignee, body):
     """Every check a new issue goes through, in the order a person fixes them."""
     config = _config()
     _check_labels(labels, has_assignee, config)
     _check_issue_body(body, labels, config)
+    _check_size(body, labels, config)
     _check_prd_root(title, body, labels, config)
 
 
@@ -387,6 +503,8 @@ def _check_gh_issue_create(command):
     tokens = shlex.split(command)  # may raise on odd quoting -> fail open
     if _is_gh_issue_create(tokens):
         _check_new_issue(*_gh_issue_fields(tokens))
+    else:
+        _check_gh_issue_change(tokens)
 
 
 def _check_mcp_create_issue(tool_input):
@@ -421,6 +539,10 @@ def main():
     tool_input = payload.get("tool_input") or {}
     if tool_name == "mcp__github__create_issue":
         _check_mcp_create_issue(tool_input)
+    elif tool_name == "mcp__github__add_issue_comment":
+        _check_comment_size(str(tool_input.get("body") or ""), _config())
+    elif tool_name == "mcp__github__update_issue" and tool_input.get("body"):
+        _check_edit_size(int(tool_input.get("issue_number") or 0), str(tool_input["body"]), _config())
     elif tool_name == "Bash":
         command = tool_input.get("command", "")
         if _is_destructive_git(command):

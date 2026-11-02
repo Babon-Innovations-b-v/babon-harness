@@ -214,3 +214,20 @@ def test_mcp_body_checks_apply():
     code, err = _run(payload)
     assert code == 2
     assert "numbers in prose rot" in err
+
+
+def test_each_issue_type_has_its_own_maximum_body_length():
+    """A sub-issue is capped below a PRD, a PRD below a vision PRD, a comment on its own; a Budget line lifts it."""
+    def create(labels, body):
+        return _run({"tool_name": "mcp__github__create_issue", "tool_input": {
+            "title": "a size probe", "labels": labels, "assignees": ["someone"], "body": body}})[0]
+
+    root = "## Root check\nNo open root covers this.\n"
+    assert create(["bug"], "x" * 3001) == 2
+    assert create(["bug"], "x" * 3000) == 0
+    assert create(["bug"], "<!-- Budget: a long spec -->\n" + "x" * 5000) == 0
+    assert create(["PRD"], root + "x" * 6000) == 2
+    assert create(["PRD", "vision"], root + "x" * 6000) == 0
+    comment = {"tool_name": "mcp__github__add_issue_comment", "tool_input": {"issue_number": 7, "body": "y" * 2501}}
+    assert _run(comment)[0] == 2
+    assert _run(_bash("gh issue comment 7 --body " + "y" * 200))[0] == 0

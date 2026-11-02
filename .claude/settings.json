@@ -89,7 +89,7 @@
         ]
       },
       {
-        "matcher": "mcp__github__create_issue",
+        "matcher": "mcp__github__create_issue|mcp__github__add_issue_comment|mcp__github__update_issue",
         "hooks": [
           {
             "type": "command",
