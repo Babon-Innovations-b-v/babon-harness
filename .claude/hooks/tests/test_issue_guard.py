@@ -231,3 +231,20 @@ def test_each_issue_type_has_its_own_maximum_body_length():
     comment = {"tool_name": "mcp__github__add_issue_comment", "tool_input": {"issue_number": 7, "body": "y" * 2501}}
     assert _run(comment)[0] == 2
     assert _run(_bash("gh issue comment 7 --body " + "y" * 200))[0] == 0
+
+
+def test_a_second_issue_for_open_work_is_refused(tmp_path, monkeypatch):
+    """A new sub-issue sharing three subject words with an open one is refused unless `## Duplicate check` names it."""
+    open_issues = tmp_path / "open.json"
+    open_issues.write_text(json.dumps([
+        {"number": 41, "title": "Rename the wire field treatment_path to label", "labels": ["bug"], "parent": None}]))
+    monkeypatch.setenv("ISSUE_GUARD_ROOTS", str(open_issues))
+
+    def create(title, body="x"):
+        return _run({"tool_name": "mcp__github__create_issue", "tool_input": {
+            "title": title, "labels": ["bug"], "assignees": ["someone"], "body": body}})[0]
+
+    assert create("Rename wire field treatment_path everywhere") == 2
+    assert create("Rename wire field treatment_path everywhere", "## Duplicate check\n#41 is the API half.") == 0
+    assert create("Fix the hero image on mobile") == 0
+

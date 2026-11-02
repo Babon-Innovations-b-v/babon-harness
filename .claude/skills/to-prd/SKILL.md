@@ -165,7 +165,7 @@ Triage labels (`needs-triage` → `ready-for-agent`/`ready-for-human`, see [`tri
 
 ### 6. Carve a sub-issue (only independently grabbable or ready-for-agent)
 
-By default a task lives as a checklist line in the PRD. Only carve it into its own sub-issue when it deserves its own card:
+By default a task lives as a checklist line in the PRD, and so does a small follow-up found later: it goes on the parent as an unticked line, never as a new issue. Only carve it into its own sub-issue when it deserves its own card:
 
 - **independently grabbable**: one person or agent picks it up alone and also finishes it, or
 - **`ready-for-agent`**: it needs its own agent brief (see [`../triage/AGENT-BRIEF.md`](../triage/AGENT-BRIEF.md)).

@@ -21,6 +21,8 @@ Reads the Claude Code PreToolUse payload on stdin (``{tool_name, tool_input, ...
 Every repo-specific value (repo slug, area prefix and names, standing backlog PRDs, body rules) comes from
 ``.claude/project.json`` beside the hooks; nothing is hard-coded here. Only creations are checked, never edits.
 
+A new sub-issue whose title shares three subject words with an open sub-issue, unless a ``## Duplicate
+   check`` section names it. See ``_check_duplicate``.
 Size: every issue type has a maximum body length, sub-issue below PRD below vision PRD, and a comment has its
    own. A new issue over its cap is refused; an edit is refused only when it grows a body that is over its cap
    (shrinking always passes); a comment over its cap is refused. A first line starting ``<!-- Budget:`` lifts the
@@ -452,6 +454,38 @@ def _check_gh_issue_change(tokens):
         _check_edit_size(number, body, config)
 
 
+_DUPLICATE_CHECK_SECTION = re.compile(r"(?im)^[ \t]*#{2,3}[ \t]+Duplicate check\b")
+#: How many subject words a new sub-issue's title may share with an open one before it has to say why it is new.
+_DUPLICATE_WORDS = 3
+
+
+def _check_duplicate(title, body, labels, config):
+    """Refuse a new sub-issue whose title shares enough subject words with an open sub-issue, unless the body names
+    it under ``## Duplicate check``. A second issue for work that already has one is the commonest dead weight after
+    a finished issue left open: the work happens on one and the other sits there. Fails open without the issue list.
+    """
+    if any(label.strip() == "PRD" for label in labels):
+        return
+    issues = _load_open_issues(config)
+    if not issues:
+        return
+    noise = _noise(config)
+    words = _title_tokens(title, noise)
+    section = _body_section(body, _DUPLICATE_CHECK_SECTION)
+    named = {int(number) for number in _ISSUE_REF.findall(section or "")}
+    alike = [(issue, words & _title_tokens(issue["title"], noise)) for issue in issues
+             if "PRD" not in issue["labels"] and issue["number"] not in named]
+    alike = [(issue, shared) for issue, shared in alike if len(shared) >= _DUPLICATE_WORDS]
+    if not alike:
+        return
+    alike.sort(key=lambda pair: len(pair[1]), reverse=True)
+    lines = "\n".join(f"  #{issue['number']} {issue['title'][:64]}  (shares: {', '.join(sorted(shared)[:4])})"
+                      for issue, shared in alike[:3])
+    _block("BLOCKED: an open issue already looks like this work:\n" + lines + "\nAdd it as a task line on that "
+           "issue instead, or add a `## Duplicate check` section naming the number with one line on why this is "
+           "separate.")
+
+
 def _check_new_issue(title, labels, has_assignee, body):
     """Every check a new issue goes through, in the order a person fixes them."""
     config = _config()
@@ -459,6 +493,7 @@ def _check_new_issue(title, labels, has_assignee, body):
     _check_issue_body(body, labels, config)
     _check_size(body, labels, config)
     _check_prd_root(title, body, labels, config)
+    _check_duplicate(title, body, labels, config)
 
 
 def _is_gh_issue_create(tokens):
