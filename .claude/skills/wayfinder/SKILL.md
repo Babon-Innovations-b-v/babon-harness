@@ -62,7 +62,7 @@ The PRD is deliberately incomplete: don't write a sub-issue for what you can't y
 
 ## Invocation
 
-Two modes. Either way, **never resolve more than one sub-issue per session, with one exception: research sub-issues.** Those are resolved by subagents and can be burned down in parallel, any number at a time, because they surface facts rather than make decisions. Decisions stay one per session.
+Two modes. Either way, **ask the repo's index first**: use the index tools root `CLAUDE.md` names (load them first if they arrive deferred) and put the idea's subjects, and later each sub-issue, to them before reading files or issues by hand; every research subagent's brief says the same, because a subagent starts with nothing loaded. And **never resolve more than one sub-issue per session, with one exception: research sub-issues.** Those are resolved by subagents and can be burned down in parallel, any number at a time, because they surface facts rather than make decisions. Decisions stay one per session.
 
 **Every issue you create here (the PRD and every sub-issue) gets an assignee and a category label**, and lands on the board. After each `gh issue create`, set its column with `python3 .claude/scripts/board-status.py <N> "Not started"`, which also adds it to the board when the auto-add workflow is off. If the project uses areas, add the area label too (`<area_label_prefix><area>`, both in `.claude/project.json`), and set the board's area field to match when it has one.
 
