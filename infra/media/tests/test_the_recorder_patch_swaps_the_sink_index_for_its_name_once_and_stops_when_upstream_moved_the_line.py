@@ -1,11 +1,11 @@
 """The recorder patch swaps the sink index for its name once, and stops when upstream moved the line.
 
 WHAT IT PINS. `infra/media/patches/recording_pulse_sink_name.py`, run by
-`setup.sh` against the pinned Talk recorder. Upstream hands the browser the
+`Dockerfile.recording` against the pinned Talk recorder. Upstream hands the browser the
 PulseAudio sink's index, which libpulse ignores there, so a recording comes
 out with video and silent audio. The patch must replace that one line, must
-be a no-op on a second run (setup.sh runs on every deploy), and must exit
-non-zero when the line is gone, so setup.sh stops instead of shipping a
+be a no-op on a second run (a rebuilt layer runs it again), and must exit
+non-zero when the line is gone, so the build stops instead of shipping a
 recorder that records silence.
 
 HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. From the

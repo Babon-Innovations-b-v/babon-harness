@@ -1,0 +1,34 @@
+# Janus transport configs that keep its APIs on the node's loopback. The node
+# also sits on the cluster's private network, which no security group
+# filters, so a port open on every interface is open to every pod: the
+# WebSocket API binds 127.0.0.1 (signaling dials ws://127.0.0.1:8188) and the
+# HTTP transport is off, admin API included. Mounted with subPath over the
+# files `make configs` wrote in the Janus image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: janus-transports
+data:
+  janus.transport.websockets.jcfg: |
+    general: {
+      json = "indented"
+      ws = true
+      ws_port = 8188
+      ws_ip = "127.0.0.1"
+      wss = false
+    }
+    admin: {
+      admin_ws = false
+      admin_wss = false
+    }
+  janus.transport.http.jcfg: |
+    general: {
+      json = "indented"
+      base_path = "/janus"
+      http = false
+      https = false
+    }
+    admin: {
+      admin_http = false
+      admin_https = false
+    }

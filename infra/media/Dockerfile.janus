@@ -1,0 +1,52 @@
+# The Janus media server of the media pool (infra/k8s/media/media-stack.yaml).
+#
+# A copy of upstream's docker/janus/Dockerfile from
+# strukturag/nextcloud-spreed-signaling at the commit the signaling image is
+# tagged with (6046e47bffd8de5b35bf042c5aa07082ffffbd64). Every source it
+# needs is fetched at a pinned version inside the build, so it copies nothing
+# from this repository. Janus 1.3.0, usrsctp b28f0b5, libsrtp 2.6.0. Moving a
+# version is a deliberate edit here; the build commands are in CLAUDE.md.
+#
+# Modified from https://gitlab.com/powerpaul17/nc_talk_backend/-/blob/dcbb918d8716dad1eb72a889d1e6aa1e3a543641/docker/janus/Dockerfile
+
+FROM alpine:3
+
+RUN apk add --no-cache curl autoconf automake libtool pkgconf build-base \
+  glib-dev libconfig-dev libnice-dev jansson-dev openssl-dev zlib libsrtp-dev \
+  gengetopt libwebsockets-dev git curl-dev libogg-dev
+
+# usrsctp, 03 Nov 2024
+ARG USRSCTP_VERSION=b28f0b55b00bde67f6be80d6623e2775b88026b8
+RUN cd /tmp && \
+    git clone https://github.com/sctplab/usrsctp && \
+    cd usrsctp && \
+    git checkout $USRSCTP_VERSION && \
+    ./bootstrap && \
+    ./configure --prefix=/usr && \
+    make -j$(nproc) && make install
+
+ARG LIBSRTP_VERSION=2.6.0
+RUN cd /tmp && \
+    wget https://github.com/cisco/libsrtp/archive/v$LIBSRTP_VERSION.tar.gz && \
+    tar xfv v$LIBSRTP_VERSION.tar.gz && \
+    cd libsrtp-$LIBSRTP_VERSION && \
+    ./configure --prefix=/usr --enable-openssl && \
+    make shared_library -j$(nproc) && \
+    make install && \
+    rm -fr /libsrtp-$LIBSRTP_VERSION && \
+    rm -f /v$LIBSRTP_VERSION.tar.gz
+
+ARG JANUS_VERSION=1.3.0
+RUN mkdir -p /usr/src/janus && \
+    cd /usr/src/janus && \
+    curl -L https://github.com/meetecho/janus-gateway/archive/v$JANUS_VERSION.tar.gz | tar -xz && \
+    cd /usr/src/janus/janus-gateway-$JANUS_VERSION && \
+    ./autogen.sh && \
+    ./configure --disable-rabbitmq --disable-mqtt --disable-boringssl && \
+    make -j$(nproc) && \
+    make install && \
+    make configs
+
+WORKDIR /usr/src/janus/janus-gateway-$JANUS_VERSION
+
+CMD [ "janus" ]

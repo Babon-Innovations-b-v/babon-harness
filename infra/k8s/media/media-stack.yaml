@@ -1,0 +1,221 @@
+# The call and recording stack: caddy, nats, janus, signaling and recording
+# in ONE pod on the host network of the one node of the media pool role,
+# which is what the compose stack was on a server of its own. Every loopback
+# address in the configs (127.0.0.1:8080 signaling, :8000 recorder, :8188
+# Janus, :4222 NATS) works because the containers share the node's network.
+#
+# Only Caddy's 80/443 and Janus's UDP range listen off loopback: the node sits
+# on the cluster's private network, which no security group filters. NATS
+# binds loopback by its args, Janus by janus-transports.yaml, signaling and
+# the recorder by their configs (infra/media/templates/).
+#
+# Janus advertises MEDIA_PUBLIC_IP in every ICE candidate (--nat-1-1). On a
+# node without that address a call connects and carries no media, silently,
+# so the init container wait-for-media-ip holds the pod until the address is
+# on a node interface (ip-reattach.yaml attaches it).
+#
+# One replica and Recreate, never RollingUpdate: two pods cannot both bind
+# :80, :443 and the UDP range on one node, and both claims are ReadWriteOnce.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-caddy-data
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Finished recordings wait here until Talk fetches them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-recordings
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-stack
+  labels:
+    app: media-stack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: media-stack
+  template:
+    metadata:
+      labels:
+        app: media-stack
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        ${POOL_ROLE_LABEL}: media
+      tolerations:
+        - key: ${POOL_ROLE_LABEL}
+          operator: Equal
+          value: media
+          effect: NoSchedule
+      imagePullSecrets:
+        - name: registry-pull
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: wait-for-media-ip
+          image: alpine:3
+          command:
+            - sh
+            - -c
+            - |
+              until ip -4 addr | grep -q "inet ${MEDIA_PUBLIC_IP}/"; do
+                echo "${MEDIA_PUBLIC_IP} is not on this node yet; waiting for media-ip-reattach"
+                sleep 5
+              done
+              echo "${MEDIA_PUBLIC_IP} is on this node"
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 32Mi}
+        # Fills each @NAME@ in the two templates from the vault and refuses a
+        # name the vault has no value for, so a missing secret stops the pod.
+        - name: render-config
+          image: ${IMAGE_REGISTRY}/media-recording:${MEDIA_IMAGE_TAG}
+          command:
+            - python3
+            - -c
+            - |
+              import os, re
+              def fill(match):
+                  value = os.environ.get(match.group(1), "")
+                  if not value:
+                      raise SystemExit(f"render-config: the vault has no value for {match.group(1)}")
+                  return value
+              for name in ("signaling.conf", "recording.conf"):
+                  with open(f"/templates/{name}.tmpl", encoding="utf-8") as source:
+                      text = re.sub(r"@([A-Z_]+)@", fill, source.read())
+                  with open(f"/config/{name}", "w", encoding="utf-8") as target:
+                      target.write(text)
+              print("render-config: signaling.conf and recording.conf written")
+          env:
+            - {name: DOMAIN, valueFrom: {secretKeyRef: {name: harness-keys, key: DOMAIN, optional: true}}}
+            - {name: TALK_SIGNALING_SECRET, valueFrom: {secretKeyRef: {name: harness-keys, key: TALK_SIGNALING_SECRET, optional: true}}}
+            - {name: TALK_RECORDING_SECRET, valueFrom: {secretKeyRef: {name: harness-keys, key: TALK_RECORDING_SECRET, optional: true}}}
+            - {name: TALK_INTERNAL_SECRET, valueFrom: {secretKeyRef: {name: harness-keys, key: TALK_INTERNAL_SECRET, optional: true}}}
+            - {name: TALK_SESSION_HASHKEY, valueFrom: {secretKeyRef: {name: harness-keys, key: TALK_SESSION_HASHKEY, optional: true}}}
+            - {name: TALK_SESSION_BLOCKKEY, valueFrom: {secretKeyRef: {name: harness-keys, key: TALK_SESSION_BLOCKKEY, optional: true}}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: media-config, mountPath: /templates, readOnly: true}
+            - {name: rendered, mountPath: /config}
+        # The recorder runs as uid 1000 (Dockerfile.recording).
+        - name: own-recordings
+          image: alpine:3
+          command: ["sh", "-c", "chown 1000:1000 /recordings"]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 32Mi}
+          volumeMounts:
+            - {name: recordings, mountPath: /recordings, subPath: recordings}
+      containers:
+        - name: caddy
+          image: caddy:2.11.7
+          env:
+            - {name: DOMAIN, valueFrom: {secretKeyRef: {name: harness-keys, key: DOMAIN, optional: true}}}
+          ports:
+            - {name: http, containerPort: 80, hostPort: 80, protocol: TCP}
+            - {name: https, containerPort: 443, hostPort: 443, protocol: TCP}
+          volumeMounts:
+            - {name: media-config, mountPath: /etc/caddy/Caddyfile, subPath: Caddyfile, readOnly: true}
+            - {name: caddy-data, mountPath: /data, subPath: caddy_data}
+            - {name: caddy-data, mountPath: /config, subPath: caddy_config}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+
+        - name: nats
+          image: nats:2.10
+          # args, not command: the image's own CMD loads nats-server.conf,
+          # which opens 4222, the 8222 monitor and 6222 routes on every
+          # interface. These args drop that file: client port on loopback only.
+          args: ["-a", "127.0.0.1", "-p", "4222"]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+
+        - name: janus
+          image: ${IMAGE_REGISTRY}/media-janus:${MEDIA_IMAGE_TAG}
+          # --nat-1-1 advertises the public IP in ICE candidates, so a remote
+          # browser reaches media directly without a TURN relay.
+          # --ice-enforce-list gathers on that one address: a node has several
+          # (its primary address, the attached flexible IP, the cluster
+          # network), --nat-1-1 labels every candidate with the public IP, and
+          # a packet sent to it reaches only the socket bound to it, so without
+          # the list every candidate but one is dead. --rtp-port-range must
+          # equal the media pool security group's UDP rule.
+          command:
+            - janus
+            - --full-trickle
+            - --nat-1-1=${MEDIA_PUBLIC_IP}
+            - --ice-enforce-list=${MEDIA_PUBLIC_IP}
+            - --rtp-port-range=20000-40000
+          volumeMounts:
+            - {name: janus-transports, mountPath: /usr/local/etc/janus/janus.transport.websockets.jcfg, subPath: janus.transport.websockets.jcfg, readOnly: true}
+            - {name: janus-transports, mountPath: /usr/local/etc/janus/janus.transport.http.jcfg, subPath: janus.transport.http.jcfg, readOnly: true}
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 2Gi}
+
+        - name: signaling
+          # Published image tagged by commit (upstream has no semver tag); it
+          # moves together with the commit named in Dockerfile.janus.
+          image: strukturag/nextcloud-spreed-signaling:6046e47
+          volumeMounts:
+            - {name: rendered, mountPath: /config/server.conf, subPath: signaling.conf, readOnly: true}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+
+        - name: recording
+          image: ${IMAGE_REGISTRY}/media-recording:${MEDIA_IMAGE_TAG}
+          volumeMounts:
+            - {name: rendered, mountPath: /etc/nextcloud-talk-recording/server.conf, subPath: recording.conf, readOnly: true}
+            - {name: recordings, mountPath: /recordings, subPath: recordings}
+            # compose's shm_size 2gb: the headless browser needs shared memory.
+            - {name: dshm, mountPath: /dev/shm}
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {memory: 8Gi}
+
+      volumes:
+        - name: media-config
+          configMap:
+            name: media-config
+        - name: janus-transports
+          configMap:
+            name: janus-transports
+        - name: rendered
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: caddy-data
+          persistentVolumeClaim:
+            claimName: media-caddy-data
+        - name: recordings
+          persistentVolumeClaim:
+            claimName: media-recordings
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi

@@ -30,7 +30,7 @@
    ]
   },
   {
-   "label": "Calls run through the media box, and a recorded call becomes minutes in the repository",
+   "label": "Calls run through the media node, and a recorded call becomes minutes in the repository",
    "add": [
     "media",
     "storage",

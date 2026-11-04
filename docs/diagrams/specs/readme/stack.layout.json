@@ -20,7 +20,7 @@
  "boundaries": [
   {"label": "Outside the server", "wraps": ["laptop", "github"], "pad": 40},
   {"label": "One server, behind Caddy", "wraps": ["website", "caddy", "sso", "assistant", "talk", "observability", "notulen", "deploy"]},
-  {"label": "Media box", "wraps": ["media"]},
+  {"label": "Media node", "wraps": ["media"]},
   {"label": "Rented beside it", "wraps": ["storage", "gpu", "vault"]}
  ],
  "edges": [

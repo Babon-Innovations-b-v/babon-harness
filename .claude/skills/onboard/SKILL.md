@@ -91,7 +91,7 @@ Work through the phases in [phases.md](phases.md). Each phase is idempotent and 
 | 8 | Notulen | bucket live, service healthy, test recording done or skipped |
 | 9 | The assistant | Signal number registered, calendar and GitHub wired, a first message answered, or consciously skipped |
 | 10 | Fast transcription | worker image pushed, GPU cluster live, one recording through a Job (or CPU fallback recorded) |
-| 11 | Video calls and recording | media box answers, Talk points at it, bot id set, or consciously skipped |
+| 11 | Video calls and recording | media node answers, Talk points at it, bot id set, or consciously skipped |
 | 12 | Finish | memory note written, daily loop explained |
 
 ## Safety rules

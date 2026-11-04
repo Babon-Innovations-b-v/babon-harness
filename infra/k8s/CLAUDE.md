@@ -15,7 +15,8 @@ k8s/
   notulen-app/        the notulen dashboard
   website/            the public website
   backups/            nightly snapshots of every labelled claim
-  deploy/ monitoring/ media/   namespaces later pieces fill
+  media/              video calls on the media pool role, its IP re-attach
+  deploy/ monitoring/ namespaces later pieces fill
 ```
 
 ## Rules

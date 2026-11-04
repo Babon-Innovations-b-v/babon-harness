@@ -1,6 +1,6 @@
 {
  "title": "The stack",
- "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
+ "subtitle": "One server behind one front door, a media node beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
  "legend": {
   "external": "Your system, outside services",
   "frontend": "Public, video calls",
@@ -147,23 +147,23 @@
    "type": "frontend",
    "label": "Nextcloud Talk",
    "sublabel": "video calls",
-   "note": "Talk is the Nextcloud app for chat and video calls, at `cloud.$DOMAIN`. Its calls run through the media box. The recording bot that `infra/media/connect-talk.sh` installs posts every call event of an assistant-made room to notulen, signed with `TALK_BOT_SECRET`.",
+   "note": "Talk is the Nextcloud app for chat and video calls, at `cloud.$DOMAIN`. Its calls run through the media node. The recording bot that `infra/media/connect-talk.sh` installs posts every call event of an assistant-made room to notulen, signed with `TALK_BOT_SECRET`.",
    "code": [
     "infra/media/connect-talk.sh"
    ],
-   "bible": "Nextcloud Talk runs inside Nextcloud on the main server; the media box only carries its calls and records them.",
-   "code_seen": "f93a80684dbf"
+   "bible": "Nextcloud Talk runs inside Nextcloud; the media node only carries its calls and records them.",
+   "code_seen": "24a04aa20e3f"
   },
   "media": {
    "type": "cloud",
-   "label": "Media box",
+   "label": "Media node",
    "sublabel": "signaling + recording",
-   "note": "Optional second server: the signaling server, the Janus media server on UDP 20000 to 40000, and the Talk recording server, a headless browser that sits in the call. Built from pinned upstream commits and deployed by hand with `infra/media/deploy.sh`, never by a push. **Watch out:** no TURN relay, so a network that blocks UDP cannot join.",
+   "note": "Optional: the one node of the media pool role, on its host network, with the flexible IP `MEDIA_PUBLIC_IP` that DNS and Janus name. One pod: the signaling server, the Janus media server on UDP 20000 to 40000, and the Talk recording server, a headless browser that sits in the call. Images built from pinned upstream commits; a CronJob on the system role moves the IP onto a replaced node within a minute. **Watch out:** no TURN relay, so a network that blocks UDP cannot join.",
    "code": [
     "infra/media"
    ],
-   "bible": "so the main server never opens the UDP range 20000 to 40000 that media needs.",
-   "code_seen": "f1bf9ca334c8"
+   "bible": "The calls run on the one node of the `media` pool role, so no other node opens the UDP range 20000 to 40000 that media needs.",
+   "code_seen": "658eae543656"
   }
  },
  "slides": [
@@ -197,7 +197,7 @@
    ]
   },
   {
-   "label": "Calls run through the media box, and a recorded call becomes minutes in the repository",
+   "label": "Calls run through the media node, and a recorded call becomes minutes in the repository",
    "add": [
     "media",
     "storage",

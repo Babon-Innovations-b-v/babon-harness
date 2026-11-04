@@ -1,0 +1,62 @@
+# The Nextcloud Talk recording server (a headless browser and ffmpeg) of the
+# media pool (infra/k8s/media/media-stack.yaml). Build context: infra/media.
+#
+# Stage `src` clones nextcloud/nextcloud-talk-recording at the pinned commit
+# and applies patches/recording_pulse_sink_name.py, which stops the build when
+# upstream moved the line, so a recorder that records silence never ships. The
+# final stage is upstream's docker-compose/Dockerfile at that commit with its
+# copies pointed at `src`, plus three changes: tini as PID 1 (Kubernetes has
+# no `init: true`), the user pinned to uid 1000 (the pod's init container
+# hands the recordings claim to that uid), and nothing else.
+# Moving REC_COMMIT is a deliberate edit; the build commands are in CLAUDE.md.
+
+FROM alpine:3 AS src
+ARG REC_COMMIT=c3a88fc23e045e7dfe0ea56a9aeccf71d8163a0b
+RUN apk add --no-cache git python3
+RUN git clone https://github.com/nextcloud/nextcloud-talk-recording.git /src && \
+    git -C /src checkout -q "$REC_COMMIT"
+COPY patches/recording_pulse_sink_name.py /patches/recording_pulse_sink_name.py
+RUN python3 /patches/recording_pulse_sink_name.py /src/src/nextcloud/talk/recording/Service.py && \
+    grep -q _pulseNameLookup /src/src/nextcloud/talk/recording/Service.py
+
+FROM ubuntu:20.04
+
+# SPDX-FileCopyrightText: 2023 Nextcloud GmbH and Nextcloud contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get --assume-yes update
+RUN apt-get --assume-yes upgrade
+RUN apt-get --assume-yes install software-properties-common
+RUN apt-get --assume-yes install ffmpeg pulseaudio python3-pip xvfb
+RUN pip3 install --upgrade requests
+RUN apt-get --assume-yes install firefox firefox-geckodriver
+
+# Chromium from the phd/chromium repository: since Ubuntu 20.04 Chromium is a
+# snap package and the equivalent PPA has been discontinued.
+RUN echo "deb https://freeshell.de/phd/chromium/focal /" > /etc/apt/sources.list.d/phd-chromium.list
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 869689FE09306074
+RUN apt-get update
+RUN apt-get --assume-yes install chromium
+
+COPY --from=src /src/docker-compose/wrap_chromium_binary /opt/bin/wrap_chromium_binary
+RUN /opt/bin/wrap_chromium_binary
+
+RUN apt-get --assume-yes install tini
+
+RUN useradd --create-home --uid 1000 recording
+COPY --from=src /src/server.conf.in /etc/nextcloud-talk-recording/server.conf
+
+RUN mkdir --parents /tmp/recording
+COPY --from=src /src/src /tmp/recording/
+COPY --from=src /src/pyproject.toml /tmp/recording/
+RUN python3 -m pip install file:///tmp/recording/
+
+RUN apt-get clean && rm --recursive --force /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN rm --recursive --force /tmp/recording
+
+WORKDIR "/home/recording/"
+USER "recording"
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["python3", "-m", "nextcloud.talk.recording", "--config", "/etc/nextcloud-talk-recording/server.conf"]

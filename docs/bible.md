@@ -455,7 +455,15 @@ The dashboard's account may only create, list and delete Jobs and Pods in its ow
 
 ## infra/media
 
-### What runs on the box
+### What runs on the media node
+
+```
+media pool role, one node, host network
+  media-stack pod     caddy, nats, janus, signaling, recording
+  MEDIA_PUBLIC_IP     the node's flexible IP: DNS, Janus's ICE candidates
+system pool role
+  media-ip-reattach   every minute: the IP onto the one Ready media node
+```
 
 | Service | Job |
 |---|---|
@@ -465,7 +473,13 @@ The dashboard's account may only create, list and delete Jobs and Pods in its ow
 | `recording` | the Talk recording server, a headless browser in the call |
 | `caddy` | HTTPS for `signaling.DOMAIN` and `recording.DOMAIN` |
 
-The media box is a second server that carries the calls and records them, so the main server never opens the UDP range 20000 to 40000 that media needs.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=media) It is optional and provisioned by hand from `infra/media/`, outside auto-deploy: a push to `main` changes nothing on it, and `infra/media/deploy.sh` is the only way a change gets there. Janus and the recorder are built on the box from upstream source at pinned commits, because the recorder touches every meeting's audio and video. There is no TURN relay, so a network that blocks direct UDP cannot join a call.
+The calls run on the one node of the `media` pool role, so no other node opens the UDP range 20000 to 40000 that media needs.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=media) The five services share one pod on the node's own network, so they reach each other on loopback, and only Caddy's ports and the UDP range listen outside it.
+
+Janus and the recorder are images built from upstream source at pinned commits, because the recorder touches every meeting's audio and video. There is no TURN relay, so a network that blocks direct UDP cannot join a call.
+
+Janus tells every browser to send media to `MEDIA_PUBLIC_IP`, so that address must sit on the node, and a replaced node comes back with a new address. A CronJob on the system role checks every minute which Ready node carries the media role and moves the IP onto its server when it is not already there; with none or two it refuses to guess. Until the IP is on the node, the pod waits before Janus starts.
+
+The media area is optional: `infra/cluster/apply.sh` skips it while `MEDIA_PUBLIC_IP` is empty, so no media node bills while calls are off. Caddy's certificates and recordings Talk has not fetched yet sit on claims the nightly backup snapshots.
 
 ### How a call becomes minutes
 
@@ -475,7 +489,7 @@ call starts -> Talk webhook -> notulen /api/talk/webhook -> start recording
 call ends   -> Talk webhook -> notulen fetches the file -> S3 -> minutes job
 ```
 
-Nextcloud Talk runs inside Nextcloud on the main server; the media box only carries its calls and records them.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=talk) The recording bot, installed by `infra/media/connect-talk.sh`, posts every call event to notulen, signed with `TALK_BOT_SECRET`. On `call_started` notulen asks Talk to record, retrying while Talk answers that the call is not recordable yet. On `call_ended` it finds the newest recording in the room owner's `Talk/Recording/<token>/` folder, refuses one it already holds or one older than the call, and hands it to the same pipeline as a recording made in the browser. A call over two minutes with no recording pages the assistant.
+Nextcloud Talk runs inside Nextcloud; the media node only carries its calls and records them.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=talk) The recording bot, installed by `infra/media/connect-talk.sh`, posts every call event to notulen, signed with `TALK_BOT_SECRET`. On `call_started` notulen asks Talk to record, retrying while Talk answers that the call is not recordable yet. On `call_ended` it finds the newest recording in the room owner's `Talk/Recording/<token>/` folder, refuses one it already holds or one older than the call, and hands it to the same pipeline as a recording made in the browser. A call over two minutes with no recording pages the assistant.
 
 The assistant's account owns every call room, which makes it the moderator allowed to start a recording and the account the file lands with. Only rooms the assistant creates are recorded, and the room is told when recording starts; telling people beforehand is the organiser's job.
 
@@ -703,12 +717,12 @@ Rough monthly cost, as a shape and not a quote; check Scaleway's current prices.
 | Secret Manager, one secret | always | cents |
 | Object storage for meeting audio | always, grows | usage-based |
 | GPU node | only while transcribing | depends on the card the picker finds |
-| Media box (PRO2-XS class) | only with recorded video calls | a second server, all month |
+| Media node (PRO2-XS class) and its flexible IP | only with video calls | one node, all month |
 | Anthropic API | per message and per meeting | usage-based |
 | Domain | yearly | about 10 euro |
 
 Deleting the server does not stop the bill. The bucket, the secret, a registry namespace, a GPU
-cluster and the media box keep billing until they are deleted too, so set a budget alert in the
+cluster and the media node keep billing until they are deleted too, so set a budget alert in the
 Scaleway console.
 
 ### Configuration
@@ -841,16 +855,16 @@ internet with only the database password in the way.
 
 #### Video calls and recording (optional)
 
-Calls run on Nextcloud Talk, carried by an optional media box: a second server built from
-[`infra/media/`](infra/media/CLAUDE.md) with a signaling server, the Janus media server and the
-Talk recording server. Each call room the assistant makes has a recording bot in it. When the call
+Calls run on Nextcloud Talk, carried by an optional media node: the one node of the cluster's
+`media` pool role, running [`infra/media/`](infra/media/CLAUDE.md)'s signaling server, the Janus
+media server and the Talk recording server. Each call room the assistant makes has a recording bot in it. When the call
 starts notulen asks Talk to record, and when it ends notulen fetches the recording from the room
 owner's files and writes minutes, as for a browser recording. The room is told when recording
 starts; telling people beforehand is up to the organiser.
 
-`infra/media/deploy.sh <ip>` is the only way a change reaches the media box, which sits outside
-auto-deploy, and the recorder is built from a pinned upstream commit. Turning it on is four steps
-in [`infra/media/CLAUDE.md`](infra/media/CLAUDE.md), or phase 11 of `onboard`. There is no TURN
+`infra/cluster/apply.sh` applies it once `MEDIA_PUBLIC_IP` is set, and the recorder is built from
+a pinned upstream commit. Turning it on is five steps in
+[`infra/media/CLAUDE.md`](infra/media/CLAUDE.md), or phase 11 of `onboard`. There is no TURN
 relay, so someone on a network that blocks direct UDP cannot join.
 
 #### Documents, website and design

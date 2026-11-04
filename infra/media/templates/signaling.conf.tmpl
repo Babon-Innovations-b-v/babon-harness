@@ -1,24 +1,25 @@
-# Signaling server (nextcloud-spreed-signaling) config. setup.sh renders this
-# to ../signaling.conf with the values in .env (envsubst, named variables only).
+# Signaling server (nextcloud-spreed-signaling) config. The media pod's
+# render-config init container fills each placeholder from the vault
+# (infra/k8s/media/media-stack.yaml).
 
 [http]
 listen = 127.0.0.1:8080
 
 [sessions]
-hashkey = ${TALK_SESSION_HASHKEY}
-blockkey = ${TALK_SESSION_BLOCKKEY}
+hashkey = @TALK_SESSION_HASHKEY@
+blockkey = @TALK_SESSION_BLOCKKEY@
 
 [clients]
 # The recording server logs in with this; must equal recording.conf's.
-internalsecret = ${TALK_INTERNAL_SECRET}
+internalsecret = @TALK_INTERNAL_SECRET@
 
 [backend]
 backends = nc1
 allowall = false
 
 [nc1]
-urls = https://cloud.${DOMAIN}
-secret = ${TALK_SIGNALING_SECRET}
+urls = https://cloud.@DOMAIN@
+secret = @TALK_SIGNALING_SECRET@
 
 [nats]
 url = nats://127.0.0.1:4222

@@ -25,7 +25,7 @@
  },
  "media": {
   "chapter": "infra/media",
-  "section": "What runs on the box"
+  "section": "What runs on the media node"
  },
  "notulen": {
   "chapter": "apps/notulen",

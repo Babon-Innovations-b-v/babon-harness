@@ -84,7 +84,7 @@
    ]
   },
   {
-   "label": "Media box",
+   "label": "Media node",
    "wraps": [
     "media"
    ]

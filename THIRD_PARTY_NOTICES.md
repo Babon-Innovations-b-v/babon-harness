@@ -122,16 +122,17 @@ copy, so nothing here is redistributed by this repository.
 | [Python](https://www.python.org) `python:3.12-slim` | PSF License, on a Debian base | the assistant's door, the alert relay, notulen |
 | `amazon/aws-cli` | Apache-2.0 | the assistant's Signal registration backup to S3 |
 | [Nextcloud Talk](https://github.com/nextcloud/spreed) (`spreed`) | AGPL-3.0 | video calls, installed into Nextcloud by `infra/media/connect-talk.sh` |
-| [nextcloud-spreed-signaling](https://github.com/strukturag/nextcloud-spreed-signaling) `strukturag/nextcloud-spreed-signaling:6046e47` | AGPL-3.0 | the media box's signaling server (optional) |
-| [NATS](https://github.com/nats-io/nats-server) `nats:2.10` | Apache-2.0 | the media box's message bus (optional) |
+| [nextcloud-spreed-signaling](https://github.com/strukturag/nextcloud-spreed-signaling) `strukturag/nextcloud-spreed-signaling:6046e47` | AGPL-3.0 | the media node's signaling server (optional) |
+| [NATS](https://github.com/nats-io/nats-server) `nats:2.10` | Apache-2.0 | the media node's message bus (optional) |
 
 **AGPL.** Nextcloud and its oidc app are AGPL-3.0. Running them unmodified is fine. If you patch
 either and serve it to other people over a network, AGPL section 13 obliges you to offer those
 people the modified source.
 
-**Built on the media box, not pulled (optional).** `infra/media/setup.sh` clones two sources at
-pinned commits and builds them on the media box: [Janus](https://github.com/meetecho/janus-gateway)
-(GPL-3.0), through the Dockerfile in nextcloud-spreed-signaling, and
+**Built from source, not pulled (optional).** `infra/media/Dockerfile.janus` and
+`infra/media/Dockerfile.recording` fetch two sources at pinned versions and build the media node's
+images: [Janus](https://github.com/meetecho/janus-gateway)
+(GPL-3.0), from a copy of the Dockerfile in nextcloud-spreed-signaling, and
 [nextcloud-talk-recording](https://github.com/nextcloud/nextcloud-talk-recording) (AGPL-3.0).
 Nothing of either is in this repository. The recorder is modified before it is built
 (`infra/media/patches/recording_pulse_sink_name.py`); the recording server is reached by your own

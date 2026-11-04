@@ -18,7 +18,7 @@ change. Do not edit by hand.
 | stack | [`observability`](../stack.html#focus=observability) | [infra/observability § Alert path](../../bible.md#alert-path) |
 | stack | [`notulen`](../stack.html#focus=notulen) | [apps/notulen § The recording path](../../bible.md#the-recording-path) |
 | stack | [`deploy`](../stack.html#focus=deploy) | [infra/deploy § The loop](../../bible.md#the-loop) |
-| stack | [`media`](../stack.html#focus=media) | [infra/media § What runs on the box](../../bible.md#what-runs-on-the-box) |
+| stack | [`media`](../stack.html#focus=media) | [infra/media § What runs on the media node](../../bible.md#what-runs-on-the-media-node) |
 | stack | [`storage`](../stack.html#focus=storage) | [apps/notulen § The recording path](../../bible.md#the-recording-path) |
 | stack | [`gpu`](../stack.html#focus=gpu) | [infra/gpu § What the tier is](../../bible.md#what-the-tier-is) |
 | stack | [`vault`](../stack.html#focus=vault) | [infra/platform § The vault](../../bible.md#the-vault) |
@@ -49,7 +49,7 @@ change. Do not edit by hand.
 | infra/deploy | The loop | [stack#deploy](../stack.html#focus=deploy) |
 | infra/observability | Alert path | [stack#observability](../stack.html#focus=observability) |
 | infra/gpu | What the tier is | [stack#gpu](../stack.html#focus=gpu) |
-| infra/media | What runs on the box | [stack#media](../stack.html#focus=media) |
+| infra/media | What runs on the media node | [stack#media](../stack.html#focus=media) |
 | infra/media | How a call becomes minutes | [stack#talk](../stack.html#focus=talk) |
 | workflow/loop | Where a turn starts | [stack/loop#spark](../stack/loop.html#focus=spark) · [stack/loop#dump](../stack/loop.html#focus=dump) |
 | workflow/loop | Nothing is built before this | [stack/loop#orient](../stack/loop.html#focus=orient) · [stack/loop#decision](../stack/loop.html#focus=decision) · [stack/loop#capture](../stack/loop.html#focus=capture) · [stack/loop#board](../stack/loop.html#focus=board) |

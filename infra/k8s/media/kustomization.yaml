@@ -1,7 +1,23 @@
+# Video calls and recording on the media pool role, applied by
+# infra/cluster/apply.sh only while MEDIA_PUBLIC_IP is set. It does not
+# include ../system-pool: the stack belongs on the media role, and the IP
+# re-attach CronJob names the system role itself (ip-reattach.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: media
 resources:
   - namespace.yaml
+  - janus-transports.yaml
+  - media-stack.yaml
+  - ip-reattach.yaml
 components:
   - ../vault-secret
+configMapGenerator:
+  - name: media-config
+    files:
+      - Caddyfile=../../media/Caddyfile
+      - signaling.conf.tmpl=../../media/templates/signaling.conf.tmpl
+      - recording.conf.tmpl=../../media/templates/recording.conf.tmpl
+  - name: media-ip-reattach
+    files:
+      - ip-reattach.sh

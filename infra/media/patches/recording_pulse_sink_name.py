@@ -11,9 +11,9 @@ recording container: `PULSE_SINK=<index>` captures a played tone at -91 dB
 the index and uses it.
 
 Idempotent: a second run is a no-op. Fail-loud: if the anchor line is gone
-(upstream changed), exit non-zero so setup.sh stops rather than silently
-shipping the silent-audio bug. `setup.sh` runs this against the pinned clone
-after checkout (the checkout would otherwise revert a hand-patch)."""
+(upstream changed), exit non-zero so the image build stops rather than
+silently shipping the silent-audio bug. `Dockerfile.recording` runs this
+against the pinned clone after checkout."""
 import sys
 
 _ANCHORS = (

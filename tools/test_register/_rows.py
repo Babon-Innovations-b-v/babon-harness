@@ -617,4 +617,17 @@ ROWS: tuple[Row, ...] = (
             why="the rewrite keeps the compose upstream, so the rendered file differs from the hand-written one",
         ),
     ),
+    Row(
+        test="infra/k8s/media/tests/test_the_media_public_ip_is_attached_only_to_the_one_ready_node_of_the_media_and_never_moved_when_it_is_already_there.py",
+        pins=("infra/k8s/media",),
+        runs_when=(
+            "infra/k8s/media/**",
+        ),
+        proved_by=Break(
+            file="infra/k8s/media/ip-reattach.sh",
+            old='if [ "$count" -ne 1 ]; then',
+            new='if [ "$count" -lt 1 ]; then',
+            why="two Ready media nodes reach the move, which the two-node case says never happens",
+        ),
+    ),
 )

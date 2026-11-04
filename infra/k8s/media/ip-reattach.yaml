@@ -1,0 +1,97 @@
+# Keep MEDIA_PUBLIC_IP on the one node of the media pool role. A replaced
+# node comes back as a new server with a new dynamic address, while DNS and
+# Janus's --nat-1-1 name the public IP. Every minute this asks which Ready
+# node carries the media role and attaches the IP to that node's server when
+# it is not already there; when it is, it writes nothing. Logic and failure
+# policy: ip-reattach.sh beside this file.
+#
+# It runs on the system role, never the media node: it must still run when the
+# media node is the thing that just came back without its IP. This area does
+# not include ../system-pool (its Deployment belongs on the media role), so the
+# role is named here.
+#
+# Its key is MEDIA_IP_SECRET_KEY in the vault: an API key allowed to manage
+# Instances in SCW_PROJECT_ID, nothing else (config/vault.env.example).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: media-ip-reattach
+---
+# Reads nodes (role label, Ready, providerID) and nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: media-ip-reattach
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: media-ip-reattach
+subjects:
+  - kind: ServiceAccount
+    name: media-ip-reattach
+    namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: media-ip-reattach
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: media-ip-reattach
+spec:
+  schedule: "* * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 50
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 55
+      template:
+        metadata:
+          labels:
+            app: media-ip-reattach
+        spec:
+          serviceAccountName: media-ip-reattach
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          tolerations:
+            - key: ${POOL_ROLE_LABEL}
+              operator: Equal
+              value: system
+              effect: NoSchedule
+          containers:
+            - name: reattach
+              # kubectl, curl, python3 and bash in one public image.
+              image: alpine/k8s:1.35.8
+              command: ["bash", "/script/ip-reattach.sh"]
+              env:
+                - name: MEDIA_PUBLIC_IP
+                  value: "${MEDIA_PUBLIC_IP}"
+                - name: MEDIA_NODE_LABEL
+                  value: "${POOL_ROLE_LABEL}=media"
+                - name: MEDIA_ZONE
+                  value: "${MEDIA_ZONE}"
+                - name: MEDIA_IP_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef: {name: harness-keys, key: MEDIA_IP_SECRET_KEY, optional: true}
+              resources:
+                requests: {cpu: 20m, memory: 32Mi}
+                limits: {memory: 128Mi}
+              volumeMounts:
+                - name: script
+                  mountPath: /script
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: media-ip-reattach

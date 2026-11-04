@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# connect-talk.sh: point the main server's Nextcloud Talk at the media box and
+# connect-talk.sh: point the main server's Nextcloud Talk at the media node and
 # install the recording bot. Runs ON the main server, from the repository
-# checkout, after the media box answers on https://signaling.$DOMAIN.
+# checkout, after the media node answers on https://signaling.$DOMAIN.
 #
 #   1. installs and enables Talk (spreed) when it is missing
 #   2. adds the signaling server and the recording server
@@ -46,4 +46,4 @@ url = sys.argv[1]
 print(next((str(bot["id"]) for bot in json.load(sys.stdin) if bot.get("url") == url), ""))
 ' "$bot_url")
 [ -n "$bot_id" ] || { echo "the bot did not install"; exit 1; }
-echo "Talk points at the media box. Put OPENCLAW_TALK_BOT_ID=$bot_id in config/harness.env and the vault."
+echo "Talk points at the media node. Put OPENCLAW_TALK_BOT_ID=$bot_id in config/harness.env and the vault."

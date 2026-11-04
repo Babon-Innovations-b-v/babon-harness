@@ -213,24 +213,24 @@ If any step fails twice on the same error: stay on CPU, tell them what that mean
 
 ## Phase 11: video calls and recording (optional, fully skippable)
 
-**Already done?** `MEDIA_PUBLIC_IP` and `OPENCLAW_TALK_BOT_ID` are set, `https://signaling.<domain>/api/v1/welcome` answers, and `ASSISTANT_VIDEO_CALL=1`. Then skip. Needs phase 9: the assistant creates the call rooms.
+**Already done?** `MEDIA_PUBLIC_IP`, `MEDIA_IMAGE_TAG` and `OPENCLAW_TALK_BOT_ID` are set, `https://signaling.<domain>/api/v1/welcome` answers, and `ASSISTANT_VIDEO_CALL=1`. Then skip. Needs phase 9: the assistant creates the call rooms.
 
-What it gives them, in two sentences: the assistant can put a video call on everyone's calendar with one link and remind them on Signal before it starts, and every such call is recorded and written up as minutes like a Notulen recording. It costs a second server running all month (`PRO2-XS` class), because calls need a wide UDP port range the main server should not carry.
+What it gives them, in two sentences: the assistant can put a video call on everyone's calendar with one link and remind them on Signal before it starts, and every such call is recorded and written up as minutes like a Notulen recording. It costs one cluster node running all month (`PRO2-XS` class) and a flexible IP, because calls need a wide UDP port range no other node should carry.
 
 Read `infra/media/CLAUDE.md` first; the scripts there do the work.
 
 1. Say plainly before starting: a recorded call must be announced to the people in it. The room gets a notice when recording starts; telling them beforehand is the organiser's job.
-2. `infra/media/provision.sh`. DNS A records `signaling` and `recording` to the IP it prints (as in phase 5).
-3. One vault version: `MEDIA_PUBLIC_IP`, and the six `TALK_*` secrets from `config/vault.env.example`, each generated (`openssl rand -hex 32`; the two session keys exactly 32 and 16 characters). Never print them.
-4. `infra/media/deploy.sh <ip>`, in the background (it builds Janus and the recorder, several minutes). Wait for `https://signaling.<domain>/api/v1/welcome` to answer.
-5. On the main server: `ssh harness@<SERVER_IP> /opt/harness/repo/infra/media/connect-talk.sh`. Put the bot id it prints in `OPENCLAW_TALK_BOT_ID` and set `ASSISTANT_VIDEO_CALL=1` and `ASSISTANT_MEETING_REMINDERS=1`, one vault version, then wait one deploy cycle.
+2. Reserve a flexible IP in the media role's zone and put its address in `MEDIA_PUBLIC_IP`. DNS A records `signaling` and `recording` to it (as in phase 5).
+3. Build and push the two images with one new tag, in the background (several minutes), as `infra/media/CLAUDE.md` step 2 says; put the tag in `MEDIA_IMAGE_TAG`.
+4. One vault version: the six `TALK_*` secrets from `config/vault.env.example`, each generated (`openssl rand -hex 32`; the two session keys exactly 32 and 16 characters), and `MEDIA_IP_SECRET_KEY`. Never print them. Then `infra/cluster/apply.sh` and wait for `https://signaling.<domain>/api/v1/welcome` to answer.
+5. `infra/media/connect-talk.sh` (against the cluster, its `occ` lines through `kubectl exec` as `infra/media/CLAUDE.md` step 5 says). Put the bot id it prints in `OPENCLAW_TALK_BOT_ID` and set `ASSISTANT_VIDEO_CALL=1` and `ASSISTANT_MEETING_REMINDERS=1`, one vault version, then wait one deploy cycle.
 6. A test, if they have five minutes: ask the assistant on Signal for a video call now with themselves; open the link, talk for over five minutes (shorter calls are skipped), hang up. Minutes appear in Notulen a few minutes later.
 
 **Skipped**: the assistant makes no call links and no call is recorded. Record it in the phase 12 note.
 
 ## Phase 12: finish
 
-1. Write a memory note in `.claude/memory/` (a short file plus one index line in MEMORY.md): domain, server IP, region, instance type, bucket, cluster and registry if the GPU tier ran, the media box IP if phase 11 ran, which phases ran, what was skipped and why, the assistant's number if one was set up, the expiry date of the harness-vm API key, and the date. No passwords in memory, ever.
+1. Write a memory note in `.claude/memory/` (a short file plus one index line in MEMORY.md): domain, server IP, region, instance type, bucket, cluster and registry if the GPU tier ran, the media IP if phase 11 ran, which phases ran, what was skipped and why, the assistant's number if one was set up, the expiry date of the harness-vm API key, and the date. No passwords in memory, ever.
 2. Print the addresses on their own lines: the root, `cloud.`, `notulen.`.
 3. The daily loop in four lines: open a terminal, run `claude --dangerously-skip-permissions` in this folder, say what you want in plain words, and after I push to main the deploy gate tests the change and it goes live in a few minutes.
 4. Bigger work, in three lines: I first ask questions, then write the plan as an issue on their GitHub page, then build it. Show the issues address once: `gh repo view "$(git remote get-url origin)" --json url --jq .url` plus `/issues`.

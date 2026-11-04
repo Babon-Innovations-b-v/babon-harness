@@ -3,7 +3,7 @@
  "diagram_type": "architecture",
  "meta": {
   "title": "The stack",
-  "subtitle": "One server behind one front door, a media box beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
+  "subtitle": "One server behind one front door, a media node beside it for video calls, a few rented pieces, and your system, where every change starts. Push to main is the deploy.",
   "visual_preset": "editorial",
   "quality_profile": "standard",
   "viewBox": [
@@ -190,7 +190,7 @@
   {
    "id": "media",
    "type": "cloud",
-   "label": "Media box",
+   "label": "Media node",
    "sublabel": "signaling + recording",
    "pos": [
     1380,
@@ -486,7 +486,7 @@
   },
   {
    "kind": "region",
-   "label": "Media box",
+   "label": "Media node",
    "wraps": [
     "media"
    ]
