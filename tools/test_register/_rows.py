@@ -1899,4 +1899,17 @@ ROWS: tuple[Row, ...] = (
             why="the limit is ignored, so the 16-commit push is let through",
         ),
     ),
+    Row(
+        test="infra/cluster/pool_fallbacks/tests/test_each_pool_role_tries_its_preferred_pool_then_its_home_never_leaves_its_zone_and_a_pool_no_role_names_still_scales.py",
+        pins=("infra/cluster/pool_fallbacks",),
+        runs_when=(
+        "infra/cluster/pool_fallbacks/**",
+        ),
+        proved_by=Break(
+            file="infra/cluster/pool_fallbacks/_priorities.py",
+            old="_STEP * (deepest - spec.rank)",
+            new="_STEP * (spec.rank + 1)",
+            why="a fallback outranks its preferred pool, so the expander order differs from the hand-written one",
+        ),
+    ),
 )

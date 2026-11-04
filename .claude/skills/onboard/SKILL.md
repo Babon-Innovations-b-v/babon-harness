@@ -69,13 +69,13 @@ Work through the phases in [phases.md](phases.md). Each phase is idempotent and 
 
 1. **The human block, phases 0 to 4 in order.** GitHub login, the domain question, the Scaleway key and card. While asking for the Scaleway key, mention the errands they can run meanwhile: the Anthropic key (console.anthropic.com) and, if they want the assistant on Signal, a number for it. After phase 4 the vault is filled and the server exists; tell them the next twenty minutes are yours.
 2. **The parallel block, zero user input.** Spread independent work over general-purpose subagents and run them CONCURRENTLY:
-   - worker A: phase 10 steps 1 and 2 (registry, worker image build, cluster). It writes nothing to the vault; it returns the cluster id, zone, node type and image reference.
+   - worker A: phase 4a steps 1 to 5 without the vault write (the cluster, its pools and their fallbacks, the secret store's key), then phase 10 step 1 (registry, worker image build). It writes nothing to the vault; it returns the cluster id, the project id, the secret store's key halves and the image reference.
    - worker B: phases 5 and 6 end to end (DNS, provisioning, scoped key, deploy, auto-deploy). It is the only vault writer in this block.
    - worker C: phase 8 step 1 only, the bucket. It returns bucket name, endpoint and region.
    If a worker fails twice, apply that phase's own fallback and keep the rest moving.
 
    **One vault writer at a time.** The vault update is an unlocked read-modify-write on one secret, so two writers silently lose one set of values. During this block the writer is worker B; A and C return values, and you fold them into one new version in the closing block.
-3. **The closing human block.** Interrupt them once, with everything that needs their hands in one sitting: Nextcloud accounts, QR codes and the single sign-on (phase 7), storage plus the Anthropic and Notulen keys in one vault version (phase 8, with the live test recording), the assistant (phase 9), the GPU wiring (phase 10 steps 3 to 9), video calls if they want them (phase 11), then finish (phase 12).
+3. **The closing human block.** Interrupt them once, with everything that needs their hands in one sitting: Nextcloud accounts, QR codes and the single sign-on (phase 7), storage plus the Anthropic and Notulen keys in one vault version (phase 8, with the live test recording), the assistant (phase 9), the cluster's vault key (phase 4a steps 5 and 6), the GPU wiring (phase 10 steps 3 to 9), video calls if they want them (phase 11), then finish (phase 12).
 
 | Phase | Does | Done when |
 |---|---|---|
@@ -84,6 +84,7 @@ Work through the phases in [phases.md](phases.md). Each phase is idempotent and 
 | 2 | Scaleway CLI | `scw account project list` returns their project |
 | 3 | Settings file + the vault | config/harness.env holds the settings, the vault secret has a version |
 | 4 | Create the server | instance running, SERVER_IP saved |
+| 4a | The cluster | cluster and pools from config/harness.env, CLUSTER_ID saved, the vault synced into the cluster |
 | 5 | DNS | every name the Caddyfile serves resolves to SERVER_IP |
 | 6 | Deploy the stack | the public names respond over HTTPS, auto-deploy timer active |
 | 7 | Nextcloud, 2FA, single sign-on | accounts enrolled, enforcement on, a gated subdomain logs in through Nextcloud |

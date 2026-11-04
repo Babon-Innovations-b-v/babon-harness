@@ -1,0 +1,6 @@
+# A kustomize Component, not an area: each namespace that needs the vault
+# includes it, and the namespace's own kustomization sets where it lands.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecret.yaml

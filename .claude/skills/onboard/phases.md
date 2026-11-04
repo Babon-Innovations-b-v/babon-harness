@@ -84,6 +84,23 @@ Then start phase 1 without waiting, unless they object.
 
 **Verify**: `ssh root@<IP> true` succeeds; SERVER_IP saved in both places.
 
+## Phase 4a: the cluster
+
+**Already done?** CLUSTER_ID is set in config/harness.env, `infra/cluster/create-cluster.sh` plans no `would:` line, and `kubectl -n apps get externalsecret harness-env` says `SecretSynced`. Then skip.
+
+`infra/cluster/CLAUDE.md` holds the rules; read it first. The cluster's control plane is free; a pool bills from the moment it has a node. Node prices and boot times are the provider's list, not measured here: say that, do not quote a number.
+
+1. Copy the `# --- Cluster` block of `config/harness.env.example` into config/harness.env if it is missing. The defaults are a working start; change a pool role only when the owner asks.
+2. Plan: `bash infra/cluster/create-cluster.sh`. It only reads, and prints every change. Read it; a refused machine type shows up here as a missing type, so swap it for the closest current one in `POOL_<ROLE>_TYPES` and plan again.
+3. Install `helm` into `~/.local/bin` if missing (release tarball, no sudo).
+4. Say in one line that the paid part of the cluster starts now, then `bash infra/cluster/create-cluster.sh --apply`. It creates or adopts the cluster named `CLUSTER_NAME`, its pools and their stock fallbacks, and writes CLUSTER_ID and SCW_PROJECT_ID back into config/harness.env.
+5. The secret store's key: an IAM application `<CLUSTER_NAME>-vault-reader` with one policy, permission sets `SecretManagerReadOnly` and `SecretManagerSecretAccess` on SCW_PROJECT_ID only, and an API key for it. Never print the secret key. Its two halves go in the vault as ESO_ACCESS_KEY and ESO_SECRET_KEY, with CLUSTER_ID and SCW_PROJECT_ID, in one version (update pattern).
+6. With a private copy of the vault: `bash infra/cluster/create-cluster.sh --apply --vault-env <copy>`. It copies the key into the cluster and applies `infra/k8s/`. Delete the copy.
+
+In the parallel block this is worker A's: it runs steps 1 to 4, creates step 5's key and returns its halves without writing the vault; step 5's vault version and step 6 run in the closing block.
+
+**Verify**: CLUSTER_ID saved in both places; `kubectl get nodes -L <POOL_ROLE_LABEL>` shows the system pool's node; the ExternalSecret `harness-env` in `apps` is synced.
+
 ## Phase 5: DNS
 
 **Already done?** Every name the Caddyfile serves resolves to SERVER_IP. List them with `grep -oE '^[a-z0-9.-]*\{\$DOMAIN\}' infra/caddy/Caddyfile` (the bare `{$DOMAIN}` is the root), and check each with `python3 -c "import socket; print(socket.gethostbyname('<name>'))"`.
@@ -181,7 +198,7 @@ The assistant ships as an empty template: no people, no number, no calendar. Thi
 Before creating anything, the money story in two sentences: the GPU bills only while it works on a recording, cents per meeting; the cluster's control plane is free.
 
 1. Start the image build first, it is the long pole: run the build script from `infra/gpu/` in the background, logging to `/tmp/harness-gpu-build.log`. It pushes `rg.<region>.scw.cloud/<namespace>/notulen-worker:<tag>`.
-2. Create the cluster with an autoscaling GPU pool, min 0, max 1, on the node type and zone the GPU picker in `infra/gpu/` prints (it walks a cheapest-first ladder across zones). No stock anywhere: stay on CPU, say what that means (a one-hour meeting takes hours instead of minutes), record it, skip the rest.
+2. The cluster is phase 4a's; its `gpu` pool role gives the GPU pools (min 0, with stock fallbacks across zones). Use the GPU picker in `infra/gpu/` to choose `POOL_GPU_TYPES` when the default has no stock, then rerun `infra/cluster/create-cluster.sh --apply`. Put the role's pool names (`python3 -m infra.cluster.pool_fallbacks --pools`) in GPU_POOL. No stock anywhere: stay on CPU, say what that means (a one-hour meeting takes hours instead of minutes), record it, skip the rest.
 3. Install kubectl on the laptop if missing (release binary into `~/.local/bin`).
 4. When the cluster is ready, fetch the admin kubeconfig to a temp file for your own kubectl use. It is NOT the one the server gets.
 5. The namespace (GPU_NAMESPACE) and its secrets, from the vault values: a registry pull secret, and ONE generic Secret holding the worker's environment (DB_URL_OPS or the external database URL, S3_*, ANTHROPIC_API_KEY). The Job template mounts it by `secretRef`; never put a credential inline in a Job.

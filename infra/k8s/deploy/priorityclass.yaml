@@ -1,0 +1,16 @@
+# The deploy loop's pods are scheduled first and evicted last: the cycle, the
+# gate's test runs, the image builder and the push receiver. A gate pod pushed
+# off its node is a run that could not finish, which ships nothing.
+#
+# preemptionPolicy Never: they wait at the front of the queue but never evict
+# anything to get a place, because they share the system pool with the apps.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: deploy-loop
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+value: 100000
+preemptionPolicy: Never
+globalDefault: false
+description: The deploy loop and its gate. Scheduled first and evicted last; never preempts.

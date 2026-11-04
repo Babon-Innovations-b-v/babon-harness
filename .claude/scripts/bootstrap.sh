@@ -75,6 +75,22 @@ check_project_json() {
   fi
 }
 
+# Read-only: whether the cluster foundation is set up. Creating it costs money,
+# so this only says what to run; onboarding's phase 4a runs it.
+check_cluster() {
+  local env_file="$REPO/config/harness.env" cluster_id
+  if [ ! -f "$env_file" ]; then
+    say "cluster: no config/harness.env yet (onboarding writes it)"
+    return
+  fi
+  cluster_id="$(sed -n 's/^CLUSTER_ID=//p' "$env_file" | tail -n 1)"
+  if [ -n "$cluster_id" ]; then
+    say "cluster: $cluster_id"
+  else
+    say "cluster: not created yet. Plan: bash infra/cluster/create-cluster.sh (reads only; --apply creates)"
+  fi
+}
+
 # --- 3. Use the repo's own git hooks ---------------------------------------
 # .claude/hooks holds the shared git hooks; each runs its .claude/hooks/local/ counterpart when
 # there is one. Relative, so each worktree runs its own copy.
@@ -100,5 +116,6 @@ use_repo_hooks
 install_index
 check_gh
 check_project_json
+check_cluster
 say ""
 say "Next: fill the placeholders in CLAUDE.md, then start a session and describe the first task."

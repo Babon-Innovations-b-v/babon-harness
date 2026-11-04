@@ -30,7 +30,7 @@ Topic to bible chapter ID. Pick the ones the prompt touches and read them before
 | Meeting minutes (notulen) | `apps/notulen` |
 | Documents (invoices, letters as PDF) | `apps/documents` |
 | Website and `design/` | `apps/website` |
-| Platform: Caddy, single sign-on, the vault, dashkit | `infra/platform` |
+| Platform: Caddy, single sign-on, the vault, the cluster and its pool roles, dashkit | `infra/platform` |
 | Deploy: auto-deploy, the gate, the register, the eject | `infra/deploy` |
 | Observability and paging | `infra/observability` |
 | GPU tier (worker image, cluster, gpu_jobs) | `infra/gpu` |

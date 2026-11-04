@@ -266,6 +266,23 @@ Each change is a new version of that secret. The server pulls the latest version
 
 The Scaleway keys themselves are not in the vault. The laptop uses the key from `scw init`. The server has its own key, allowed to read this one secret, in `$HARNESS_ROOT/scw-secrets.env`, which onboarding writes once and git never sees.
 
+### The cluster
+
+```
+config/harness.env   (CLUSTER_*, POOL_*)
+  -> infra/cluster/create-cluster.sh    (plan; --apply creates or adopts)
+  -> one cluster in SCW_REGION, CLUSTER_ID written back
+  -> pools per pool role: preferred, then stock fallbacks
+  -> infra/cluster/apply.sh             (renders infra/k8s/)
+  -> namespaces, PriorityClass deploy-loop, ClusterSecretStore vault
+```
+
+The cluster is the base every later piece runs on. Its pools are grouped by pool role: `system` for everything without a role, `gate` for the deploy gate's test runs, `media` for calls, `gpu` for transcription. A pod asks for a role through the node label `POOL_ROLE_LABEL`, never for a pool by name.
+
+Each role has a preferred pool and stock fallbacks: empty pools of other machine types and other zones of the region, carrying the same label, taint and root disk. When the provider has no stock of the preferred type, the autoscaler's priority expander tries the fallbacks in order: other types in the home zone first, because a pod with a zonal volume can only follow there, then the other zones. A role given one zone never leaves it.
+
+Pods get secrets through the ClusterSecretStore `vault` over the same Secret Manager secret the server pulls. An ExternalSecret writes the whole vault into Secret `harness-env` in each namespace that may read it, so no key is ever written into a manifest.
+
 ### The shared library
 
 | Piece | What a dashboard gets |
