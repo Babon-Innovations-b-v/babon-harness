@@ -2,16 +2,22 @@ name: Deploy watchdog
 
 # The only workflow in this repository, and deliberately not a build.
 #
-# Every build and every test runs on the deploy server (infra/auto-deploy).
-# What GitHub does here is the one thing the server cannot do for itself:
-# notice that it has gone quiet. A gate that stops reporting looks exactly like
-# a gate that always passes, and the only thing that could say so is the
-# machine that stopped saying things.
+# Every build and every test runs in the deploy cycle in the cluster
+# (infra/auto-deploy, infra/k8s/deploy). What GitHub does here is the one thing
+# the cycle cannot do for itself: notice that it has gone quiet. A gate that
+# stops reporting looks exactly like a gate that always passes, and the only
+# thing that could say so is the machine that stopped saying things.
 #
 # So this job checks out nothing, builds nothing and runs no tests. It asks the
-# GitHub API what the server has reported (the vm/* commit statuses and the
+# GitHub API what the cycle has reported (the vm/* commit statuses and the
 # Deployments) and opens one tracking issue when the answer is "nothing". About
 # fifty API calls, under twenty seconds.
+#
+# It is armed only in an installed repository: one whose .claude/project.json
+# names this repository under `repo` (setup-github.py writes it when the
+# harness is installed). The template ships that field empty, and nothing
+# deploys the template, so there it says so, closes any tracking issue it left
+# with that reason, and stays green.
 #
 # It stays quiet on a quiet weekend by construction: every rule is anchored to a
 # commit that exists on main. No push, nothing to deploy, nothing to report.
@@ -56,11 +62,48 @@ jobs:
       # Must span more than one working day of commits; raise it on a busy
       # repository, keep it at least 40.
       WALK: "40"
-      TITLE: "Deploy watchdog: the server has stopped reporting deploys to GitHub"
-      # The repository owner; the issue is opened unassigned if that fails.
-      ASSIGNEE: ${{ github.repository_owner }}
+      TITLE: "Deploy watchdog: the deploy cycle has stopped reporting deploys to GitHub"
+      # Titles an earlier version opened issues under; closed like TITLE.
+      OLD_TITLES: "Deploy watchdog: the server has stopped reporting deploys to GitHub"
     steps:
-      - name: Ask GitHub what the deploy server has reported
+      - name: Is this repository installed
+        id: armed
+        run: |
+          set -uo pipefail
+          # A failed read is a red run, never "not installed": the close step
+          # below would otherwise close a real tracking issue.
+          project=$(gh api -H "Accept: application/vnd.github.raw+json" "repos/$REPO/contents/.claude/project.json?ref=main") || {
+            echo "could not read .claude/project.json from main, nothing was checked"
+            exit 1
+          }
+          named=$(jq -r '.repo // ""' <<< "$project") || {
+            echo ".claude/project.json on main is not valid JSON, nothing was checked"
+            exit 1
+          }
+          if [ "$named" = "$REPO" ]; then
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+            echo "owner=$(jq -r '.owner // ""' <<< "$project")" >> "$GITHUB_OUTPUT"
+            echo "armed: .claude/project.json names $REPO"
+          else
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "not armed: .claude/project.json names '${named}', not $REPO, so this is the uninstalled template and nothing deploys it"
+          fi
+
+      - name: Close what an unarmed watchdog left open
+        if: steps.armed.outputs.armed == 'false'
+        run: |
+          set -uo pipefail
+          for title in "$TITLE" "$OLD_TITLES"; do
+            for number in $(TITLE_NOW="$title" gh issue list --repo "$REPO" --state open --limit 100 --json number,title \
+                --jq '.[] | select(.title == env.TITLE_NOW) | .number'); do
+              gh issue comment "$number" --repo "$REPO" \
+                --body "Not armed: \`.claude/project.json\` on main names no installed repository, so nothing deploys this one and there is nothing to report. The watchdog arms itself once the harness is installed here. Closing."
+              gh issue close "$number" --repo "$REPO"
+            done
+          done
+
+      - name: Ask GitHub what the deploy cycle has reported
+        if: steps.armed.outputs.armed == 'true'
         id: check
         run: |
           set -uo pipefail
@@ -155,7 +198,7 @@ jobs:
 
           # R3, the gate ran and could not form an opinion.
           if [ "$newest_gate_state" = "error" ]; then
-            add "The newest \`vm/gate\` status is \`error\`: the gate could not run (an environment fault, or \`GATE_ENABLED\` is not 1). Nothing shipped for that commit: amber ships nothing. The cycle retries every two minutes, so a standing error means the server has verified nothing for as long as this status is old."
+            add "The newest \`vm/gate\` status is \`error\`: the gate could not run (an environment fault, or \`GATE_ENABLED\` is not 1). Nothing shipped for that commit: amber ships nothing. The cycle retries every two minutes, so a standing error means the cycle has verified nothing for as long as this status is old."
           fi
 
           # R4, a cycle died between its first and last report.
@@ -182,7 +225,7 @@ jobs:
                 fi
                 ;;
               *)
-                add "\`$env_name\` last reported \`$dstate\`, so it is not running the code the deploy server last tried to ship."
+                add "\`$env_name\` last reported \`$dstate\`, so it is not running the code the deploy cycle last tried to ship."
                 ;;
             esac
           done
@@ -196,7 +239,11 @@ jobs:
           cat findings.txt
 
       - name: Open, update or close the tracking issue
-        if: always()
+        if: always() && steps.armed.outputs.armed == 'true'
+        env:
+          # The owner .claude/project.json names (a person: an organisation
+          # cannot be assigned); the issue stays unassigned if that fails.
+          ASSIGNEE: ${{ steps.armed.outputs.owner }}
         run: |
           set -uo pipefail
           checked="${{ steps.check.outputs.checked }}"
@@ -217,14 +264,14 @@ jobs:
           if [ "${count:-0}" -eq 0 ]; then
             if [ -n "$number" ]; then
               gh issue comment "$number" --repo "$REPO" \
-                --body "The server is reporting deploys again as of $(date -u +%Y-%m-%dT%H:%M:%SZ). Closing."
+                --body "The deploy cycle is reporting deploys again as of $(date -u +%Y-%m-%dT%H:%M:%SZ). Closing."
               gh issue close "$number" --repo "$REPO"
             fi
             exit 0
           fi
 
           {
-            echo "The deploy server is the only thing that deploys, and GitHub is where it reports what it did."
+            echo "The deploy cycle is the only thing that deploys, and GitHub is where it reports what it did."
             echo "This issue is opened, updated and closed by \`.github/workflows/deploy-watchdog.yml\`."
             echo "The body is rewritten on every run; reply in a comment instead of editing it."
             echo
@@ -238,7 +285,12 @@ jobs:
           if [ -n "$number" ]; then
             gh issue edit "$number" --repo "$REPO" --body-file body.txt
           else
-            gh issue create --repo "$REPO" --title "$TITLE" --body-file body.txt --assignee "$ASSIGNEE" \
-              || gh issue create --repo "$REPO" --title "$TITLE" --body-file body.txt
+            # Created once, then assigned. A create retried without the
+            # assignee opened two issues a second apart on 2026-11-01: the
+            # create had succeeded and only the assignment had failed.
+            url=$(gh issue create --repo "$REPO" --title "$TITLE" --body-file body.txt)
+            echo "$url"
+            gh issue edit "${url##*/}" --repo "$REPO" --add-assignee "$ASSIGNEE" \
+              || echo "could not assign $ASSIGNEE; the issue stays open unassigned"
           fi
           exit 1
