@@ -16,12 +16,6 @@ from __future__ import annotations
 
 #: 127 tests over 18 levels on the day the rule arrived. Only ever delete.
 DEBT: tuple[tuple[str, str], ...] = (
-    ('.claude/hooks', '.claude/hooks/tests/test_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes.py'),
-    ('.claude/hooks', '.claude/hooks/tests/test_issue_guard.py'),
-    ('.claude/hooks/local', '.claude/hooks/tests/test_a_drawn_box_whose_code_moved_is_a_note_and_a_broken_marker_is_a_block.py'),
-    ('.claude/hooks/local', '.claude/hooks/tests/test_every_bible_chapter_is_within_budget_or_says_why.py'),
-    ('.claude/hooks/local', '.claude/hooks/tests/test_the_bible_guard_blocks_growth_and_never_a_cut.py'),
-    ('.claude/hooks/local', '.claude/hooks/tests/test_the_overlay_guard_blocks_growth_and_never_a_cut.py'),
     ('apps/assistant', 'apps/assistant/core/tests/test_a_covering_page_triage_reads_off_the_awareness_rows_is_one_the_claim_gate_can_find.py'),
     ('apps/assistant', 'apps/assistant/core/tests/test_a_critical_page_leaves_through_quiet_hours_and_the_morning_gate_while_a_warning_waits.py'),
     ('apps/assistant', 'apps/assistant/core/tests/test_a_failing_signal_send_backs_off_instead_of_retrying_every_pass.py'),
@@ -149,13 +143,6 @@ DEBT: tuple[tuple[str, str], ...] = (
 #: count. A file may not grow past its count; one that shrank lowers its entry,
 #: and one down to a single test loses it. Only ever shrink.
 FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
-    ('.claude/hooks/tests/test_a_drawn_box_whose_code_moved_is_a_note_and_a_broken_marker_is_a_block.py', 4),
-    ('.claude/hooks/tests/test_every_bible_chapter_is_within_budget_or_says_why.py', 3),
-    ('.claude/hooks/tests/test_issue_guard.py', 28),
-    ('.claude/hooks/tests/test_the_bible_guard_blocks_growth_and_never_a_cut.py', 14),
-    ('.claude/hooks/tests/test_the_overlay_guard_blocks_growth_and_never_a_cut.py', 4),
-    ('.claude/index/tests/test_the_index_answers_only_from_the_pinned_build_and_a_finished_index_of_this_commit.py', 14),
-    ('.claude/scripts/tests/test_gate_scope.py', 7),
     ('apps/assistant/core/monitor/tests/test_a_deployment_scaled_to_zero_on_purpose_is_parked_not_down.py', 2),
     ('apps/assistant/core/state/tests/test_a_finding_that_says_the_same_thing_does_not_move_the_item.py', 4),
     ('apps/assistant/core/state/tests/test_a_look_into_nobody_has_answered_is_rendered_as_work_to_do_never_as_not_news.py', 3),

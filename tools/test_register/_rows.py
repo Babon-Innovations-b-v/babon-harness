@@ -27,7 +27,7 @@ from ._row import Row
 #: can find it.
 ROWS: tuple[Row, ...] = (
     Row(
-        test='.claude/hooks/tests/test_issue_guard.py',
+        test='.claude/hooks/tests/test_the_hooks_refuse_a_force_push_or_a_malformed_issue_and_a_push_waits_while_the_deploy_queue_is_long.py',
         pins=('.claude/hooks',),
         runs_when=(
             '.claude/hooks/**',
@@ -37,6 +37,26 @@ ROWS: tuple[Row, ...] = (
             old='    return any(token in ("--force", "--force-with-lease", "-f") or',
             new='    return any(token in ("--force",) or',
             why='a push with --force-with-lease or -f is no longer refused, so the force-push cases fail',
+        ),
+    ),
+    Row(
+        test='.claude/hooks/tests/test_the_local_guards_refuse_a_chapter_or_overlay_grown_past_its_budget_and_a_broken_drawn_marker_and_never_a_cut.py',
+        pins=('.claude/hooks/local',),
+        runs_when=(
+            '.claude/hooks/local/linkmap_sync.py',
+            'docs/diagrams/tools/**',
+            '.claude/hooks/local/bible_guard.py',
+            'docs/bible.md',
+            'CLAUDE.md',
+            '.claude/hooks/local/overlay_guard.py',
+            '.claude/hooks/tests/test_the_local_guards_refuse_a_chapter_or_overlay_grown_past_its_budget_and_a_broken_drawn_marker_and_never_a_cut.py',
+            '.claude/hooks/local/**',
+        ),
+        proved_by=Break(
+            file='.claude/hooks/local/bible_guard.py',
+            old='        if before is not None and words <= before.get(name, 0):',
+            new='        if before is not None:',
+            why='an edit that grows a chapter is let through, so the growth case fails',
         ),
     ),
     Row(
@@ -50,19 +70,6 @@ ROWS: tuple[Row, ...] = (
             old='    if sha256_of(binary) != build.sha256:',
             new='    if False:',
             why='a binary whose hash is not the pinned one is accepted, so the pinned-build case fails',
-        ),
-    ),
-    Row(
-        test='.claude/scripts/tests/test_gate_scope.py',
-        pins=('.claude/scripts',),
-        runs_when=(
-            '.claude/scripts/**',
-        ),
-        proved_by=Break(
-            file='.claude/scripts/gate-scope.py',
-            old='DOC_SUFFIXES = (".md",)',
-            new='DOC_SUFFIXES = (".mdx",)',
-            why='a markdown file is no longer a document, so a documents-only change runs the suite',
         ),
     ),
     Row(
@@ -262,65 +269,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='.claude/hooks/tests/test_a_drawn_box_whose_code_moved_is_a_note_and_a_broken_marker_is_a_block.py',
-        pins=('.claude/hooks/local',),
-        runs_when=(
-            '.claude/hooks/local/linkmap_sync.py',
-            '.claude/hooks/tests/test_a_drawn_box_*.py',
-            'docs/diagrams/tools/**',
-        ),
-        proved_by=Break(
-            file='.claude/hooks/local/linkmap_sync.py',
-            old='    blocking = [line for line in lines if _DRIFT not in line]',
-            new='    blocking = list(lines)',
-            why='a drifted box blocks like a broken marker, so the note-only case fails',
-        ),
-    ),
-    Row(
-        test='.claude/hooks/tests/test_the_bible_guard_blocks_growth_and_never_a_cut.py',
-        pins=('.claude/hooks/local',),
-        runs_when=(
-            '.claude/hooks/local/bible_guard.py',
-            '.claude/hooks/tests/test_the_bible_guard_*.py',
-        ),
-        proved_by=Break(
-            file='.claude/hooks/local/bible_guard.py',
-            old='        if before is not None and words <= before.get(name, 0):',
-            new='        if before is not None:',
-            why='an edit that grows a chapter is let through, so the growth case fails',
-        ),
-    ),
-    Row(
-        test='.claude/hooks/tests/test_every_bible_chapter_is_within_budget_or_says_why.py',
-        pins=('.claude/hooks/local',),
-        runs_when=(
-            '.claude/hooks/local/bible_guard.py',
-            'docs/bible.md',
-            'CLAUDE.md',
-            '.claude/hooks/tests/test_every_bible_chapter_*.py',
-        ),
-        proved_by=Break(
-            file='.claude/hooks/local/bible_guard.py',
-            old='BUDGET_WORDS = 900',
-            new='BUDGET_WORDS = 300',
-            why='the budget drops below the chapters written, so the within-budget case fails',
-        ),
-    ),
-    Row(
-        test='.claude/hooks/tests/test_the_overlay_guard_blocks_growth_and_never_a_cut.py',
-        pins=('.claude/hooks/local',),
-        runs_when=(
-            '.claude/hooks/local/overlay_guard.py',
-            '.claude/hooks/tests/test_the_overlay_guard_*.py',
-        ),
-        proved_by=Break(
-            file='.claude/hooks/local/overlay_guard.py',
-            old='    if resolved.parent == _REPO_ROOT:',
-            new='    if False:',
-            why='the root CLAUDE.md is treated as an overlay, so the root-is-exempt case fails',
-        ),
-    ),
-    Row(
         test='docs/diagrams/tests/test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page.py',
         pins=('docs/diagrams',),
         runs_when=(
@@ -383,6 +331,19 @@ ROWS: tuple[Row, ...] = (
             old='not str(target).startswith(str(base))\n            or not target.is_file()',
             new='not target.is_file()',
             why='a path that climbs out of the static folder is served, so the traversal case fails',
+        ),
+    ),
+    Row(
+        test='.claude/scripts/tests/test_gate_scope.py',
+        pins=('.claude/scripts',),
+        runs_when=(
+            '.claude/scripts/**',
+        ),
+        proved_by=Break(
+            file='.claude/scripts/gate-scope.py',
+            old='DOC_SUFFIXES = (".md",)',
+            new='DOC_SUFFIXES = (".mdx",)',
+            why='a markdown file is no longer a document, so a documents-only change runs the suite',
         ),
     ),
     Row(
@@ -1858,19 +1819,6 @@ ROWS: tuple[Row, ...] = (
             old='if "_pulseNameLookup" in src:',
             new='if "_pulseNameLookup" in src or True:',
             why="every file reads as already patched, so the upstream line survives the first run",
-        ),
-    ),
-    Row(
-        test=".claude/hooks/tests/test_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes.py",
-        pins=(".claude/hooks",),
-        runs_when=(
-        ".claude/hooks/**",
-        ),
-        proved_by=Break(
-            file=".claude/hooks/local/push_queue.py",
-            old="    if unblocks or queue + pushed <= limit:\n",
-            new="    if True:\n",
-            why="the limit is ignored, so the 16-commit push is let through",
         ),
     ),
     Row(

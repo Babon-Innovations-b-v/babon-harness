@@ -1,4 +1,10 @@
-"""Pin the issue_guard PreToolUse decisions by driving the real script via stdin.
+"""The hooks refuse a force push or a malformed issue, and a push waits while the deploy queue is long.
+
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
+Pin the issue_guard PreToolUse decisions by driving the real script via stdin.
 
 Runs the script exactly as the harness does: JSON on stdin, exit 2 = block, exit 0 =
 allow. Covers the bare-issue block, the complete-issue pass (so the to-prd and triage
@@ -6,14 +12,47 @@ skills are never blocked), the MCP path, the optional area check, destructive gi
 fail-open on garbage.
 
 Run: python3 -m pytest .claude/hooks/tests/
+
+A push to main waits while the deploy queue is long, and a commit that unblocks the deploy goes.
+
+WHAT IT PINS. `.claude/hooks/local/push_queue.py`, which `.claude/hooks/local/pre-push`
+runs before every push: `undeployed` counts the commits on main before the
+newest one marked `vm/deploy` success, and `verdict` refuses when that count
+plus the pushed commits passes the limit.
+
+HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. The history is
+written by hand: two unmarked commits, then a deployed one, so the queue is 2;
+with a limit of 15, ten waiting plus five pushed is 15 and goes, plus six is 16
+and is refused, and the trailer lets even 41 through.
+
+WHAT IT WAS PROVED AGAINST. The register row's break makes `verdict` ignore the
+limit, so the 16-commit push goes through.
+
+GUARDS. The 2026-11-02 deploy jam: one session pushed 62 commits in an hour.
 """
+from __future__ import annotations
+
+import inspect
+import pytest
+
+
+# From issue guard.
 
 import json
+
+
 import pathlib
+
+
 import subprocess
+
+
 import sys
 
+
 _GUARD = pathlib.Path(__file__).resolve().parent.parent / "issue_guard.py"
+
+
 _CONFIG = pathlib.Path(__file__).resolve().parents[2] / "project.json"
 
 
@@ -43,47 +82,47 @@ def _with_areas(areas):
 _FULL = 'gh issue create --title x --label bug --assignee someone'
 
 
-def test_bare_gh_issue_create_is_blocked():
+def _bare_gh_issue_create_is_blocked():
     code, err = _run(_bash('gh issue create --title "x" --body "y"'))
     assert code == 2
     assert "bare issue creation" in err
 
 
-def test_full_prd_create_passes():
+def _full_prd_create_passes():
     code, _ = _run(_bash('gh issue create --title "x" --label bug --assignee someone'))
     assert code == 0
 
 
-def test_comma_joined_labels_pass():
+def _comma_joined_labels_pass():
     code, _ = _run(_bash('gh issue create --title "x" -l "bug,enhancement" -a someone'))
     assert code == 0
 
 
-def test_equals_form_labels_pass():
+def _equals_form_labels_pass():
     code, _ = _run(_bash('gh issue create --title=x --label=bug --assignee=someone'))
     assert code == 0
 
 
-def test_missing_assignee_is_blocked():
+def _missing_assignee_is_blocked():
     code, err = _run(_bash("gh issue create --title x --label PRD"))
     assert code == 2
     assert "assignee" in err
 
 
-def test_missing_category_is_blocked():
+def _missing_category_is_blocked():
     code, err = _run(_bash("gh issue create --title x --assignee someone"))
     assert code == 2
     assert "PRD or bug/enhancement" in err
 
 
-def test_bare_mcp_create_issue_is_blocked():
+def _bare_mcp_create_issue_is_blocked():
     payload = {"tool_name": "mcp__github__create_issue", "tool_input": {"title": "x"}}
     code, err = _run(payload)
     assert code == 2
     assert "bare issue creation" in err
 
 
-def test_full_mcp_create_issue_passes():
+def _full_mcp_create_issue_passes():
     payload = {
         "tool_name": "mcp__github__create_issue",
         "tool_input": {"title": "x", "labels": ["bug"], "assignees": ["someone"]},
@@ -92,7 +131,7 @@ def test_full_mcp_create_issue_passes():
     assert code == 0
 
 
-def test_area_check_is_off_when_no_areas_configured():
+def _area_check_is_off_when_no_areas_configured():
     original = _with_areas([])
     try:
         code, _ = _run(_bash(_FULL))
@@ -101,7 +140,7 @@ def test_area_check_is_off_when_no_areas_configured():
         _CONFIG.write_text(original)
 
 
-def test_area_label_required_once_areas_are_configured():
+def _area_label_required_once_areas_are_configured():
     original = _with_areas(["dev", "art"])
     try:
         code, err = _run(_bash(_FULL))
@@ -113,12 +152,12 @@ def test_area_label_required_once_areas_are_configured():
         _CONFIG.write_text(original)
 
 
-def test_non_issue_gh_command_passes():
+def _non_issue_gh_command_passes():
     code, _ = _run(_bash("gh issue list --label needs-triage"))
     assert code == 0
 
 
-def test_issue_close_with_create_in_comment_passes():
+def _issue_close_with_create_in_comment_passes():
     # A regex matching "create" anywhere after `gh issue` blocks this; the guard is
     # token-based so the word inside the quoted comment is one token, never a match.
     code, _ = _run(_bash(
@@ -127,81 +166,81 @@ def test_issue_close_with_create_in_comment_passes():
     assert code == 0
 
 
-def test_create_after_close_in_one_line_is_still_blocked():
+def _create_after_close_in_one_line_is_still_blocked():
     # A compound line whose SECOND command is a bare create must still block.
     code, err = _run(_bash('gh issue close 1 --comment "done" && gh issue create --title "x"'))
     assert code == 2
     assert "bare issue creation" in err
 
 
-def test_unrelated_bash_passes():
+def _unrelated_bash_passes():
     code, _ = _run(_bash("ls -la && echo hi"))
     assert code == 0
 
 
-def test_force_push_is_blocked():
+def _force_push_is_blocked():
     code, err = _run(_bash("git push --force origin main"))
     assert code == 2
     assert "destructive git" in err
 
 
-def test_force_with_lease_is_blocked():
+def _force_with_lease_is_blocked():
     code, err = _run(_bash("git push --force-with-lease origin main"))
     assert code == 2
     assert "destructive git" in err
 
 
-def test_plus_refspec_push_is_blocked():
+def _plus_refspec_push_is_blocked():
     code, err = _run(_bash("git push origin +main:main"))
     assert code == 2
     assert "destructive git" in err
 
 
-def test_reset_hard_is_blocked():
+def _reset_hard_is_blocked():
     code, err = _run(_bash("git reset --hard origin/main"))
     assert code == 2
     assert "destructive git" in err
 
 
-def test_normal_push_passes():
+def _normal_push_passes():
     code, _ = _run(_bash("git push origin HEAD:main"))
     assert code == 0
 
 
-def test_force_pattern_inside_a_commit_message_passes():
+def _force_pattern_inside_a_commit_message_passes():
     code, _ = _run(_bash('git commit -m "note: never run git push -f here"'))
     assert code == 0
 
 
-def test_garbage_stdin_fails_open():
+def _garbage_stdin_fails_open():
     code, _ = _run("not json at all {{{")
     assert code == 0
 
 
-def test_unbalanced_quotes_fail_open():
+def _unbalanced_quotes_fail_open():
     # shlex.split raises on this; the guard must allow rather than crash-block.
     code, _ = _run(_bash('gh issue create --title "unterminated'))
     assert code == 0
 
 
-def test_md_line_number_ref_is_blocked():
+def _md_line_number_ref_is_blocked():
     code, err = _run(_bash(_FULL + ' --body "Per plan.md line 117 this holds."'))
     assert code == 2
     assert "numbers in prose rot" in err
 
 
-def test_md_colon_line_ref_is_blocked():
+def _md_colon_line_ref_is_blocked():
     code, err = _run(_bash(_FULL + ' --body "See notes.md:42 for the claim."'))
     assert code == 2
     assert "numbers in prose rot" in err
 
 
-def test_code_line_ref_stays_allowed():
+def _code_line_ref_stays_allowed():
     code, _ = _run(_bash(_FULL + ' --body "Bug lives in src/dispatcher.py:419"'))
     assert code == 0
 
 
-def test_mcp_body_checks_apply():
+def _mcp_body_checks_apply():
     payload = {
         "tool_name": "mcp__github__create_issue",
         "tool_input": {
@@ -216,7 +255,7 @@ def test_mcp_body_checks_apply():
     assert "numbers in prose rot" in err
 
 
-def test_each_issue_type_has_its_own_maximum_body_length():
+def _each_issue_type_has_its_own_maximum_body_length():
     """A sub-issue is capped below a PRD, a PRD below a vision PRD, a comment on its own; a Budget line lifts it."""
     def create(labels, body):
         return _run({"tool_name": "mcp__github__create_issue", "tool_input": {
@@ -233,7 +272,7 @@ def test_each_issue_type_has_its_own_maximum_body_length():
     assert _run(_bash("gh issue comment 7 --body " + "y" * 200))[0] == 0
 
 
-def test_a_second_issue_for_open_work_is_refused(tmp_path, monkeypatch):
+def _a_second_issue_for_open_work_is_refused(tmp_path, monkeypatch):
     """A new sub-issue sharing three subject words with an open one is refused unless `## Duplicate check` names it."""
     open_issues = tmp_path / "open.json"
     open_issues.write_text(json.dumps([
@@ -248,3 +287,91 @@ def test_a_second_issue_for_open_work_is_refused(tmp_path, monkeypatch):
     assert create("Rename wire field treatment_path everywhere", "## Duplicate check\n#41 is the API half.") == 0
     assert create("Fix the hero image on mobile") == 0
 
+# From a push waits while the deploy queue is long and an unblocking commit goes.
+
+import importlib.util
+
+
+_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "local" / "push_queue.py"
+
+
+def _push_queue():
+    spec = importlib.util.spec_from_file_location("push_queue", _SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _commit(deployed: bool) -> dict:
+    contexts = [{"context": "vm/deploy", "state": "SUCCESS"}] if deployed else []
+    return {"oid": "x", "status": {"contexts": contexts}}
+
+
+def _a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes() -> None:
+    """The queue is counted to the newest deployed commit; past the limit refuses, the trailer passes."""
+    queue = _push_queue()
+    assert queue.undeployed([_commit(False), _commit(False), _commit(True), _commit(False)]) == 2
+    assert queue.undeployed([_commit(False)]) is None
+    assert queue.verdict(10, 5, False, limit=15) is None
+    assert "BLOCKED" in queue.verdict(10, 6, False, limit=15)
+    assert queue.verdict(40, 1, True, limit=15) is None
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_bare_gh_issue_create_is_blocked),
+    *_cases(_full_prd_create_passes),
+    *_cases(_comma_joined_labels_pass),
+    *_cases(_equals_form_labels_pass),
+    *_cases(_missing_assignee_is_blocked),
+    *_cases(_missing_category_is_blocked),
+    *_cases(_bare_mcp_create_issue_is_blocked),
+    *_cases(_full_mcp_create_issue_passes),
+    *_cases(_area_check_is_off_when_no_areas_configured),
+    *_cases(_area_label_required_once_areas_are_configured),
+    *_cases(_non_issue_gh_command_passes),
+    *_cases(_issue_close_with_create_in_comment_passes),
+    *_cases(_create_after_close_in_one_line_is_still_blocked),
+    *_cases(_unrelated_bash_passes),
+    *_cases(_force_push_is_blocked),
+    *_cases(_force_with_lease_is_blocked),
+    *_cases(_plus_refspec_push_is_blocked),
+    *_cases(_reset_hard_is_blocked),
+    *_cases(_normal_push_passes),
+    *_cases(_force_pattern_inside_a_commit_message_passes),
+    *_cases(_garbage_stdin_fails_open),
+    *_cases(_unbalanced_quotes_fail_open),
+    *_cases(_md_line_number_ref_is_blocked),
+    *_cases(_md_colon_line_ref_is_blocked),
+    *_cases(_code_line_ref_stays_allowed),
+    *_cases(_mcp_body_checks_apply),
+    *_cases(_each_issue_type_has_its_own_maximum_body_length),
+    *_cases(_a_second_issue_for_open_work_is_refused),
+    *_cases(_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_the_hooks_refuse_a_force_push_or_a_malformed_issue_and_a_push_waits_while_the_deploy_queue_is_long(scenario, given, uses, request):
+    """The hooks refuse a force push or a malformed issue, and a push waits while the deploy queue is long: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})

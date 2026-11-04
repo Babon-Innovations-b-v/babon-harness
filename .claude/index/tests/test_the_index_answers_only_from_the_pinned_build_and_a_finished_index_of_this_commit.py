@@ -1,5 +1,9 @@
 """The code index answers only through the pinned binary and from a finished index of the commit asked about.
 
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 Its GitHub issues are part of that answer: fetched with `gh`, written into the index as Issue rows with CHILD_OF
 edges, put back after a rebuild drops them, and when gh cannot answer the reply says why and names the fix. Those
 tests drive `cbm_issues.answer` and the server with a stand-in `gh` on PATH and a scratch index in the tool's own
@@ -43,29 +47,68 @@ The break that turns each test red (applied once each, seen red, reverted):
 """
 from __future__ import annotations
 
+import inspect
+
+
+# From the index answers only from the pinned build and a finished index of this commit.
+
 import hashlib
+
+
 import json
+
+
 import os
+
+
 import pathlib
+
+
 import re
+
+
 import shutil
+
+
 import sqlite3
+
+
 import subprocess
+
+
 import sys
+
+
 import time
+
 
 import pytest
 
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+
 import cbm_clean  # noqa: E402
+
+
 import cbm_fetch  # noqa: E402
+
+
 import cbm_index  # noqa: E402
+
+
 import cbm_issues  # noqa: E402
+
+
 import cbm_pin  # noqa: E402
+
+
 import server  # noqa: E402
 
+
 _PLATFORMS = ("linux_amd64", "linux_arm64", "darwin_amd64", "darwin_arm64")
+
+
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -109,7 +152,7 @@ def _stand_in_indexer(rows: int):
     return index_into
 
 
-def test_only_the_pinned_build_is_accepted(tmp_path: pathlib.Path) -> None:
+def _only_the_pinned_build_is_accepted(tmp_path: pathlib.Path) -> None:
     """The pinned hash and version pass; another hash, a swapped file and no file do not."""
     binary = tmp_path / "codebase-memory-mcp"
     digest = _fake_binary(binary, "0.12.1")
@@ -122,7 +165,7 @@ def test_only_the_pinned_build_is_accepted(tmp_path: pathlib.Path) -> None:
     assert not cbm_pin.verified(tmp_path / "missing", cbm_pin.Build("v0.12.1", "a", "0" * 64, digest))
 
 
-def test_every_shipped_platform_has_a_complete_pin() -> None:
+def _every_shipped_platform_has_a_complete_pin() -> None:
     """pin.env names an asset and two distinct sha256s for each platform upstream ships."""
     fields = cbm_pin.read()
     for key in _PLATFORMS:
@@ -133,14 +176,14 @@ def test_every_shipped_platform_has_a_complete_pin() -> None:
         assert build.tarball_sha256 != build.sha256, key
 
 
-def test_the_binary_lives_under_the_cache_by_version(
+def _the_binary_lives_under_the_cache_by_version(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Installed by version under the cache, never in the shared ~/.local/bin."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     assert cbm_pin.binary_path("v9.9.9") == tmp_path / "harness/cbm/v9.9.9/codebase-memory-mcp"
 
 
-def test_an_unstamped_or_outdated_index_is_built_before_it_is_asked(
+def _an_unstamped_or_outdated_index_is_built_before_it_is_asked(
         repo: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No index or an older commit's: ready builds first. This commit's: ready builds nothing."""
     monkeypatch.setattr(cbm_index, "ensure_binary", lambda: pathlib.Path("/no/binary"))
@@ -159,7 +202,7 @@ def test_an_unstamped_or_outdated_index_is_built_before_it_is_asked(
     assert cbm_index.stamp_of(pathlib.Path(moved["path"]), moved["project"]) == _git(repo, "rev-parse", "HEAD")
 
 
-def test_a_build_that_wrote_no_rows_is_never_stamped_or_placed(
+def _a_build_that_wrote_no_rows_is_never_stamped_or_placed(
         repo: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """An index with no rows for the project raises with the rebuild as its fix, and nothing is placed."""
     monkeypatch.setattr(cbm_index, "ensure_binary", lambda: pathlib.Path("/no/binary"))
@@ -170,7 +213,7 @@ def test_a_build_that_wrote_no_rows_is_never_stamped_or_placed(
     assert not (pathlib.Path(os.environ["CBM_CACHE_DIR"]) / f"{cbm_index.project_for(repo)}.db").exists()
 
 
-def test_a_failed_question_answers_its_cause_and_the_fix(monkeypatch: pytest.MonkeyPatch) -> None:
+def _a_failed_question_answers_its_cause_and_the_fix(monkeypatch: pytest.MonkeyPatch) -> None:
     """A call that cannot be answered is an error naming its cause and fix, never an empty result."""
     monkeypatch.setattr(cbm_index, "ready", lambda here: {
         "error": "the index could not be built: no network", "fix": cbm_pin.INSTALL})
@@ -186,7 +229,7 @@ def test_a_failed_question_answers_its_cause_and_the_fix(monkeypatch: pytest.Mon
     assert json.dumps(server.respond({"jsonrpc": "2.0", "id": 9, "method": "nope"})).count("-32601") == 1
 
 
-def test_a_malformed_call_is_answered_and_the_server_keeps_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+def _a_malformed_call_is_answered_and_the_server_keeps_reading(monkeypatch: pytest.MonkeyPatch) -> None:
     """Arguments, params or a name of the wrong shape get an error reply; none of them ends the server."""
     monkeypatch.setattr(cbm_index, "ready", lambda here: {"path": "", "project": "p", "head": ""})
     monkeypatch.setattr(cbm_index, "ask", lambda tool, given: {"ok": True, "result": "rows: 0"})
@@ -273,7 +316,7 @@ def _issue_rows(database: pathlib.Path) -> dict:
         connection.close()
 
 
-def test_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows(issues_box) -> None:
+def _an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows(issues_box) -> None:
     """gh's issues land as Issue rows with their fields and CHILD_OF edge, and come back after a rebuild."""
     root, database = issues_box
     said = cbm_issues.answer(database, "p", root)
@@ -296,7 +339,7 @@ def test_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dro
     assert set(_issue_rows(database)) == {10, 11} and _issue_rows(database)[11][2] == 10
 
 
-def test_without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_names_the_fix(
+def _without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_names_the_fix(
         issues_box, monkeypatch: pytest.MonkeyPatch) -> None:
     """No login and no cache: "not loaded" and gh auth login. A cache and a failing gh: its age and the fix."""
     root, database = issues_box
@@ -314,7 +357,7 @@ def test_without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_nam
     assert set(_issue_rows(database)) == {10, 11}
 
 
-def test_only_a_question_that_names_issues_waits_on_github(monkeypatch: pytest.MonkeyPatch) -> None:
+def _only_a_question_that_names_issues_waits_on_github(monkeypatch: pytest.MonkeyPatch) -> None:
     """An Issue query carries the sync's line; a question about code never calls it."""
     calls = []
     monkeypatch.setattr(cbm_index, "ready", lambda here: {"path": "/x/p.db", "project": "p", "head": ""})
@@ -377,7 +420,7 @@ else:
     return publish
 
 
-def test_a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_own(
+def _a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_own(
         repo: pathlib.Path, release) -> None:
     """Published for an ancestor of HEAD: placed under this checkout's project, prefix and root, its commit kept."""
     first = _git(repo, "rev-parse", "HEAD")
@@ -398,7 +441,7 @@ def test_a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_
     connection.close()
 
 
-def test_a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not_installed(
+def _a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not_installed(
         repo: pathlib.Path, release) -> None:
     """A commit not in this history, or one no newer than the index here, places nothing."""
     release("0" * 40)
@@ -416,14 +459,14 @@ def test_a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not
         cbm_fetch.fetch(repo, slug="o/r", tag="t", asset="i.db.zst")
 
 
-def test_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_files(
+def _cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_files(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Gone or idle trees, unpinned versions, dead builds' leftovers and a log's head go; the live and the pinned stay."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     monkeypatch.setenv("CBM_CACHE_DIR", str(tmp_path / "codebase-memory-mcp"))
     cache, trees = tmp_path / "codebase-memory-mcp", tmp_path / "codebase-memory-mcp-trees"
     cache.mkdir()
-    now = time.time()
+    now = 1_800_000_000.0  # a fixed instant: every age below is measured from it, never from the wall clock
     old = now - 4 * 86400
     dead_pid = 2 ** 22 + 7  # above Linux's pid_max default, so never a live process
 
@@ -452,6 +495,7 @@ def test_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_fil
     leftovers[2].write_text("")
     young = tmp_path / f".cbm-fetch.p.{dead_pid + 1}"
     young.mkdir()
+    os.utime(young, (now - 60, now - 60))
     for path in leftovers:
         os.utime(path, (now - 7200, now - 7200))
     log = cache / "gaps.jsonl"
@@ -467,7 +511,7 @@ def test_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_fil
         assert path.exists(), path
 
 
-def test_a_checkout_whose_project_json_names_no_repository_uses_its_github_origin(tmp_path: pathlib.Path) -> None:
+def _a_checkout_whose_project_json_names_no_repository_uses_its_github_origin(tmp_path: pathlib.Path) -> None:
     """A fresh copy of a template has an empty `repo`; its GitHub origin names the repository instead."""
     import cbm_issues
     root = tmp_path / "copy"
@@ -478,3 +522,48 @@ def test_a_checkout_whose_project_json_names_no_repository_uses_its_github_origi
     assert cbm_issues.repository(root) == "someone/my-company"
     (root / ".claude/project.json").write_text(json.dumps({"repo": "o/r"}))
     assert cbm_issues.repository(root) == "o/r"
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_only_the_pinned_build_is_accepted),
+    *_cases(_every_shipped_platform_has_a_complete_pin),
+    *_cases(_the_binary_lives_under_the_cache_by_version),
+    *_cases(_an_unstamped_or_outdated_index_is_built_before_it_is_asked),
+    *_cases(_a_build_that_wrote_no_rows_is_never_stamped_or_placed),
+    *_cases(_a_failed_question_answers_its_cause_and_the_fix),
+    *_cases(_a_malformed_call_is_answered_and_the_server_keeps_reading),
+    *_cases(_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows),
+    *_cases(_without_a_gh_login_an_issue_question_says_issues_are_not_loaded_and_names_the_fix),
+    *_cases(_only_a_question_that_names_issues_waits_on_github),
+    *_cases(_a_published_index_of_an_ancestor_commit_is_installed_as_this_checkouts_own),
+    *_cases(_a_published_index_of_a_commit_this_checkout_lacks_or_already_has_is_not_installed),
+    *_cases(_cleanup_removes_a_stale_tree_index_an_old_binary_and_leftover_build_files),
+    *_cases(_a_checkout_whose_project_json_names_no_repository_uses_its_github_origin),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_the_index_answers_only_from_the_pinned_build_and_a_finished_index_of_this_commit(scenario, given, uses, request):
+    """The code index answers only through the pinned binary and from a finished index of the commit asked about: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})
