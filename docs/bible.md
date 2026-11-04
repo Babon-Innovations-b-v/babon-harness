@@ -639,11 +639,15 @@ seam, and its collaborators are injected rather than patched.
 | a module group | one file, one test function, of how its modules fit |
 | the whole tree | the full suite |
 
-A module has one clear purpose, so it has one test function checking that purpose. A second
-check is a parametrized case of that function, never a second function pasted beside it, and a
-module group is held to the same rule. `--check` refuses a second test for a level and a second
-function in a file; the tests that were already over the rule are listed in the register's debt
-file, which only shrinks.
+A module has one clear purpose, so it has one test function. A second check is a parametrized
+case of it, never a second function, and a module group is held to the same rule. `--check`
+refuses both, past a debt list of the tests already over the rule, which only shrinks.
+
+A red that is the test's fault never holds the deploy. When the failing test also fails on the
+last good tree, or passes on a re-run of the same commit, the gate quarantines it: a
+`quarantined=` line on its row that only the gate writes, an issue for its owner, the issue named
+on the commit's status. The deploy goes on without it, with no time limit, and every other test
+still fails closed. A red that is the commit's is reverted and handed back at once.
 
 ### Failure tiers
 

@@ -26,8 +26,22 @@ command -v python3 >/dev/null 2>&1 || exit 0
 # system python3, a fraction of a second, and it runs on every commit rather
 # than only on one that adds a test: a row can also be broken by DELETING the
 # test it names.
-if ! register_out=$( cd "$root" && python3 -m tools.test_register \
-        --check --repo "$root" 2>&1 ); then
+#
+# The rows as HEAD has them and this commit's author: a `quarantined=` line
+# only the deploy gate may add, and `--check` refuses one this commit adds by
+# anyone else. No HEAD copy (a first commit) skips that half.
+register_base="$(mktemp)"
+git -C "$root" show "HEAD:tools/test_register/_rows.py" > "$register_base" 2>/dev/null \
+    || : > "$register_base"
+register_author="$(git -C "$root" var GIT_AUTHOR_IDENT 2>/dev/null | sed -E 's/^.*<([^>]*)>.*$/\1/')"
+register_base_args=()
+[ -s "$register_base" ] && [ -n "$register_author" ] \
+    && register_base_args=(--base "$register_base" --author "$register_author")
+register_out=$( cd "$root" && python3 -m tools.test_register \
+        --check --repo "$root" ${register_base_args[@]+"${register_base_args[@]}"} 2>&1 )
+register_verdict=$?
+rm -f "$register_base"
+if [ "$register_verdict" -ne 0 ]; then
     echo "" >&2
     echo "$register_out" >&2
     echo "" >&2

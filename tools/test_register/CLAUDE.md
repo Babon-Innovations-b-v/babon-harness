@@ -3,7 +3,9 @@
 One row per test in this repository. `_rows.py` is the data; everything else
 reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
 `triggers_for`, `uncovered`, `modules_in`, `module_groups`, `level_of`,
-`group_key`, `scaffold`. Module test, one function over parametrized cases:
+`group_key`, `scaffold`, the quarantine's `with_quarantine`,
+`quarantined_tests`, `quarantines_added`, `gate_quarantines`, `left_out`,
+`LeftOut`, `owner_login`, `quarantine_issue`, `quarantine_note`. Module test, one function over parametrized cases:
 `tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py`.
 
 ## Rules
@@ -24,6 +26,15 @@ reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
   stops existing.
 - **Nothing here runs on a timer.** Replay runs on the rows a commit touches,
   at commit time and again in the gate, so a finding always belongs to a commit.
+
+- **Only the gate writes a row's `quarantined=` line.** The gate believes
+  only a line on main that `GATE_AUTHOR_EMAIL` added, and `--check --base
+  --author` refuses one any other author adds. The owner (a `people` name or a
+  login, else the project owner, from `.claude/project.json`) deletes it in the
+  commit that fixes the test. No time limit.
+- **A quarantine outside the selection changes nothing**: `left_out` drops a
+  quarantined file, ignores one under a selected directory, and says `emptied`
+  only when it removed every selected path.
 
 ## Gotchas
 

@@ -1886,4 +1886,17 @@ ROWS: tuple[Row, ...] = (
             why="a fallback outranks its preferred pool, so the expander order differs from the hand-written one",
         ),
     ),
+    Row(
+        test="tools/red_triage/tests/test_a_red_is_the_commits_the_tests_or_the_boxs.py",
+        pins=("tools/red_triage",),
+        runs_when=(
+            "tools/red_triage/**",
+        ),
+        proved_by=Break(
+            file="tools/red_triage/_triage.py",
+            old="    old = sorted(still & (good_failing or frozenset()) - new_files)",
+            new="    old = sorted(still & (good_failing or frozenset()))",
+            why="a test the commit changed reads as old and is quarantined, so the changed-test case fails",
+        ),
+    ),
 )

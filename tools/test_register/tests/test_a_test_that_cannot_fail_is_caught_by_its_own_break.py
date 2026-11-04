@@ -9,6 +9,14 @@ holding more than one test function. Each rule has its debt list and no other
 exception, and every debt list only shrinks. `scaffold`, what `--new` calls,
 writes a new test file and its row.
 
+The quarantine is the one field the gate writes on a row. `with_quarantine`
+writes it, `quarantined_tests` reads it back, and `gate_quarantines` believes
+only a line the gate's own address added; `--check --base --author` refuses a
+line any other author adds. `left_out` takes the honoured quarantines out of
+one selection and says when that emptied it; `owner_login`, `quarantine_issue`
+and `quarantine_note` say who is told and what, from a project file written in
+the case.
+
 ONE TEST, PARAMETRIZED. Every case is the same question, "what does the
 register answer here", asked of a different scratch repository. That is the
 rule this file enforces on every other test, so it keeps it itself.
@@ -43,13 +51,20 @@ directory the call creates gets its `__init__.py`; one that already existed
 keeps its own shape. The filename is every word of the sentence, lowercased,
 apostrophes (straight and typographic) dropped from inside the word.
 
+The quarantine cases commit each quarantine line in a scratch git repository
+as the author the case names, and the believed and refused lists are read off
+the case. The selection cases name their paths and quarantines and the answer
+by hand from the rule in `_quarantine.py`.
+
 WHAT IT WAS PROVED AGAINST. The row's break makes `_read` call a passing run
 `red`, so the blind case fails. Dropping `len(fresh) > 1` from `_second.py`
 lets two fresh tests of `pkg/alpha` pass and the "a second test of a module"
 case fails; dropping the `count > 1` refusal in `_functions.py` turns the
 "three tests" case red; writing the package marker whenever it is absent, or
 dropping the apostrophe `.replace(...)`, in `_scaffold.py` turns a scaffold
-case red.
+case red. Dropping the author test from `gate_quarantines` turns the "another
+author's line" case red, and dropping `not in out` from `left_out` the
+selection cases.
 
 GUARDS. The register's reason to exist: a test that cannot fail looks exactly
 like a good one.
@@ -62,7 +77,22 @@ from pathlib import Path
 
 import pytest
 
-from tools.test_register import Break, Row, check, replay, scaffold
+from tools.test_register import (
+    Break,
+    LeftOut,
+    Row,
+    check,
+    gate_quarantines,
+    left_out,
+    owner_login,
+    quarantine_issue,
+    quarantine_note,
+    quarantined_tests,
+    replay,
+    scaffold,
+    with_quarantine,
+)
+from tools.test_register.__main__ import _quarantines_refused
 from tools.test_register._replay import GREEN, RED, UNPROVEN
 
 #: The module under the replay cases. `add` is written the obvious way so the
@@ -110,6 +140,13 @@ _ALPHA_IS_A_GROUP = {
 _ROWS = "tools/test_register/_rows.py"
 _EMPTY_REGISTER = "from ._row import Break, Row\n\nROWS = (\n)\n"
 
+#: The quarantine cases' two authors: the gate, and anybody else.
+_GATE, _PERSON = "gate@example.org", "someone@example.org"
+
+#: The project file the owner cases read: two people, two areas, a backlog PRD.
+_PROJECT = {"owner": "owner-login", "people": {"sam": "sam-login", "kim": "kim-login"},
+            "areas": ["web", "pkg"], "area_label_prefix": "area:", "backlog_prd": 7}
+
 #: How the replay case runs its test: a subprocess with the scratch directory
 #: importable, or the register's own runner.
 _THERE, _DEFAULT = "there", "default"
@@ -127,6 +164,16 @@ def _replays(body: str, proved_by: Break, runner: str, verdict: str, phrase: str
 def _checks(rows: tuple, contents: dict, debt=(), function_debt=(), refusals=(), pkg=True) -> tuple:
     """A register case: the rows, the files, the two debt lists, the refusals."""
     return ("check", rows, contents, debt, function_debt, refusals, pkg)
+
+
+def _quarantines(commits: tuple, believed: tuple, refused: tuple) -> tuple:
+    """A quarantine case: (author, test) commits in order, what the gate believes, what `--check` refuses."""
+    return ("quarantine", commits, believed, refused)
+
+
+def _selects(selection: tuple, quarantined: tuple, expected: LeftOut) -> tuple:
+    """A selection case: the gate's selection, the honoured quarantines, and what runs."""
+    return ("left-out", selection, quarantined, expected)
 
 
 def _scaffolds(module: str, sentence: str, files: tuple, before=None) -> tuple:
@@ -201,6 +248,22 @@ _CASES = {
     "check: a function debt entry whose test is gone": _checks(
         (_row(_ONE, "pkg/alpha"),), {}, function_debt=(("pkg/tests/test_gone.py", 2),),
         refusals=("pkg/tests/test_gone.py is on FUNCTION_DEBT",)),
+    "quarantine: the gate's own line is believed and never refused": _quarantines(
+        ((_GATE, _ONE),), (_ONE,), ()),
+    "quarantine: another author's line is not believed and is refused": _quarantines(
+        ((_GATE, _ONE), (_PERSON, _TWO)), (_ONE,), (_TWO,)),
+    "quarantine: a test the gate quarantines twice is listed once": _quarantines(
+        ((_GATE, _ONE), (_GATE, _ONE), (_GATE, _THREE)), (_ONE, _THREE), ()),
+    "left out: a quarantined file the selection names leaves the run": _selects(
+        (_ONE, _TWO), (_ONE,), LeftOut(paths=(_TWO,), ignores=(), emptied=False)),
+    "left out: a quarantined file under a selected directory is ignored": _selects(
+        ("pkg/alpha", _THREE), (_ONE, "other/tests/test_x.py"),
+        LeftOut(paths=("pkg/alpha", _THREE), ignores=(_ONE,), emptied=False)),
+    "left out: a selection the quarantine empties says so": _selects(
+        (_ONE,), (_ONE,), LeftOut(paths=(), ignores=(), emptied=True)),
+    "left out: an empty selection is not emptied by the quarantine": _selects(
+        (), (_ONE,), LeftOut(paths=(), ignores=(), emptied=False)),
+    "owner: a row naming a person, a login, and nobody": ("owner",),
     "scaffold: a tests directory it creates gets its package marker": _scaffolds(
         "gadgets", "a gadget turns", ("gadgets/tests/__init__.py", "gadgets/tests/test_a_gadget_turns.py")),
     "scaffold: a tests directory with no marker keeps its own shape": _scaffolds(
@@ -275,6 +338,52 @@ def _register_answer(root: Path, case: tuple) -> None:
         assert any(sentence.startswith(expected) for sentence in verdict), (expected, verdict)
 
 
+def _quarantine_answer(root: Path, case: tuple, monkeypatch) -> None:
+    """What the gate believes, and what `--check` refuses, after each author's quarantine commit."""
+    _kind, commits, believed, refused = case
+    monkeypatch.setenv("GATE_AUTHOR_EMAIL", _GATE)
+    rows = "".join(
+        f"    Row(\n        test='{test}',\n        pins=('pkg',),\n        runs_when=('pkg/**',),\n    ),\n"
+        for test in _TESTS
+    )
+    _write(root, {_ROWS: f"from ._row import Break, Row\n\nROWS = (\n{rows})\n"})
+    _commit(root, _PERSON, "rows")
+    target = root / _ROWS
+    for index, (author, test) in enumerate(commits):
+        before = target.read_text(encoding="utf-8")
+        target.write_text(with_quarantine(before, test, f"c0ffee{index}", "flips", str(index), "2000-01-01"),
+                          encoding="utf-8")
+        base = root.parent / f"{root.name}-base.py"
+        base.write_text(before, encoding="utf-8")
+        refusals = _quarantines_refused(root, str(base), author)
+        assert [sentence.split(" ", 1)[0] for sentence in refusals] == ([test] if test in refused else [])
+        _commit(root, author, f"quarantine {index}")
+    assert quarantined_tests(root) == tuple(sorted({test for _author, test in commits}))
+    assert gate_quarantines(root, author=_GATE) == believed
+
+
+def _commit(root: Path, author: str, message: str) -> None:
+    """One commit of everything in the scratch repository, authored by `author`."""
+    who = {"GIT_AUTHOR_NAME": "a", "GIT_AUTHOR_EMAIL": author, "GIT_COMMITTER_NAME": "a",
+           "GIT_COMMITTER_EMAIL": author, "PATH": "/usr/bin:/bin", "HOME": str(root)}
+    for argv in (["init", "-q"], ["add", "-A"], ["commit", "-q", "--allow-empty", "-m", message]):
+        subprocess.run(["git", "-C", str(root), *argv], check=True, capture_output=True, env=who)
+
+
+def _owner_answer() -> None:
+    """Who is told, and what, read off `_PROJECT` by hand."""
+    assert [owner_login(name, _PROJECT) for name in ("sam", "lee-login", "")] == [
+        "sam-login", "lee-login", "owner-login"]
+    issue = quarantine_issue("web/tests/test_x.py", "sam-login", _PROJECT, commit="c0ffee", reason="flips",
+                             failures=("FAILED web/tests/test_x.py::test_x - assert 1 == 2",))
+    assert (issue["title"], issue["assignee"], issue["labels"], issue["parent"]) == (
+        "test: test_x.py is quarantined", "sam-login", ["bug", "area:web"], 7)
+    assert "FAILED web/tests/test_x.py::test_x" in issue["body"] and "quarantined=" in issue["body"]
+    assert quarantine_issue("docs/test_y.py", "", _PROJECT, commit="c", reason="r")["labels"] == ["bug", "area:web"]
+    assert quarantine_note((("12", "web/tests/test_x.py"), ("", "pkg/tests/test_y.py"))) == (
+        "quarantined #12 test_x.py, test_y.py")
+
+
 def _scaffold_answer(root: Path, case: tuple) -> None:
     """What `scaffold` writes into a scratch repository with an empty register."""
     _kind, module, sentence, files, before = case
@@ -288,10 +397,16 @@ def _scaffold_answer(root: Path, case: tuple) -> None:
 
 
 @pytest.mark.parametrize("case", sorted(_CASES))
-def test_the_register_answers_each_scratch_repository_as_written(tmp_path: Path, case: str) -> None:
+def test_the_register_answers_each_scratch_repository_as_written(tmp_path: Path, monkeypatch, case: str) -> None:
     kind = _CASES[case][0]
     if kind == "replay":
         _replay_answer(tmp_path, _CASES[case])
+    elif kind == "quarantine":
+        _quarantine_answer(tmp_path / "repo", _CASES[case], monkeypatch)
+    elif kind == "left-out":
+        assert left_out(_CASES[case][1], _CASES[case][2]) == _CASES[case][3]
+    elif kind == "owner":
+        _owner_answer()
     elif kind == "scaffold":
         _scaffold_answer(tmp_path, _CASES[case])
     else:

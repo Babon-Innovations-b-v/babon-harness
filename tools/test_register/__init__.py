@@ -9,6 +9,10 @@ it can fail. Two things read the register:
                                 disagree about, and replays the break of every
                                 row the commit touches.
 
+The deploy gate also writes one field of a row, `quarantined` (`_row.py`): a
+test it found to be the wrong one, left out of the gate until its owner fixes
+it.
+
 Why it exists: a test that can never fail looks exactly like a good one. It is
 green, it is named for an invariant, and it verifies nothing. Writing the break
 down beside the test, and replaying it whenever the test or its module changes,
@@ -24,8 +28,10 @@ from ._coverage import uncovered
 from ._groups import module_groups
 from ._level import group_key, level_of
 from ._modules import modules_in
+from ._owner import owner_login, quarantine_issue, quarantine_note
+from ._quarantine import LeftOut, left_out
 from ._replay import replay
-from ._row import Row
+from ._row import Row, gate_quarantines, quarantined_tests, quarantines_added, with_quarantine
 from ._rows import ROWS
 from ._scaffold import scaffold
 from ._touched import touched_by
@@ -34,15 +40,24 @@ from ._triggers import triggers_for
 __all__ = [
     "ROWS",
     "Break",
+    "LeftOut",
     "Row",
     "check",
+    "gate_quarantines",
     "group_key",
     "level_of",
     "module_groups",
+    "left_out",
     "modules_in",
+    "owner_login",
+    "quarantine_issue",
+    "quarantine_note",
+    "quarantined_tests",
+    "quarantines_added",
     "replay",
     "scaffold",
     "touched_by",
     "triggers_for",
     "uncovered",
+    "with_quarantine",
 ]
