@@ -25,12 +25,12 @@ from __future__ import annotations
 from ._break import Break
 from ._check import check
 from ._coverage import uncovered
-from ._groups import module_groups
+from ._groups import module_groups, shard_key, shards
 from ._level import group_key, level_of
 from ._modules import modules_in
 from ._owner import owner_login, quarantine_issue, quarantine_note
 from ._quarantine import LeftOut, left_out
-from ._replay import replay
+from ._replay import replay, replay_all
 from ._row import Row, gate_quarantines, quarantined_tests, quarantines_added, with_quarantine
 from ._rows import ROWS
 from .birth import Pin, live_reads, pin_drift, read_pin, scaffold, sealed_argv
@@ -38,18 +38,18 @@ from ._touched import touched_by
 from ._triggers import triggers_for
 
 __all__ = [
-    "ROWS",
     "Break",
     "LeftOut",
     "Pin",
+    "ROWS",
     "Row",
     "check",
     "gate_quarantines",
     "group_key",
-    "level_of",
-    "module_groups",
     "left_out",
+    "level_of",
     "live_reads",
+    "module_groups",
     "modules_in",
     "owner_login",
     "pin_drift",
@@ -59,8 +59,11 @@ __all__ = [
     "quarantines_added",
     "read_pin",
     "replay",
+    "replay_all",
     "scaffold",
     "sealed_argv",
+    "shard_key",
+    "shards",
     "touched_by",
     "triggers_for",
     "uncovered",

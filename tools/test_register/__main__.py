@@ -21,6 +21,8 @@ The verbs, exactly one per run:
                              red. rc 1 when a test passes with its own break
                              applied. `--changed-file` replays every row a
                              commit touches instead of a named list.
+                             `--workers N` replays N rows at once, each on its
+                             own copy of the tree.
   --new <module> --says "…"  write the test file and its row together.
   --coverage                 how many modules the register pins, and which it
                              does not. Never a non-zero exit: it is a number,
@@ -42,6 +44,10 @@ The verbs, exactly one per run:
                              network off and a fake clock (`birth/_run.py`).
                              pytest's own exit code, or 99 when this box could
                              not run it, which is never a verdict.
+  --shards <paths file> [--max N]
+                             the selected paths split into at most N gate
+                             runs, one per module group (`_groups.py`):
+                             `<shard>\t<path>` per line, `-` reads stdin.
   --pin-drift                the gate image inputs that moved past the commit
                              the pinned image was built from, one per line.
                              Never a non-zero exit: it is a notice.
@@ -49,7 +55,8 @@ The verbs, exactly one per run:
                              the issue for one quarantined test, as JSON.
 
 FAILURE POLICY. `--check` and `--replay` are verdicts and say no by exiting 1.
-Everything they cannot do is exit 0 with a note on stderr, the same fail-open
+A replay that crashed part way exits 3, never 1. Everything else they cannot
+do is exit 0 with a note on stderr, the same fail-open
 rule the pre-commit hook follows for a missing `uv`: a box without a runner
 has not found a problem, it has found a box.
 """
@@ -67,7 +74,8 @@ from ._modules import modules_in
 from ._owner import owner_login, quarantine_issue
 from ._quarantine import left_out
 from ._row import ROWS_FILE, gate_author, gate_quarantines, quarantined_tests, quarantines_added, with_quarantine
-from ._replay import GREEN, replay
+from ._groups import module_groups, shards
+from ._replay import GREEN, replay_all
 from ._rows import ROWS
 from .birth import PIN, live_reads, pin_drift, read_pin, scaffold, sealed_run
 from ._touched import touched_by
@@ -100,7 +108,9 @@ def main(argv: list[str] | None = None) -> int:
         return sealed_run(repo, parsed.sealed_run)
     if parsed.pin_drift:
         return _do_pin_drift(repo)
-    return _do_replay(repo, parsed.replay, parsed.changed_file)
+    if parsed.shards:
+        return _do_shards(repo, parsed.shards, parsed.max)
+    return _do_replay(repo, parsed.replay, parsed.changed_file, parsed.workers)
 
 
 def _parse(argv: list[str] | None) -> argparse.Namespace:
@@ -128,6 +138,10 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--failures", default="", metavar="FILE", help="with --quarantine-issue")
     parser.add_argument("--sealed-run", nargs="+", default=None, metavar="TEST")
     parser.add_argument("--pin-drift", action="store_true", help="gate image inputs past its build")
+    parser.add_argument("--workers", type=int, default=1, metavar="N",
+                        help="with a replay: rows at once, each on its own copy of the tree")
+    parser.add_argument("--shards", default="", metavar="PATHS_FILE", help="split selected paths by module group")
+    parser.add_argument("--max", type=int, default=4, metavar="N", help="with --shards: at most N shards")
     parser.add_argument(
         "--allow-missing-break",
         action="store_true",
@@ -302,7 +316,24 @@ def _do_new(repo: Path, module: str, says: str) -> int:
     return 0
 
 
-def _do_replay(repo: Path, named: list[str] | None, changed_file: str) -> int:
+def _do_shards(repo: Path, paths_file: str, limit: int) -> int:
+    """Print `<shard>\t<path>` for every selected path, one module group a shard."""
+    lines = _lines(paths_file)
+    if lines is None:
+        return 2
+    modules = modules_in(repo)
+    for name, members in shards(lines, ROWS, set(modules), set(module_groups(modules)), limit):
+        for member in members:
+            print(f"{name}\t{member}")
+    return 0
+
+
+#: `--replay`'s exit when it could not finish. Not 1: the gate refuses a commit
+#: on 1, and a full disk or a vanished file is no finding about a test.
+REPLAY_UNFINISHED = 3
+
+
+def _do_replay(repo: Path, named: list[str] | None, changed_file: str, workers: int = 1) -> int:
     """Replay every named row's break, quarantined tests left out. Only a `green` refuses."""
     out = set(quarantined_tests(repo))
     rows = tuple(row for row in _rows_to_replay(repo, named, changed_file) if row.test not in out)
@@ -310,9 +341,13 @@ def _do_replay(repo: Path, named: list[str] | None, changed_file: str) -> int:
         print("register: no row to replay")
         return 0
 
+    try:
+        answers = replay_all(rows, repo, workers)
+    except Exception as failure:  # noqa: BLE001  a replay that could not finish is never a verdict
+        print(f"register: the break replay could not finish: {failure!r}", file=sys.stderr)
+        return REPLAY_UNFINISHED
     passed = []
-    for row in rows:
-        verdict, sentence = replay(row, repo)
+    for verdict, sentence in answers:
         print(f"{verdict:9}{sentence}")
         if verdict == GREEN:
             passed.append(sentence)

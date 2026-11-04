@@ -44,4 +44,8 @@ test, one function over parametrized cases:
 - **A skipped run is not proof.** pytest exits 0 when every test in a file
   skips, so the replay reads the summary and returns `unproven`, never `green`.
 - **A row's break anchor must appear exactly once** in its file.
-- **Changing `_modules.py` or `_groups.py` moves levels**: rerun `--check`.
+- **Changing `_modules.py` or `_groups.py` moves levels and shards**: rerun
+  `--check`. `--shards` keys a selection by innermost module group.
+- **`--workers N` replays on hard-linked copies**: `replay` unlinks a file
+  before breaking it, and a `green` from a copy is replayed again in the tree
+  before it refuses anything. A replay that crashed exits 3, never 1.

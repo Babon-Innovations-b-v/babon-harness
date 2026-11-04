@@ -5,6 +5,21 @@ OWNS: proving that one test can fail, right now, on this tree.
 DOES NOT OWN: which rows to replay (`__main__.py` decides that from the
 changed paths), or what a row is (`_row.py`).
 
+SEVERAL AT ONCE. `replay_all` spreads the rows over workers, each on its own
+copy of the tree, because one row breaks one file and two rows at once in one
+tree would each see the other's break. A copy is hard links, so making six
+costs seconds rather than six times the tree; `replay` therefore never writes
+into a file in place, it unlinks it first, so a break lands in the copy alone.
+A `green` from a copy refuses nothing until the same row is replayed in the
+tree itself and says `green` again: a verdict that refuses a commit is only
+taken from the commit's own tree.
+
+A copy that cannot be made, or a worker that raises, is a fault of the box and
+never a verdict: the rows are then replayed one at a time in the tree itself.
+`replay` can still raise when the tree itself will not take the break or the
+file back (an unreadable encoding, a read-only directory); the command line
+reads that as "could not finish" and never as a refusal.
+
 WHY THIS EXISTS AT ALL. A test that can never fail looks exactly like a good
 one: it is green, it is named for an invariant, and it verifies nothing. Break
 the code on purpose, watch the test go red, put the code back: this file does
@@ -41,10 +56,14 @@ cached copy is removed after the restore. A replay leaves nothing behind.
 from __future__ import annotations
 
 import os
+import queue
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ._row import Row
@@ -67,7 +86,10 @@ _PYTEST_REFUSED = frozenset({2, 3, 4, 5})
 def replay(
     row: Row, repo: Path, run: Callable[[Row, Path], int] | None = None
 ) -> tuple[str, str]:
-    """Break the module, run the test, demand red, restore. Never raises.
+    """Break the module, run the test, demand red, restore.
+
+    Raises only when the tree will not take the break or its bytes back; every
+    answer about the test itself is a verdict.
 
     Returns one of `red`, `green` or `unproven`, and the sentence that goes in
     the report beside it.
@@ -90,14 +112,82 @@ def replay(
         )
 
     runner = run or _default_runner
+    mode = target.stat().st_mode
     try:
+        # Unlinked first: in a worker's copy the file is a hard link to the
+        # tree's own, and writing through it would break the tree as well.
+        target.unlink()
         target.write_bytes(text.replace(row.proved_by.old, row.proved_by.new).encode("utf-8"))
+        os.chmod(target, mode)
         verdict = runner(row, repo)
     finally:
         target.write_bytes(before)
+        os.chmod(target, mode)
         _forget_bytecode(target)
 
     return _read(row, verdict)
+
+
+def replay_all(
+    rows: tuple, repo: Path, workers: int = 1, run: Callable[[Row, Path], int] | None = None
+) -> list[tuple[str, str]]:
+    """Every row's verdict and sentence, in row order, `workers` rows at a time.
+
+    Copies that cannot be made, or a worker that raises, fall back to one row at
+    a time in the tree itself: a full disk is not a finding about any test.
+    """
+    count = min(max(workers, 1), len(rows))
+    if count <= 1:
+        return [replay(row, repo, run) for row in rows]
+    try:
+        answers = _replay_in_copies(rows, repo, count, run)
+    except Exception as failure:  # noqa: BLE001  any fault of the copies is the box's, never a verdict
+        print(f"register: replaying on {count} copies of the tree failed ({failure!r}); "
+              "replaying one row at a time in the tree itself", file=sys.stderr)
+        return [replay(row, repo, run) for row in rows]
+    return [replay(row, repo, run) if verdict == GREEN else (verdict, sentence)
+            for row, (verdict, sentence) in zip(rows, answers)]
+
+
+def _replay_in_copies(
+    rows: tuple, repo: Path, count: int, run: Callable[[Row, Path], int] | None
+) -> list[tuple[str, str]]:
+    """Every row's verdict on `count` linked copies of the tree, the copies removed after."""
+    scratch = Path(tempfile.mkdtemp(prefix=".replay-", dir=repo.resolve().parent))
+    try:
+        copies: queue.Queue = queue.Queue()
+        for index in range(count):
+            copy = scratch / str(index)
+            _link_tree(repo, copy)
+            copies.put(copy)
+
+        def _one(row: Row) -> tuple[str, str]:
+            copy = copies.get()
+            try:
+                return replay(row, copy, run)
+            finally:
+                copies.put(copy)
+
+        with ThreadPoolExecutor(count) as pool:
+            answers = list(pool.map(_one, rows))
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    return answers
+
+
+def _link_tree(source: Path, copy: Path) -> None:
+    """A copy of the tree whose files are hard links, or real copies where a link cannot be made."""
+    def _link(src: str, dst: str) -> None:
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+
+    # A virtualenv inside the tree is the runner, not the tree: tests run on
+    # `sys.executable`, and linking its tens of thousands of files is most of
+    # the copy on a dev box.
+    shutil.copytree(source, copy, symlinks=True, copy_function=_link,
+                    ignore=shutil.ignore_patterns(".venv"))
 
 
 def _forget_bytecode(source: Path) -> None:
@@ -167,6 +257,10 @@ _PASSED_ANY = re.compile(r"(?<![0-9])\d+ passed")
 #: `unproven` blocks no commit, and a false `green` reverts one.
 _SKIPPED_ANY = re.compile(r"(?<![0-9])\d+ (?:skipped|xfailed|deselected)")
 
+#: What the interpreter prints when it has no pytest. It exits 1, the same code
+#: as a failing test, and read as one it would report proof while nothing ran.
+_NO_PYTEST = re.compile(r"No module named pytest\s*$")
+
 
 def _default_runner(row: Row, repo: Path) -> int:
     """Run one test file the way the gate runs it."""
@@ -179,6 +273,8 @@ def _run_pytest(row: Row, repo: Path) -> int:
         [sys.executable, "-m", "pytest", "-q", "--no-header", "-p", "no:randomly", row.test],
         repo,
     )
+    if _NO_PYTEST.search(output):
+        return _NO_RUNNER
     if verdict != 0:
         return verdict
     if not _PASSED_ANY.search(output):
@@ -202,7 +298,11 @@ def _run(argv: list[str], cwd: Path) -> tuple[int, str]:
             text=True,
             timeout=TIMEOUT_SECONDS,
             check=False,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "NO_COLOR": "1"},
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "NO_COLOR": "1",
+                 # The tree being replayed first, so a worker's copy imports
+                 # its own broken module and not the tree's.
+                 "PYTHONPATH": os.pathsep.join(
+                     part for part in (str(cwd), os.environ.get("PYTHONPATH", "")) if part)},
         )
     except subprocess.TimeoutExpired:
         return _TIMED_OUT, ""

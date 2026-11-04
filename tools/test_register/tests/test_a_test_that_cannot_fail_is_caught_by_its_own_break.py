@@ -49,7 +49,18 @@ subtraction, and one test whose verdict is known by reading it:
 After every replay `calc.py` must hold its original bytes, and a planted
 `__pycache__/calc.*.pyc` must be gone whenever a break was applied, because
 bytecode compiled while the break was applied makes later tests fail against a
-tree version control calls clean.
+tree version control calls clean. Rows spread over workers answer as each would
+alone, on copies of the tree that are gone afterwards; copies that cannot be
+made fall back to the tree itself, and a replay that crashes exits as
+unfinished (3), never as a refusal (1).
+
+`shards` splits a selection over several gate runs: each shard case is a
+scratch tree with two module groups, `pkg` (modules `pkg/alpha`, `pkg/beta`)
+and `other` (`other/gamma`, `other/delta`), three rows and a `docs` path no
+group holds, and the shards are written out by hand from the rule in
+`_groups.py`: a module's test runs with the group above it, a group's test with
+that group, a path in no group with its first two parts, and past the limit the
+heaviest key goes first into the lightest shard.
 
 The register cases build a tree with two modules, `pkg/alpha` and `pkg/beta`,
 so `pkg` is the module group above them by the written rule; a layer with code
@@ -76,7 +87,11 @@ case fails; dropping the `count > 1` refusal in `_functions.py` turns the
 dropping the apostrophe `.replace(...)`, in `_scaffold.py` turns a scaffold
 case red. Dropping the author test from `gate_quarantines` turns the "another
 author's line" case red, and dropping `not in out` from `left_out` the
-selection cases. Dropping the clock pair `("time", "time")`, the `/opt`
+selection cases. Calling `_replay_in_copies` outside the fallback in
+`replay_all` turns the "copies that cannot be made" case red, and dropping the
+`except` around `replay_all` in `_do_replay` the "replay that crashes" case.
+Keying every path by itself turns the "one run a group" shard case red.
+Dropping the clock pair `("time", "time")`, the `/opt`
 prefix or `"kubectl"` from `birth/_scan.py`, or `--network none` from
 `birth/_run.py`, turns a sealed case red.
 
@@ -106,7 +121,9 @@ from tools.test_register import (
     scaffold,
     with_quarantine,
 )
-from tools.test_register import Pin, live_reads, pin_drift, read_pin, sealed_argv
+from tools.test_register import Pin, live_reads, module_groups, modules_in, pin_drift, read_pin, replay_all
+from tools.test_register import sealed_argv, shards
+from tools.test_register import _replay as replay_module
 from tools.test_register import __main__ as register_main
 from tools.test_register.__main__ import _quarantines_refused
 from tools.test_register._replay import GREEN, RED, UNPROVEN
@@ -164,8 +181,8 @@ _PROJECT = {"owner": "owner-login", "people": {"sam": "sam-login", "kim": "kim-l
             "areas": ["web", "pkg"], "area_label_prefix": "area:", "backlog_prd": 7}
 
 #: How the replay case runs its test: a subprocess with the scratch directory
-#: importable, or the register's own runner.
-_THERE, _DEFAULT = "there", "default"
+#: importable, the register's own runner, or an interpreter with no pytest.
+_THERE, _DEFAULT, _NO_PYTEST = "there", "default", "no pytest"
 
 
 def _row(test: str, *pins: str, note: str = "") -> Row:
@@ -256,6 +273,27 @@ _CASES = {
         _HALF_SKIPPING_TEST, _BREAK, _DEFAULT, UNPROVEN, "part of it skipped"),
     "replay: a break whose anchor is not there proves nothing": _replays(
         _REAL_TEST, _MOVED, _THERE, UNPROVEN, "exactly once"),
+    "replay: an interpreter with no pytest proves nothing": _replays(
+        _REAL_TEST, _BREAK, _NO_PYTEST, UNPROVEN, "no runner"),
+    "replay: rows spread over workers answer as each would alone": (
+        "replay-many", (_REAL_TEST, _BLIND_TEST), (RED, GREEN)),
+    "replay: copies that cannot be made replay each row in the tree instead": (
+        "replay-crash", "copy", (RED, GREEN), 1),
+    "replay: a replay that crashes exits as unfinished, never as a refusal": (
+        "replay-crash", "worker", (), 3),
+    "shards: one run a group, docs on its own": ("shards", 3, (
+        ("docs", ("docs",)),
+        ("other", ("other/gamma/tests/test_g.py",)),
+        ("pkg", ("pkg/alpha/tests/test_a.py", "pkg/tests/test_pkg.py")),
+    )),
+    "shards: two runs, the lightest keys packed together": ("shards", 2, (
+        ("docs + other", ("docs", "other/gamma/tests/test_g.py")),
+        ("pkg", ("pkg/alpha/tests/test_a.py", "pkg/tests/test_pkg.py")),
+    )),
+    "shards: one run holds everything": ("shards", 1, (
+        ("docs + other + pkg", ("docs", "other/gamma/tests/test_g.py",
+                                "pkg/alpha/tests/test_a.py", "pkg/tests/test_pkg.py")),
+    )),
     "check: a test file with no row": _checks(
         (), {"test_nobody_registered_me.py": _REAL_TEST}, pkg=False,
         refusals=("test_nobody_registered_me.py is a test file with no row",)),
@@ -392,12 +430,15 @@ def _run_there(row: Row, repo: Path) -> int:
     ).returncode
 
 
-def _replay_answer(root: Path, case: tuple) -> None:
+def _replay_answer(root: Path, case: tuple, monkeypatch) -> None:
     """Replay one scratch row; the module comes back byte for byte and no broken bytecode stays."""
     _kind, body, proved_by, runner, verdict, phrase = case
     _write(root, {"calc.py": _MODULE, "test_scratch.py": body,
                   "__pycache__/calc.cpython-312.pyc": "pretend this was compiled while the break was applied"})
     before = (root / "calc.py").read_bytes()
+    if runner == _NO_PYTEST:
+        monkeypatch.setattr(replay_module, "_run",
+                            lambda argv, cwd: (1, "\n/usr/bin/python3: No module named pytest\n"))
     row = Row(test="test_scratch.py", pins=("",), runs_when=("calc.py",), proved_by=proved_by)
 
     answer, sentence = replay(row, root, run=_run_there if runner == _THERE else None)
@@ -406,6 +447,68 @@ def _replay_answer(root: Path, case: tuple) -> None:
     assert (root / "calc.py").read_bytes() == before
     applied = proved_by.old in _MODULE
     assert (root / "__pycache__/calc.cpython-312.pyc").exists() is not applied
+
+
+def _replay_many_answer(root: Path, case: tuple) -> None:
+    """Two rows on two workers: each answers as alone, in row order, and the tree comes back whole."""
+    _kind, bodies, verdicts = case
+    tree = root / "tree"
+    _write(tree, {"calc.py": _MODULE, **{f"test_{index}.py": body for index, body in enumerate(bodies)}})
+    before = (tree / "calc.py").read_bytes()
+    rows = tuple(Row(test=f"test_{index}.py", pins=("",), runs_when=("calc.py",), proved_by=_BREAK)
+                 for index in range(len(bodies)))
+    ran_in = []
+
+    def _run_and_note(row: Row, repo: Path) -> int:
+        ran_in.append(repo)
+        return _run_there(row, repo)
+
+    answers = replay_all(rows, tree, workers=len(rows), run=_run_and_note)
+
+    assert [verdict for verdict, _sentence in answers] == list(verdicts)
+    assert (tree / "calc.py").read_bytes() == before
+    assert any(place != tree for place in ran_in)
+    assert sorted(path.name for path in root.iterdir()) == ["tree"]
+
+
+def _replay_crash_answer(root: Path, case: tuple, monkeypatch) -> None:
+    """A fault of the box, a full disk or a replay that raises, never reads as a test passing its break."""
+    _kind, where, verdicts, exit_code = case
+    tree = root / "tree"
+    _write(tree, {"calc.py": _MODULE, "test_0.py": _REAL_TEST, "test_1.py": _BLIND_TEST})
+    rows = tuple(Row(test=f"test_{index}.py", pins=("",), runs_when=("calc.py",), proved_by=_BREAK)
+                 for index in range(2))
+
+    def _no_room(source: Path, copy: Path) -> None:
+        raise OSError(28, "No space left on device")
+
+    def _raises(row: Row, repo: Path, run=None) -> tuple:
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    if where == "copy":
+        monkeypatch.setattr(replay_module, "_link_tree", _no_room)
+        answers = replay_all(rows, tree, workers=2, run=_run_there)
+        assert [verdict for verdict, _sentence in answers] == list(verdicts)
+        assert sorted(path.name for path in root.iterdir()) == ["tree"]
+    else:
+        monkeypatch.setattr(replay_module, "replay", _raises)
+        monkeypatch.setattr(register_main, "_rows_to_replay", lambda repo, named, changed: rows)
+        assert register_main._do_replay(tree, ["test_0.py"], "", workers=2) == exit_code
+
+
+def _shard_answer(root: Path, case: tuple) -> None:
+    """The shards of one selection in a tree of two module groups, as written out by hand."""
+    _kind, limit, expected = case
+    for module in ("pkg/alpha", "pkg/beta", "other/gamma", "other/delta"):
+        _write(root, {f"{module}/__init__.py": "", f"{module}/code.py": "VALUE = 1\n"})
+    rows = (
+        Row(test="pkg/alpha/tests/test_a.py", pins=("pkg/alpha",), runs_when=("pkg/**",)),
+        Row(test="pkg/tests/test_pkg.py", pins=("pkg/alpha", "pkg/beta"), runs_when=("pkg/**",)),
+        Row(test="other/gamma/tests/test_g.py", pins=("other/gamma",), runs_when=("other/**",)),
+    )
+    modules = modules_in(root)
+    selection = ("pkg/tests/test_pkg.py", "docs", "other/gamma/tests/test_g.py", "pkg/alpha/tests/test_a.py")
+    assert shards(selection, rows, set(modules), set(module_groups(modules)), limit) == expected
 
 
 def _register_answer(root: Path, case: tuple) -> None:
@@ -529,7 +632,13 @@ def _scaffold_answer(root: Path, case: tuple) -> None:
 def test_the_register_answers_each_scratch_repository_as_written(tmp_path: Path, monkeypatch, case: str) -> None:
     kind = _CASES[case][0]
     if kind == "replay":
-        _replay_answer(tmp_path, _CASES[case])
+        _replay_answer(tmp_path, _CASES[case], monkeypatch)
+    elif kind == "replay-many":
+        _replay_many_answer(tmp_path, _CASES[case])
+    elif kind == "replay-crash":
+        _replay_crash_answer(tmp_path, _CASES[case], monkeypatch)
+    elif kind == "shards":
+        _shard_answer(tmp_path, _CASES[case])
     elif kind == "quarantine":
         _quarantine_answer(tmp_path / "repo", _CASES[case], monkeypatch)
     elif kind == "left-out":
