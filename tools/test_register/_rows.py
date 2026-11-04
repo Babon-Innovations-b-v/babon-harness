@@ -590,4 +590,18 @@ ROWS: tuple[Row, ...] = (
             why="the job records the commit URL as its path, so the two landed cases fail",
         ),
     ),
+    Row(
+        test="tools/gate_scope/tests/test_a_change_only_a_register_row_names_selects_that_rows_test_and_nothing_else.py",
+        pins=("tools/gate_scope", "tools/test_register"),
+        runs_when=(
+            "tools/gate_scope/**",
+            "tools/test_register/**",
+        ),
+        proved_by=Break(
+            file="tools/gate_scope/select.py",
+            old="        and any(_fires(path, glob) for path in paths for glob in row.runs_when)",
+            new="        and False",
+            why="no row's trigger ever selects its test, so the two matched cases select nothing",
+        ),
+    ),
 )
