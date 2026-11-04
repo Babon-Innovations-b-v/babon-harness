@@ -86,7 +86,7 @@ Then start phase 1 without waiting, unless they object.
 
 ## Phase 4a: the cluster
 
-**Already done?** CLUSTER_ID is set in config/harness.env, `infra/cluster/create-cluster.sh` plans no `would:` line, and `kubectl -n apps get externalsecret harness-env` says `SecretSynced`. Then skip.
+**Already done?** CLUSTER_ID is set in config/harness.env, `infra/cluster/create-cluster.sh` plans no `would:` line, and `kubectl -n assistant get externalsecret harness-env` says `SecretSynced`. Then skip.
 
 `infra/cluster/CLAUDE.md` holds the rules; read it first. The cluster's control plane is free; a pool bills from the moment it has a node. Node prices and boot times are the provider's list, not measured here: say that, do not quote a number.
 
@@ -99,7 +99,7 @@ Then start phase 1 without waiting, unless they object.
 
 In the parallel block this is worker A's: it runs steps 1 to 4, creates step 5's key and returns its halves without writing the vault; step 5's vault version and step 6 run in the closing block.
 
-**Verify**: CLUSTER_ID saved in both places; `kubectl get nodes -L <POOL_ROLE_LABEL>` shows the system pool's node; the ExternalSecret `harness-env` in `apps` is synced.
+**Verify**: CLUSTER_ID saved in both places; `kubectl get nodes -L <POOL_ROLE_LABEL>` shows the system pool's node; the ExternalSecret `harness-env` in `assistant` is synced.
 
 ## Phase 5: DNS
 

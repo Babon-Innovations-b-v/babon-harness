@@ -1,0 +1,13 @@
+# The assistant's door, signal-cli and the speech model. The gateway has its
+# own namespace (../assistant-gateway).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: assistant
+resources:
+  - namespace.yaml
+  - door.yaml
+  - signal-cli.yaml
+  - whisper.yaml
+components:
+  - ../vault-secret
+  - ../system-pool

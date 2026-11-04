@@ -1,0 +1,169 @@
+# The notulen dashboard (apps/notulen/compose.yml), behind the single
+# sign-on. Live recording sessions are appended chunk by chunk to
+# notulen-sessions (compose volume notulen_sessions), which survives a roll.
+# One replica and Recreate: the sessions claim is ReadWriteOnce.
+#
+# Namespace notulen-app, not notulen: the GPU tier's Jobs and their RBAC own
+# namespace GPU_NAMESPACE (default notulen, infra/gpu).
+#
+# The image is the stack's own (apps/notulen/Dockerfile). The tag is a
+# placeholder the deploy loop replaces by digest with `kubectl set image`.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notulen-sessions
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notulen
+  labels:
+    app: notulen
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: notulen
+  template:
+    metadata:
+      labels:
+        app: notulen
+    spec:
+      imagePullSecrets:
+        - name: registry-pull
+      containers:
+        - name: notulen
+          image: ${IMAGE_REGISTRY}/notulen:set-by-deploy-loop
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_DB}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ANTHROPIC_API_KEY}
+            - name: S3_ENDPOINT
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: S3_ENDPOINT, optional: true}
+            - name: S3_REGION
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: S3_REGION}
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: S3_BUCKET}
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: S3_ACCESS_KEY}
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: S3_SECRET_KEY}
+            - name: NOTULEN_TARGET_REPO
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NOTULEN_TARGET_REPO}
+            - name: NOTULEN_TARGET_PATH
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NOTULEN_TARGET_PATH}
+            - name: GITHUB_NOTULEN_PAT
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GITHUB_NOTULEN_PAT, optional: true}
+            - name: NOTULEN_ATTENDEES
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NOTULEN_ATTENDEES, optional: true}
+            - name: NOTULEN_LANGUAGE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NOTULEN_LANGUAGE, optional: true}
+            - name: OPENCLAW_NOTIFY_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_NOTIFY_URL, optional: true}
+            - name: OPENCLAW_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_WEBHOOK_SECRET, optional: true}
+            - name: GPU_ENABLED
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GPU_ENABLED}
+            - name: GPU_NAMESPACE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GPU_NAMESPACE}
+            - name: GPU_POOL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GPU_POOL}
+            - name: NOTULEN_WORKER_IMAGE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NOTULEN_WORKER_IMAGE, optional: true}
+            - name: KUBECONFIG_B64
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: KUBECONFIG_B64, optional: true}
+            - name: TALK_BOT_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: TALK_BOT_SECRET, optional: true}
+            - name: NC_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NC_URL, optional: true}
+            - name: AGENDA_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_USER, optional: true}
+            - name: AGENDA_APP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_APP_PASSWORD, optional: true}
+            - name: ASSISTANT_TIMEZONE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_TIMEZONE}
+            - name: DB_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.postgres.svc.cluster.local:5432/$(POSTGRES_DB)
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: sessions
+              mountPath: /tmp/notulen
+              subPath: notulen_sessions
+      volumes:
+        - name: sessions
+          persistentVolumeClaim:
+            claimName: notulen-sessions
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notulen
+spec:
+  selector:
+    app: notulen
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

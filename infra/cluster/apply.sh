@@ -5,10 +5,14 @@
 #   infra/cluster/apply.sh [--render | --dry-run] [path/to/harness.env]
 #
 # Each directory under infra/k8s/ with a kustomization.yaml is one area; a
-# kustomize Component (infra/k8s/vault-secret) is included by the areas and
-# skipped here. `kubectl kustomize` builds an area, then the three settings the
-# manifests name (SCW_REGION, SCW_PROJECT_ID, VAULT_SECRET_NAME) are filled in.
-# Any other ${...} left in the output stops the run before anything is sent.
+# kustomize Component (vault-secret, system-pool) is included by the areas and
+# skipped here. `kubectl kustomize` builds an area (files outside it allowed,
+# so postgres can read infra/nextcloud/postgres-init.sh), then the settings in
+# PLACEHOLDERS below are filled in. Any other ${...} left in the output stops
+# the run before anything is sent. The cluster Caddyfile is rendered into
+# infra/k8s/ingress/ first (python3 -m infra.caddy.cluster_caddyfile), and the
+# ingress area is skipped while INGRESS_LB_IP_ID is empty, so no load balancer
+# is made on a throwaway address.
 # --render prints the rendered manifests and needs no cluster. --dry-run
 # sends them to the current cluster as a client dry run (kubectl needs the
 # cluster to know the kinds), which changes nothing.
@@ -34,13 +38,26 @@ set +a
 for required in SCW_REGION SCW_PROJECT_ID; do
     [ -n "${!required:-}" ] || { echo "ERROR: $required is empty in $ENV_FILE" >&2; exit 1; }
 done
-export SCW_REGION SCW_PROJECT_ID VAULT_SECRET_NAME
+: "${POOL_ROLE_LABEL:=harness/role}"
+: "${IMAGE_REGISTRY_HOST:=rg.${SCW_REGION}.scw.cloud}"
+: "${IMAGE_REGISTRY:=${IMAGE_REGISTRY_HOST}/${SCW_REGISTRY:-}}"
+zones=${CLUSTER_ZONES:-}
+: "${INGRESS_LB_ZONE:=${zones%%,*}}"
+: "${INGRESS_LB_TYPE:=LB-S}"
+: "${INGRESS_LB_IP_ID:=}"
+: "${BACKUP_SNAPSHOT_CLASS:=scw-snapshot}"
+: "${BACKUP_KEEP:=7}"
+: "${ASSISTANT_TIMEZONE:=UTC}"
+# Every setting a manifest may name as ${KEY}; a new one is added here.
+PLACEHOLDERS="SCW_REGION SCW_PROJECT_ID VAULT_SECRET_NAME POOL_ROLE_LABEL IMAGE_REGISTRY_HOST IMAGE_REGISTRY INGRESS_LB_ZONE INGRESS_LB_TYPE INGRESS_LB_IP_ID BACKUP_SNAPSHOT_CLASS BACKUP_KEEP ASSISTANT_TIMEZONE"
+# shellcheck disable=SC2086
+export PLACEHOLDERS $PLACEHOLDERS
 
 render() {
     python3 -c '
 import os, re, sys
 text = sys.stdin.read()
-for key in ("SCW_REGION", "SCW_PROJECT_ID", "VAULT_SECRET_NAME"):
+for key in os.environ["PLACEHOLDERS"].split():
     text = text.replace("${" + key + "}", os.environ[key])
 left = sorted(set(re.findall(r"\$\{[A-Za-z_]+\}", text)))
 if left:
@@ -52,16 +69,22 @@ sys.stdout.write(text)
 apply_args=(apply -f -)
 [ "$mode" != dry-run ] || apply_args=(apply --dry-run=client --validate=false -f -)
 
+(cd "$REPO" && python3 -m infra.caddy.cluster_caddyfile >&2)
+
 for area in "$REPO"/infra/k8s/*/; do
     [ -f "$area/kustomization.yaml" ] || continue
     if grep -q '^kind: Component' "$area/kustomization.yaml"; then
         continue
     fi
+    if [ "$mode" != render ] && [ "$(basename "$area")" = ingress ] && [ -z "$INGRESS_LB_IP_ID" ]; then
+        echo "==> ingress skipped: INGRESS_LB_IP_ID is empty (reserve an IP first)" >&2
+        continue
+    fi
     echo "==> $(basename "$area")" >&2
     if [ "$mode" = render ]; then
         printf -- '---\n'
-        kubectl kustomize "$area" | render
+        kubectl kustomize --load-restrictor LoadRestrictionsNone "$area" | render
     else
-        kubectl kustomize "$area" | render | kubectl "${apply_args[@]}"
+        kubectl kustomize --load-restrictor LoadRestrictionsNone "$area" | render | kubectl "${apply_args[@]}"
     fi
 done

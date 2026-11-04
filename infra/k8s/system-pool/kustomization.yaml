@@ -1,0 +1,42 @@
+# A kustomize Component, not an area: every Deployment, StatefulSet and
+# CronJob of an area that includes it selects the system pool role and
+# tolerates its taint. ${POOL_ROLE_LABEL} is filled by infra/cluster/apply.sh.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: (Deployment|StatefulSet)
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: any
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              ${POOL_ROLE_LABEL}: system
+            tolerations:
+              - key: ${POOL_ROLE_LABEL}
+                operator: Equal
+                value: system
+                effect: NoSchedule
+  - target:
+      kind: CronJob
+    patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: any
+      spec:
+        jobTemplate:
+          spec:
+            template:
+              spec:
+                nodeSelector:
+                  ${POOL_ROLE_LABEL}: system
+                tolerations:
+                  - key: ${POOL_ROLE_LABEL}
+                    operator: Equal
+                    value: system
+                    effect: NoSchedule

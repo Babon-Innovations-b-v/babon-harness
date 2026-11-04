@@ -86,7 +86,7 @@ private copy as they happen.
 | `signal-cli` | signal-cli-rest-api, pinned | the Signal account both of them use |
 | `assistant-whisper` | speaches, profile `voice` | turns a voice note into text |
 
-The gateway is someone else's software, run unmodified. It answers people. The door is this repository's code, and it decides what reaches a phone.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=assistant) Neither container is reachable from the internet: the gateway and the door publish only on the server's loopback, and Alertmanager, Prometheus and the gateway reach the door by its name, `assistant`, on the compose network. The door keeps its memory in one SQLite file on a named volume and runs a single worker, because that file has one writer.
+The gateway is someone else's software, run unmodified. It answers people. The door is this repository's code, and it decides what reaches a phone.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=assistant) Neither container is reachable from the internet: the gateway and the door publish only on the server's loopback, and Alertmanager, Prometheus and the gateway reach the door by its name, `assistant`, on the compose network. The door keeps its memory in one SQLite file on a named volume and runs a single worker, because that file has one writer. In the cluster the same four are Deployments: the gateway alone in namespace `assistant-gateway`, the rest in `assistant`, where a network policy lets only the door and the gateway reach signal-cli.
 
 ### How an alert reaches Signal
 
@@ -141,7 +141,7 @@ stop -> /api/upload/finalize -> stitch -> loudness boost -> S3 -> process_job
 
 The recorder is a single page at `notulen.$DOMAIN`, behind the Nextcloud single sign-on.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=notulen) Pressing record opens a row in `notulen_jobs` with status `recording`. From then on the browser sends five seconds of audio at a time. Each piece is kept in the phone's IndexedDB until the server confirms it, so a locked screen or a closed tab loses nothing. The next visit offers "Resume upload".
 
-The server appends the pieces to one file on a volume, so a redeploy does not wipe a meeting in progress. Gates refuse a chunk out of order (409 asks the browser to re-send from the gap), a chunk over 10 MB, a recording under 10 KB, and a third concurrent job.
+The server appends the pieces to one file on a volume, so a redeploy does not wipe a meeting in progress; in the cluster that volume is the claim `notulen-sessions` in namespace `notulen-app`. Gates refuse a chunk out of order (409 asks the browser to re-send from the gap), a chunk over 10 MB, a recording under 10 KB, and a third concurrent job.
 
 When the microphone dies mid-meeting, the page beeps, vibrates and keeps asking for it; recording resumes into the same session. At finalize the server stitches the pieces and boosts a near-silent recording. The audio goes to S3 before any check that could end the session, so every failed job can be retried.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=storage)
 
@@ -214,7 +214,7 @@ The public site is static files in `apps/website/`, served by a stock `nginx:alp
 
 ### How it changes
 
-Edit `apps/website/index.html`, or add pages and images beside it, and push to `main`. The deploy cycle rebuilds the `website` service, defined in `apps/website/compose.yml` and included by the root `docker-compose.yml`, within about two minutes. A healthcheck fetches `/` every 30 seconds.
+Edit `apps/website/index.html`, or add pages and images beside it, and push to `main`. The deploy cycle rebuilds the `website` service, defined in `apps/website/compose.yml` and included by the root `docker-compose.yml`, within about two minutes. A healthcheck fetches `/` every 30 seconds. In the cluster the same image runs as two replicas in namespace `website`, and the deploy loop sets it by digest.
 
 ### design/
 
@@ -228,6 +228,8 @@ Edit `apps/website/index.html`, or add pages and images beside it, and push to `
 Brand colors appear in both `company.yaml` and `tokens.css`, and onboarding keeps them in sync. A custom font is a `.woff2` in `design/` plus an `@font-face` block in `tokens.css`; until then the system font stack is used.
 
 ## infra/platform
+
+<!-- Budget: about 950 words; four subjects (the login, the vault, the cluster and its services, the shared library), each explained once. -->
 
 ### One login across subdomains
 
@@ -275,13 +277,16 @@ config/harness.env   (CLUSTER_*, POOL_*)
   -> pools per pool role: preferred, then stock fallbacks
   -> infra/cluster/apply.sh             (renders infra/k8s/)
   -> namespaces, PriorityClass deploy-loop, ClusterSecretStore vault
+  -> one namespace per service, each on the system pool role
 ```
 
 The cluster is the base every later piece runs on. Its pools are grouped by pool role: `system` for everything without a role, `gate` for the deploy gate's test runs, `media` for calls, `gpu` for transcription. A pod asks for a role through the node label `POOL_ROLE_LABEL`, never for a pool by name.
 
 Each role has a preferred pool and stock fallbacks: empty pools of other machine types and other zones of the region, carrying the same label, taint and root disk. When the provider has no stock of the preferred type, the autoscaler's priority expander tries the fallbacks in order: other types in the home zone first, because a pod with a zonal volume can only follow there, then the other zones. A role given one zone never leaves it.
 
-Pods get secrets through the ClusterSecretStore `vault` over the same Secret Manager secret the server pulls. An ExternalSecret writes the whole vault into Secret `harness-env` in each namespace that may read it, so no key is ever written into a manifest.
+Pods get secrets through the ClusterSecretStore `vault` over the same Secret Manager secret the server pulls. An ExternalSecret writes the whole vault into Secret `harness-env` in each namespace that may read it, and a second splits it into one key per setting, `harness-keys`, so each container names exactly the keys its compose service was given and no key is ever written into a manifest.
+
+Every long-running service of the compose stack is declared here too, one namespace each, so an exec grant on one never reaches another. Caddy sits behind one cloud load balancer, with the compose Caddyfile's upstreams rewritten to cluster Services at every apply, so it cannot go stale. A nightly job snapshots every volume labelled as holding state. Compose stays the live stack until the deploy loop runs here.
 
 ### The shared library
 

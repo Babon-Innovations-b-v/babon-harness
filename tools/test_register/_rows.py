@@ -604,4 +604,17 @@ ROWS: tuple[Row, ...] = (
             why="no row's trigger ever selects its test, so the two matched cases select nothing",
         ),
     ),
+    Row(
+        test="infra/caddy/cluster_caddyfile/tests/test_the_cluster_caddyfile_dials_a_cluster_service_for_every_compose_upstream_and_refuses_one_it_has_no_service_for.py",
+        pins=("infra/caddy/cluster_caddyfile",),
+        runs_when=(
+        "infra/caddy/cluster_caddyfile/**",
+        ),
+        proved_by=Break(
+            file="infra/caddy/cluster_caddyfile/_render.py",
+            old='match.group("lead") + upstreams[upstream] + match.group("rest")',
+            new='match.group("lead") + upstream + match.group("rest")',
+            why="the rewrite keeps the compose upstream, so the rendered file differs from the hand-written one",
+        ),
+    ),
 )

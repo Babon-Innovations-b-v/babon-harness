@@ -1,0 +1,17 @@
+# The one database server, for Nextcloud and the stack (notulen). Its init
+# script is infra/nextcloud/postgres-init.sh itself, read from outside this
+# directory, which is why apply.sh builds with --load-restrictor
+# LoadRestrictionsNone.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: postgres
+resources:
+  - namespace.yaml
+  - postgres.yaml
+components:
+  - ../vault-secret
+  - ../system-pool
+configMapGenerator:
+  - name: postgres-init
+    files:
+      - 10-nextcloud-db.sh=../../nextcloud/postgres-init.sh

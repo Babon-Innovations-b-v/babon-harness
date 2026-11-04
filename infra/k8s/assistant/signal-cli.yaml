@@ -1,0 +1,109 @@
+# signal-cli-rest-api, unmodified and pinned by digest as in
+# apps/assistant/compose.yml: the Signal account, shared by the gateway (reads
+# and answers chat over the /v1/receive websocket, json-rpc mode) and the door
+# (sends pages). The gateway is the only receiver; there is no separate
+# receive loop. Its keys are signal-data (compose volume signal_data).
+#
+# One replica, always: two clients on one number lose messages, because a
+# receive is destructive. Recreate, so the old pod is gone before the new one
+# starts. It authenticates nobody, so the NetworkPolicy below is its only gate.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: signal-data
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signal-cli
+  labels:
+    app: signal-cli
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: signal-cli
+  template:
+    metadata:
+      labels:
+        app: signal-cli
+    spec:
+      containers:
+        - name: signal-cli
+          image: bbernhard/signal-cli-rest-api@sha256:2cf09d66a86fdd210e42ee91662216364acc27da1163a8c44167a77ea3a6559a
+          env:
+            # Registering or linking a number needs MODE=native for the
+            # duration; set SIGNAL_CLI_MODE in the vault and restart.
+            - name: MODE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_CLI_MODE}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /v1/about
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /home/.local/share/signal-cli
+              subPath: signal_data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: signal-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: signal-cli
+spec:
+  selector:
+    app: signal-cli
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Only the door (this namespace) and the gateway (namespace
+# assistant-gateway) may reach signal-cli: whatever reaches port 8080 owns the
+# Signal account.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: signal-cli-callers
+spec:
+  podSelector:
+    matchLabels:
+      app: signal-cli
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: assistant
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: assistant-gateway
+          podSelector:
+            matchLabels:
+              app: gateway
+      ports:
+        - port: 8080

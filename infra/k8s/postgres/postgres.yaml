@@ -1,0 +1,97 @@
+# Postgres as a StatefulSet of one: its data (compose volume postgres_data)
+# is the claim data-postgres-0, mounted through subPath postgres_data so the
+# volume's lost+found never sits in PGDATA. The init script runs only on an
+# empty data directory, so a copied-in compose volume keeps its databases.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: POSTGRES_DB}
+            - name: NEXTCLOUD_DB_NAME
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_NAME}
+            - name: NEXTCLOUD_DB_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_USER}
+            - name: NEXTCLOUD_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_PASSWORD}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: postgres_data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          harness/backup: "true"
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+# Reached as postgres.postgres.svc.cluster.local:5432 by Nextcloud and notulen.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

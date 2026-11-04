@@ -1,0 +1,32 @@
+# The backup job reads which claims carry the label and makes, reads and
+# deletes VolumeSnapshots beside them. Claims span namespaces, so this is a
+# ClusterRole; its ServiceAccount lives here, in the job's own namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: volume-backup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: volume-backup
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: volume-backup
+subjects:
+  - kind: ServiceAccount
+    name: volume-backup
+    namespace: backups
+roleRef:
+  kind: ClusterRole
+  name: volume-backup
+  apiGroup: rbac.authorization.k8s.io

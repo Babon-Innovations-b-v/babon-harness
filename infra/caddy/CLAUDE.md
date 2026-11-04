@@ -11,3 +11,4 @@ The HTTPS front door. `Caddyfile` routes every host; `compose.yml` runs Caddy an
 - **Nextcloud cookie rewrites stay `header_down` inside `reverse_proxy`.** A site-level `header` block runs before the upstream `Set-Cookie` exists and silently does nothing.
 - **Paths in `compose.yml` are relative to this directory** (compose `include` semantics), so the config mount is `./`.
 - Validate before pushing: `docker run --rm -e DOMAIN=example.org -e ACME_EMAIL=a@example.org -v "$PWD/infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile`.
+- **The cluster renders its own copy** (`cluster_caddyfile/`, written by `infra/cluster/apply.sh` into `infra/k8s/ingress/`): every upstream above needs its row in `cluster_caddyfile/_upstreams.py`, or the render refuses.

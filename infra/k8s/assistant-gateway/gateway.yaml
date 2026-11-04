@@ -1,0 +1,146 @@
+# The upstream OpenClaw gateway, unmodified and pinned by digest as in
+# apps/assistant/compose.yml: it holds the Signal conversation and calls the
+# door for every tool. Alone in its namespace, because whatever later execs
+# into it (the chat relay, the workspace apply) gets an exec grant that cannot
+# be pinned to one pod, and must never reach signal-cli or the door.
+#
+# One claim, two subPaths: gateway_state at the state dir and
+# assistant_workspace inside it, as the two compose volumes were mounted.
+# The init container is compose's assistant-init: the image runs as uid 1000.
+#
+# The DNS search path adds namespace assistant, so the names the gateway's
+# config already uses (assistant:8000, signal-cli:8080) resolve unchanged.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-data
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      dnsConfig:
+        searches:
+          - assistant.svc.cluster.local
+      initContainers:
+        - name: own-volumes
+          image: alpine:3
+          command: ["sh", "-c", "chown -R 1000:1000 /gateway-state /workspace"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          volumeMounts:
+            - name: data
+              mountPath: /gateway-state
+              subPath: gateway_state
+            - name: data
+              mountPath: /workspace
+              subPath: assistant_workspace
+      containers:
+        - name: gateway
+          image: ghcr.io/openclaw/openclaw@sha256:6afe42854c87471188b9c4f8dce6bbc14005a48d8e1592846548b32508754f84
+          # The image's own command with the startup guard lifted, as in compose.
+          command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+          env:
+            - name: HOME
+              value: /home/node
+            - name: OPENCLAW_HOME
+              value: /home/node
+            - name: OPENCLAW_STATE_DIR
+              value: /home/node/.openclaw
+            - name: OPENCLAW_CONFIG_PATH
+              value: /home/node/.openclaw/openclaw.json
+            - name: OPENCLAW_CONFIG_DIR
+              value: /home/node/.openclaw
+            - name: OPENCLAW_WORKSPACE_DIR
+              value: /home/node/.openclaw/workspace
+            - name: OPENCLAW_GATEWAY_PORT
+              value: "18789"
+            - name: OPENCLAW_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_GATEWAY_TOKEN}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ANTHROPIC_API_KEY}
+            - name: OPENCLAW_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_WEBHOOK_SECRET}
+            - name: TZ
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_TIMEZONE}
+            - name: OPENCLAW_TOOLS_AUTHORIZATION
+              value: Bearer $(OPENCLAW_WEBHOOK_SECRET)
+            - name: OPENCLAW_TRANSCRIBE_AUTHORIZATION
+              value: Bearer $(OPENCLAW_WEBHOOK_SECRET)
+          ports:
+            - name: http
+              containerPort: 18789
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "curl -fsS http://127.0.0.1:18789/healthz"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "curl -fsS http://127.0.0.1:18789/healthz"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["NET_RAW", "NET_ADMIN"]
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/.openclaw
+              subPath: gateway_state
+            - name: data
+              mountPath: /home/node/.openclaw/workspace
+              subPath: assistant_workspace
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gateway-data
+---
+# For a port-forward from a laptop; nothing in the stack dials the gateway.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 18789
+      targetPort: http

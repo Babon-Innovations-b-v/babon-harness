@@ -1,0 +1,235 @@
+# The door: alert triage, the notify pen, the patrol and the MCP tool door
+# the gateway calls (apps/assistant/compose.yml service assistant). Its SQLite
+# state is assistant-state (compose volume assistant_state). One replica and
+# Recreate: two doors on one SQLite file would race.
+#
+# The image is the stack's own (apps/assistant/Dockerfile). The tag here is a
+# placeholder: the deploy loop sets the image by digest with `kubectl set
+# image`, and until it does the pod cannot pull.
+#
+# No kubeconfig is mounted, so the door's kubectl tools are off here, as on a
+# compose box with no /kube/config.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: assistant-state
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assistant
+  labels:
+    app: assistant
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: assistant
+  template:
+    metadata:
+      labels:
+        app: assistant
+    spec:
+      imagePullSecrets:
+        - name: registry-pull
+      containers:
+        - name: assistant
+          image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+          env:
+            - name: OPENCLAW_PORT
+              value: "8000"
+            # The door is the sender: it talks to signal-cli directly and
+            # never POSTs a page to itself.
+            - name: OPENCLAW_GATEWAY_SELF
+              value: "1"
+            - name: SIGNAL_CLI_URL
+              value: http://signal-cli:8080
+            # The monitoring area's Prometheus Service.
+            - name: PROM_URL
+              value: http://prometheus.monitoring.svc.cluster.local:9090
+            - name: OPENCLAW_STATE_PATH
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_STATE_PATH}
+            - name: OPENCLAW_DAILY_CAP_EUR
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_DAILY_CAP_EUR}
+            - name: OPENCLAW_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_WEBHOOK_SECRET}
+            - name: OPENCLAW_WEBHOOK_SECRET_PREV
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_WEBHOOK_SECRET_PREV, optional: true}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ANTHROPIC_API_KEY}
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: DOMAIN, optional: true}
+            - name: ASSISTANT_NAME
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_NAME}
+            - name: ASSISTANT_TIMEZONE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_TIMEZONE}
+            - name: ASSISTANT_BRIEF_TIME
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_BRIEF_TIME}
+            - name: ASSISTANT_ADVISOR_TIME
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_ADVISOR_TIME}
+            - name: ASSISTANT_AGENDA_WRITE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_AGENDA_WRITE}
+            - name: ASSISTANT_GITHUB_WRITE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_GITHUB_WRITE}
+            - name: ASSISTANT_MEETING_REMINDERS
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_MEETING_REMINDERS}
+            - name: ASSISTANT_VOICE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_VOICE}
+            - name: ASSISTANT_TEAM_MESSAGE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_TEAM_MESSAGE}
+            - name: ASSISTANT_VIDEO_CALL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_VIDEO_CALL}
+            - name: OPENCLAW_TALK_BOT_ID
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_TALK_BOT_ID, optional: true}
+            - name: ASSISTANT_DOOR_WRITE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_DOOR_WRITE}
+            - name: ASSISTANT_QUIET_HOURS
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_QUIET_HOURS}
+            - name: ASSISTANT_NAMESPACE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_NAMESPACE}
+            - name: SIGNAL_BOT_NUMBER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_BOT_NUMBER, optional: true}
+            - name: SIGNAL_RECIPIENT
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_RECIPIENT, optional: true}
+            - name: SIGNAL_ALLOWLIST
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_ALLOWLIST, optional: true}
+            - name: SIGNAL_PEOPLE
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_PEOPLE, optional: true}
+            - name: AGENDA_BASE_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_BASE_URL, optional: true}
+            - name: AGENDA_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_USER, optional: true}
+            - name: AGENDA_APP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_APP_PASSWORD, optional: true}
+            - name: AGENDA_CALENDARS
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: AGENDA_CALENDARS, optional: true}
+            - name: TEAM_CALENDAR
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: TEAM_CALENDAR, optional: true}
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GITHUB_ASSISTANT_TOKEN, optional: true}
+            - name: GITHUB_ASSISTANT_TOKEN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: GITHUB_ASSISTANT_TOKEN, optional: true}
+            - name: LOKI_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: LOKI_URL, optional: true}
+            - name: OPENCLAW_DB_RO_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_DB_RO_URL, optional: true}
+            - name: NC_URL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NC_URL, optional: true}
+            - name: NC_ALERTS_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NC_ALERTS_USER, optional: true}
+            - name: NC_ALERTS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NC_ALERTS_PASSWORD, optional: true}
+            - name: NC_ALERTS_ROOM
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NC_ALERTS_ROOM, optional: true}
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SMTP_HOST, optional: true}
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SMTP_USER, optional: true}
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SMTP_PASSWORD, optional: true}
+            - name: ALERT_EMAIL_FROM
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ALERT_EMAIL_FROM, optional: true}
+            - name: ALERT_EMAIL_TO
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ALERT_EMAIL_TO, optional: true}
+            - name: MONITOR_HTTP_TARGETS
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: MONITOR_HTTP_TARGETS, optional: true}
+            - name: MONITOR_DEPLOYMENTS
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: MONITOR_DEPLOYMENTS, optional: true}
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: state
+              mountPath: /state
+              subPath: assistant_state
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: assistant-state
+---
+# Reached by the gateway (http://assistant:8000/mcp, through the gateway pod's
+# DNS search path) and by Alertmanager as assistant.assistant.svc.cluster.local.
+apiVersion: v1
+kind: Service
+metadata:
+  name: assistant
+spec:
+  selector:
+    app: assistant
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -1,0 +1,50 @@
+# Nightly CSI snapshot of every claim labelled harness/backup=true, kept to
+# the newest BACKUP_KEEP per claim (./volume-backup.sh). 01:30 in
+# ASSISTANT_TIMEZONE. A new claim that holds state carries the label; a cache
+# leaves it off.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: volume-backup
+spec:
+  schedule: "30 1 * * *"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 21600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app: volume-backup
+        spec:
+          serviceAccountName: volume-backup
+          restartPolicy: Never
+          containers:
+            - name: volume-backup
+              # kubectl, bash and coreutils in one public image.
+              image: alpine/k8s:1.35.8
+              command: ["bash", "/script/volume-backup.sh"]
+              env:
+                - name: BACKUP_KEEP
+                  value: "${BACKUP_KEEP}"
+                - name: BACKUP_SNAPSHOT_CLASS
+                  value: ${BACKUP_SNAPSHOT_CLASS}
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /script
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: volume-backup

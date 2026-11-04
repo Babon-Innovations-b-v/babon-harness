@@ -1,0 +1,90 @@
+# oauth2-proxy: the single sign-on every private subdomain forward-auths to
+# (the Caddyfile's (oauth2_auth) snippet). Image and flags as in
+# infra/nextcloud/compose.yml; keep --cookie-expire=8h --cookie-refresh=0s
+# (infra/nextcloud/session-lifetime-assert.sh checks them). Its OIDC calls to
+# cloud.$(DOMAIN) resolve to the load balancer, as they would from outside.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  labels:
+    app: oauth2-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+          args:
+            - --http-address=0.0.0.0:4180
+            - --provider=oidc
+            - --provider-display-name=Nextcloud
+            - --oidc-issuer-url=https://cloud.$(DOMAIN)
+            - --scope=openid profile email
+            - --email-domain=*
+            - --upstream=static://202
+            - --reverse-proxy=true
+            - --set-xauthrequest=true
+            - --skip-provider-button=true
+            - --cookie-domain=.$(DOMAIN)
+            - --whitelist-domain=.$(DOMAIN)
+            - --cookie-secure=true
+            - --cookie-expire=8h
+            - --cookie-refresh=0s
+          env:
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: DOMAIN}
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OIDC_CLIENT_ID, optional: true}
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OIDC_CLIENT_SECRET, optional: true}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OAUTH2_PROXY_COOKIE_SECRET}
+          ports:
+            - name: http
+              containerPort: 4180
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+spec:
+  selector:
+    app: oauth2-proxy
+  ports:
+    - name: http
+      port: 4180
+      targetPort: http

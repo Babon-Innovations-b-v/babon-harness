@@ -40,3 +40,6 @@ oidc-client.env
 
 # Local virtual environment
 .venv/
+
+# Rendered at apply time by python3 -m infra.caddy.cluster_caddyfile
+infra/k8s/ingress/Caddyfile

@@ -1,0 +1,125 @@
+# Nextcloud: files, calendars, contacts and the login every private
+# subdomain uses. Same image as infra/nextcloud/compose.yml. Its cron runs as
+# a second container in the same pod, not a second Deployment, because both
+# write nextcloud-data and the claim is ReadWriteOnce: one pod, one writer.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  labels:
+    app: nextcloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      containers:
+        - name: nextcloud
+          image: nextcloud:34.0.5-apache
+          env:
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: DOMAIN}
+            - name: POSTGRES_HOST
+              value: postgres.postgres.svc.cluster.local
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_NAME}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_DB_PASSWORD}
+            - name: NEXTCLOUD_ADMIN_USER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_ADMIN_USER}
+            - name: NEXTCLOUD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: NEXTCLOUD_ADMIN_PASSWORD}
+            - name: NEXTCLOUD_TRUSTED_DOMAINS
+              value: cloud.$(DOMAIN)
+            - name: OVERWRITEHOST
+              value: cloud.$(DOMAIN)
+            - name: OVERWRITEPROTOCOL
+              value: https
+            - name: OVERWRITECLIURL
+              value: https://cloud.$(DOMAIN)
+            # Caddy reaches it from a pod address; these are the private
+            # ranges a cluster's pod network is drawn from.
+            - name: TRUSTED_PROXIES
+              value: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10
+            - name: APACHE_DISABLE_REWRITE_IP
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 80
+          # A first boot installs itself and can take minutes.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/www/html
+              subPath: nextcloud_data
+        # Nextcloud's cron.php every 5 minutes (compose service nextcloud-cron).
+        - name: cron
+          image: nextcloud:34.0.5-apache
+          command: ["/cron.sh"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/www/html
+              subPath: nextcloud_data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nextcloud-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+spec:
+  selector:
+    app: nextcloud
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

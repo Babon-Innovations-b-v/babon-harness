@@ -1,0 +1,124 @@
+# Caddy: the HTTPS front door, the cluster's only public address. Same image
+# as infra/caddy/compose.yml, the Caddyfile rendered from the compose one with
+# every upstream a cluster Service (infra/caddy/cluster_caddyfile).
+#
+# Certificates and the ACME account live on caddy-data (/data, compose volume
+# caddy_data); /config is Caddy's autosave (caddy_config). ReadWriteOnce, so
+# one replica and Recreate. `--watch` reloads a changed ConfigMap, and a config
+# that fails to adapt is logged while the running one is kept.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: caddy-data
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+  labels:
+    app: caddy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: caddy
+  template:
+    metadata:
+      labels:
+        app: caddy
+    spec:
+      containers:
+        - name: caddy
+          image: caddy:2.11.7
+          command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile", "--watch"]
+          env:
+            - name: DOMAIN
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: DOMAIN}
+            - name: ACME_EMAIL
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ACME_EMAIL}
+          ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+            - name: http3
+              containerPort: 443
+              protocol: UDP
+          readinessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]
+          volumeMounts:
+            - name: caddyfile
+              mountPath: /etc/caddy
+              readOnly: true
+            - name: caddy-data
+              mountPath: /data
+              subPath: caddy_data
+            - name: caddy-data
+              mountPath: /config
+              subPath: caddy_config
+      volumes:
+        - name: caddyfile
+          configMap:
+            name: caddyfile
+        - name: caddy-data
+          persistentVolumeClaim:
+            claimName: caddy-data
+---
+# One cloud load balancer, TCP passthrough on 80 and 443, so Caddy terminates
+# TLS and answers the ACME HTTP-01 challenge itself. The annotations are the
+# provider's, every value from config/harness.env (INGRESS_LB_*): the zone,
+# the size, the reserved IP every DNS name points at, and PROXY protocol v2 so
+# Caddy sees the client's address (the Caddyfile's servers block reads it).
+# apply.sh skips this area while INGRESS_LB_IP_ID is empty, so no load
+# balancer is ever made on a throwaway address.
+apiVersion: v1
+kind: Service
+metadata:
+  name: caddy
+  annotations:
+    service.beta.kubernetes.io/scw-loadbalancer-zone: "${INGRESS_LB_ZONE}"
+    service.beta.kubernetes.io/scw-loadbalancer-type: "${INGRESS_LB_TYPE}"
+    service.beta.kubernetes.io/scw-loadbalancer-ip-ids: "${INGRESS_LB_IP_ID}"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "*"
+spec:
+  type: LoadBalancer
+  selector:
+    app: caddy
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP

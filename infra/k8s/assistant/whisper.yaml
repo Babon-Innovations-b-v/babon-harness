@@ -1,0 +1,88 @@
+# Speech to text for voice notes (compose profile voice): faster-whisper
+# behind an OpenAI-shaped API, CPU only, pinned by digest. Declared at zero
+# replicas, the cluster's form of an opt-in profile: scale it to 1 with
+# ASSISTANT_VOICE=1. The weights are a cache (whisper-models), downloaded once,
+# so the claim carries no backup label.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whisper-models
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whisper
+  labels:
+    app: whisper
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: whisper
+  template:
+    metadata:
+      labels:
+        app: whisper
+    spec:
+      initContainers:
+        - name: own-volume
+          image: alpine:3
+          command: ["sh", "-c", "chown -R 1000:1000 /models"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              subPath: whisper_models
+      containers:
+        - name: whisper
+          image: ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
+          env:
+            - name: WHISPER__MODEL
+              value: Systran/faster-whisper-large-v3
+            - name: WHISPER__INFERENCE_DEVICE
+              value: cpu
+            - name: WHISPER__COMPUTE_TYPE
+              value: int8
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+          volumeMounts:
+            - name: models
+              mountPath: /home/ubuntu/.cache/huggingface/hub
+              subPath: whisper_models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: whisper-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whisper
+spec:
+  selector:
+    app: whisper
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
