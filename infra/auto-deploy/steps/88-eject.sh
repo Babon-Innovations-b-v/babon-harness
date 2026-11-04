@@ -2,8 +2,9 @@
 # Step 88: the cycle's eject. Takes a commit the gate rejected back off main and
 # hands it to its author on a branch and a draft pull request.
 #
-# OFF BY DEFAULT (EJECT_ENABLED=0): then this step decides nothing, the red
-# holds the bookmark, and step 90 alerts that the queue is frozen. The mechanism
+# OFF WHEN UNSET OR 0 (the shipped config sets EJECT_ENABLED=1): then this step
+# decides nothing, the red holds the bookmark, and step 90 alerts that the
+# queue is frozen. The mechanism
 # and its bounds are in steps/eject_body.sh; this file holds the cycle's own two
 # hooks and the record of what happened.
 #

@@ -16,7 +16,7 @@
 #
 # THE FROZEN QUEUE. A bookmark that has not moved for QUEUE_BLOCKED_LIMIT cycles
 # with work behind it alerts once, keyed on the bookmark: when the eject is off
-# (the default) that alert is the whole hand-back, so it fires on the first
+# that alert is the whole hand-back, so it fires on the first
 # cycle a red holds the queue.
 #
 # FAILURE POLICY: exits 1 when the cycle failed, so the cycle's Job is marked

@@ -25,12 +25,12 @@
 #                            each out by digest, undo a rollout that fails
 #   68-assistant-workspace.sh  render the assistant's workspace
 #   80-manifests.sh          apply infra/k8s when the commit changed it
-#   88-eject.sh              take a rejected commit back off main (off by default)
+#   88-eject.sh              take a rejected commit back off main (armed in the shipped config)
 #   90-outcome.sh            move the bookmark, post the statuses, clean up
 #
 # Not steps, sourced by the steps that need them: steps/doors.sh (config,
 # alerts, GitHub), steps/cluster.sh (the cluster calls), steps/eject_body.sh,
-# steps/build_verdict.sh.
+# steps/build_verdict.sh, steps/red_triage.sh (whose fault a red is).
 #
 # FAILURE POLICY: declared per step. Summary: the gate fails CLOSED (red and
 # amber both ship nothing); a failed build or boot holds the bookmark and the

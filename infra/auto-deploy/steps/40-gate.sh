@@ -17,6 +17,13 @@
 #          ejects; the bookmark holds and the next tick retries. Three ambers in
 #          a row escalate the alert to red.
 #
+# WHOSE RED. A red that names test files is sorted before it is believed
+# (red_triage.sh): a test that flips, or fails on the last good tree too, is
+# quarantined and the suite runs again at once without it, so a wrong test
+# never holds the queue. A red that names no file runs the whole selection once
+# more; a second red is the commit's. Quarantined tests (main's register rows)
+# are left out of every run.
+#
 # A red sets gate_red=1 with one word in gate_red_reason and never exits: it
 # blocks SHIPS only. Step 30's Caddy reload and step 90's bookkeeping still run.
 #
@@ -45,6 +52,14 @@ gate_red=0
 gate_red_reason=""
 AMBER_FILE="$STATE_DIR/gate-amber-streak"
 AMBER_LIMIT="${GATE_AMBER_LIMIT:-3}"
+
+# The wrong-commit / wrong-test sorter and the quarantine (not a step).
+red_triage_loaded=1
+if ! . "$(dirname "${BASH_SOURCE[0]}")/red_triage.sh" 2>/dev/null; then
+    red_triage_loaded=0
+    log "[gate] steps/red_triage.sh did not load, so every red this cycle is the commit's"
+    _quarantine_list() { return 0; }
+fi
 
 gate_paths=()
 if [ -f "$gate_paths_file" ]; then
@@ -170,6 +185,181 @@ if [ "$gate_scope" = "selected" ] && [ -n "${BUILD_TREE:-}" ] && [ -d "${BUILD_T
     fi
 fi
 
+# ── Quarantined tests leave the run ─────────────────────────────────────────
+# Every quarantine main's register honours is left out: a file named in the
+# selection is dropped, one under a selected directory is ignored. A selection
+# the quarantine empties is scope none: nothing is left that could say no.
+gate_quarantine_args=()
+gate_quarantined_now=()
+_gate_leave_out() {
+    local test="$1" kept=() gate_path
+    gate_quarantine_args+=(--ignore "$test")
+    for gate_path in ${gate_paths[@]+"${gate_paths[@]}"}; do
+        [ "$gate_path" = "$test" ] || kept+=("$gate_path")
+    done
+    gate_paths=(${kept[@]+"${kept[@]}"})
+}
+gate_paths_before_quarantine=(${gate_paths[@]+"${gate_paths[@]}"})
+if [ "$gate_scope" != "none" ] && [ -n "${BUILD_TREE:-}" ] && [ -d "${BUILD_TREE:-}" ]; then
+    while IFS= read -r quarantined_test; do
+        [ -n "$quarantined_test" ] && [ -e "$BUILD_TREE/$quarantined_test" ] || continue
+        _gate_leave_out "$quarantined_test"
+        log "[gate] $quarantined_test is quarantined, so this run leaves it out"
+    done < <(_quarantine_list)
+    if [ "$gate_scope" = "selected" ] && [ "${#gate_paths[@]}" -eq 0 ] \
+            && [ "${#gate_quarantine_args[@]}" -gt 0 ]; then
+        log "[gate] every selected test is quarantined at ${NEW_SHA:0:8}, so nothing is left to run: scope none"
+        gate_scope="none"
+    fi
+    gate_selected_count="${#gate_paths[@]}"
+fi
+
+# ── After a red: run it again, or is this the answer? ──────────────────────
+# 0 runs again at once, 1 is the answer. Nothing waits for a tick.
+#
+#   a red naming files   `_gate_triage` sorts it; a test's fault leaves the gate
+#                        and the suite runs again without it, for as many rounds
+#                        as each one quarantines something new; the box's fault
+#                        is amber; the commit's is the answer
+#   a red naming none    the whole selection once more; a second red is the
+#                        commit's
+#   out of rounds        still a test's red after GATE_TRIAGE_ROUNDS: amber,
+#                        never the commit's, because nothing showed it was
+#   collected nothing    red, unless the quarantine is what emptied the run
+#   could not finish     amber, as before: the next tick retries
+GATE_TRIAGE_ROUNDS="${GATE_TRIAGE_ROUNDS:-6}"
+gate_triaged=0
+gate_unnamed_reds=0
+_gate_next_attempt() {
+    local failing left_out_before
+    case "$gate_rc" in
+        1|2|3|4) : ;;
+        5)
+            if _gate_quarantine_emptied_run; then
+                log "[gate] nothing left to collect once the quarantined tests are out; nothing that stays in the gate failed"
+                gate_rc=0
+            fi
+            return 1 ;;
+        *) return 1 ;;
+    esac
+    if [ "$gate_rc" -eq 1 ] && [ "${#gate_worker_args[@]}" -gt 0 ] && _gate_run_lost_a_worker; then
+        return 1
+    fi
+    [ "$red_triage_loaded" -eq 1 ] && [ "${GATE_TRIAGE_ENABLED:-1}" = "1" ] || return 1
+    failing="$(mktemp -t gate-failing-XXXXXX)" || return 1
+    tail -c "+$(( ${gate_log_offset:-0} + 1 ))" "$LOG" 2>/dev/null > "$failing.log"
+    _red_failing_files "$failing.log" "$NEW_SHA" > "$failing"
+    rm -f "$failing.log"
+    if [ ! -s "$failing" ]; then
+        rm -f "$failing"
+        gate_unnamed_reds=$(( gate_unnamed_reds + 1 ))
+        if [ "$gate_unnamed_reds" -eq 1 ]; then
+            log "[gate] red (rc=$gate_rc) naming no test file: running the whole selection once more, and a second red is this commit's"
+            return 0
+        fi
+        return 1
+    fi
+    if [ "$gate_triaged" -ge "$GATE_TRIAGE_ROUNDS" ]; then
+        rm -f "$failing"
+        log "[gate] still red after $gate_triaged triage rounds that each left a test's fault out; nothing showed this red is the commit's, so it is amber"
+        gate_rc=125
+        return 1
+    fi
+    gate_triaged=$(( gate_triaged + 1 ))
+    left_out_before="${#gate_quarantine_args[@]}"
+    _gate_triage "$failing"
+    rm -f "$failing"
+    case "$red_triage_kind" in
+        test)
+            if [ "${#gate_quarantine_args[@]}" -eq "$left_out_before" ]; then
+                log "[gate] the triage left nothing new out, so this red is the commit's"
+                return 1
+            fi
+            if [ "$gate_scope" = "selected" ] && [ "${#gate_paths[@]}" -eq 0 ]; then
+                log "[gate] every test this commit selected is quarantined now; nothing that stays in the gate failed"
+                gate_rc=0
+                return 1
+            fi
+            log "[gate] the red was a test's fault, not this commit's: running the suite again without it"
+            return 0 ;;
+        setup)
+            log "[gate] the triage could not run its comparisons; the box, not the commit: amber"
+            gate_rc=125
+            return 1 ;;
+    esac
+    return 1
+}
+
+# Did the quarantine empty this run? pytest collecting nothing is red (a broken
+# selector or tree) unless every test file the selection held before the
+# quarantine is itself quarantined. A full run has no selection to compare, so
+# its rc 5 stays red.
+_gate_quarantine_emptied_run() {
+    local selected left_out path held=0
+    [ "$gate_scope" = "selected" ] || return 1
+    [ "${#gate_quarantine_args[@]}" -gt 0 ] || return 1
+    [ "${#gate_paths_before_quarantine[@]}" -gt 0 ] || return 1
+    left_out="$(printf '%s\n' "${gate_quarantine_args[@]}" | grep -vx -- '--ignore')"
+    for selected in "${gate_paths_before_quarantine[@]}"; do
+        while IFS= read -r path; do
+            case "${path##*/}" in test_*.py | *_test.py) ;; *) continue ;; esac
+            held=1
+            printf '%s\n' "$left_out" | grep -qxF -- "$path" || return 1
+        done < <(git -C "${REPO:-.}" ls-tree -r --name-only "$NEW_SHA" -- "$selected" 2>/dev/null)
+    done
+    [ "$held" -eq 1 ]
+}
+
+# Sort a red that named test files (rules: red_triage.sh), quarantine every
+# file that was a test's fault and leave it out of the next run. The last good
+# tree is the bookmark, OLD_SHA, which is what the deploy last shipped.
+_gate_triage() {
+    local failing="$1" line test reason evidence
+    evidence="$(mktemp -t gate-evidence-XXXXXX)"
+    tail -c "+$(( ${gate_log_offset:-0} + 1 ))" "$LOG" 2>/dev/null > "$evidence"
+    log "[gate] red (rc=$gate_rc): asking whose fault it is; $(wc -l < "$failing") test file(s) run again in a fresh Job and on the last good tree ${OLD_SHA:0:12}"
+    _red_triage "${OLD_SHA:-}" "$failing" "${NEW_SHA:-}"
+    log "[gate] triage: $red_triage_kind"
+    for line in ${red_triage_tests[@]+"${red_triage_tests[@]}"}; do
+        test="${line%%$'\t'*}"
+        reason="${line#*$'\t'}"
+        _red_quarantine "$test" "$reason" "$NEW_SHA" "$evidence"
+        _gate_leave_out "$test"
+        gate_quarantined_now+=("${red_quarantine_issue:+#$red_quarantine_issue }${test##*/}")
+        log "[gate] quarantined $test: it $reason${red_quarantine_issue:+ (#$red_quarantine_issue)}"
+    done
+    rm -f "$evidence"
+    return 0
+}
+
+# The caller's hook for red_triage.sh: the listed test files of this commit
+# (`same`) or of the last good tree (`good`), each in a gate Job of its own in
+# the image that commit's own pin names.
+_red_triage_run() {
+    local which="$1" list="$2" out="$3" sha="$NEW_SHA" pin="$BUILD_TREE/infra/gate-image/pin"
+    local run_log rc path files=()
+    while IFS= read -r path; do
+        [ -n "$path" ] && files+=("$path")
+    done < "$list"
+    [ "${#files[@]}" -gt 0 ] || return 125
+    run_log="$(mktemp -t gate-triage-XXXXXX)" || return 125
+    if [ "$which" = "good" ]; then
+        sha="${OLD_SHA:-}"
+        pin="$run_log.pin"
+        if [ -z "$sha" ] || ! git -C "$REPO" show "$sha:infra/gate-image/pin" > "$pin" 2>/dev/null; then
+            rm -f "$run_log" "$pin"
+            : > "$out"
+            return 125
+        fi
+    fi
+    cluster_gate_triage_run "$sha" "$pin" 900 "$run_log" -- -q -rfE -p no:cacheprovider "${files[@]}"
+    rc=$?
+    _red_failing_files "$run_log" "$sha" > "$out"
+    cat "$run_log" >> "$LOG" 2>/dev/null
+    rm -f "$run_log" "$run_log.pin"
+    return "$rc"
+}
+
 # ── Where it runs: a gate Job in the image the commit pins ──────────────────
 # steps/cluster.sh and infra/deploy_loop: the gated tree's own
 # infra/gate-image/pin names the image, and the Job re-syncs its environment
@@ -208,15 +398,23 @@ elif [ -d "$BUILD_TREE/tools/test_register" ] \
     gh_stage_head "vm/gate" "failure" "a test in the tree has no register row; nothing verified, nothing shipped"
 else
     gh_stage_head "vm/gate" "pending" "verifying ($gate_scope scope, $gate_selected_count paths)"
-    gate_log_offset=$(wc -c < "$LOG" 2>/dev/null || echo 0)
     # The clean environment pytest runs in is set inside the Job
     # (infra/deploy_loop/gate_run.sh). Keep it identical to
     # tools/gate_scope/audit_full_run.sh, or the audit stops being evidence.
-    cluster_gate_run "$gate_timeout" -- -q -rfE \
-        ${gate_worker_args[@]+"${gate_worker_args[@]}"} \
-        --ignore=.claude/worktrees \
-        ${gate_paths[@]+"${gate_paths[@]}"}
-    gate_rc=$?
+    while :; do
+        gate_log_offset=$(wc -c < "$LOG" 2>/dev/null || echo 0)
+        cluster_gate_run "$gate_timeout" -- -q -rfE \
+            ${gate_worker_args[@]+"${gate_worker_args[@]}"} \
+            --ignore=.claude/worktrees \
+            ${gate_quarantine_args[@]+"${gate_quarantine_args[@]}"} \
+            ${gate_paths[@]+"${gate_paths[@]}"}
+        gate_rc=$?
+        _gate_next_attempt || break
+    done
+    gate_quarantine_note=""
+    if [ "${#gate_quarantined_now[@]}" -gt 0 ]; then
+        gate_quarantine_note="quarantined ${gate_quarantined_now[*]}"
+    fi
     _record_gate_run "$gate_rc"
     if [ "$gate_rc" -eq 0 ]; then
         rm -f "$AMBER_FILE"
@@ -239,7 +437,7 @@ else
         fi
         if [ "${gate_red:-0}" -ne 1 ]; then
             record_gate_verdict green
-            gh_stage_head "vm/gate" "success" "gate green ($gate_scope scope)"
+            gh_stage_head "vm/gate" "success" "gate green ($gate_scope scope)${gate_quarantine_note:+; $gate_quarantine_note}"
         fi
     elif [ "$gate_rc" -eq 1 ]; then
         gate_ok=0

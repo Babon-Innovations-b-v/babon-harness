@@ -2,10 +2,10 @@
 # The eject's body: how a commit the gate rejected comes off main and goes back
 # to its author, in one copy.
 #
-# OFF BY DEFAULT. EJECT_ENABLED=0 (the default) decides nothing at all: no
+# OFF WHEN UNSET OR 0. EJECT_ENABLED=0 decides nothing at all: no
 # claim, no revert, no branch, no issue. A red then holds the bookmark and step
 # 90 alerts that the queue is frozen until a person fixes or reverts the commit.
-# EJECT_ENABLED=1 arms it; DEPLOY_STATUS_TOKEN then needs contents write and
+# EJECT_ENABLED=1 (the shipped config) arms it; DEPLOY_STATUS_TOKEN then needs contents write and
 # pull requests. EJECT_DRY_RUN=1 (with EJECT_ENABLED=0) opens the hand-back
 # issue saying what it WOULD have done and pushes nothing, so the call can be
 # judged before it is armed.

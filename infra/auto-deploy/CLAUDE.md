@@ -35,12 +35,19 @@ the cluster is in `steps/cluster.sh`. `commit_gate/` (the verifying lane) and
   `kubectl -n deploy patch configmap deploy-bookmark --type merge -p '{"data":{"sha":"<last live sha>"}}'`
   (or `""` on a fresh install, which gates from the first commit).
 - **A new step goes in the explicit source list** in `auto-deploy.sh`; a test
-  checks the list against `steps/`. `doors.sh`, `cluster.sh`, `eject_body.sh`
-  and `build_verdict.sh` are not steps and must never be sourced as one.
-- **The eject ships OFF** (`EJECT_ENABLED=0`). Off decides nothing: no claim, no
-  revert, no issue; step 90 alerts that a red holds the queue. Armed, it takes
-  back ONE commit and hands it back on `auto-eject/<sha12>` with a draft pull
-  request.
+  checks the list against `steps/`. `doors.sh`, `cluster.sh`, `eject_body.sh`,
+  `build_verdict.sh` and `red_triage.sh` are not steps and must never be
+  sourced as one.
+- **A red is sorted before it is believed** (`steps/red_triage.sh`, the rule in
+  `tools/red_triage`). Its failing files run again in a fresh gate Job and on
+  the bookmark's tree: a flip or an old failure is quarantined on main as
+  `GATE_AUTHOR_EMAIL` (empty: left out of this run only) and the suite runs
+  again without it; the commit's red goes to the eject. A red naming no file
+  runs once more. Never let a triage answer turn a red green by itself.
+- **The shipped config arms the eject** (`EJECT_ENABLED=1`). Unset or `0`
+  decides nothing: no claim, no revert, no issue; step 90 alerts that a red
+  holds the queue. Armed, it takes back ONE commit and hands it back on
+  `auto-eject/<sha12>` with a draft pull request.
 - **Never press merge on a hand-back pull request.** Its first commit is the
   tree the gate refused. Fix it on the branch, then squash it onto main as ONE
   commit with `Closes #<the PR>` in the message.

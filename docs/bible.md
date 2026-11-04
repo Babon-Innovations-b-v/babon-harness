@@ -334,7 +334,9 @@ Every test has one row in `tools/test_register/_rows.py`: the module the test pi
 
 ### The eject
 
-The eject takes a rejected commit back off `main` and hands it back to its author. It ships off (`EJECT_ENABLED=0`). While it is off, a red holds the queue, and the cycle alerts that a person must fix or revert the commit.
+Nothing holds the queue. Before a red is believed, the test files it names run again in a fresh gate Job and on the last good tree. A test that passes the second time, or fails on the last good tree too, is the test's fault: it is quarantined, an issue goes to its owner, and the suite runs again without it. Only a red that is the commit's stays red.
+
+The eject takes that commit back off `main` and hands it back to its author. The shipped config arms it (`EJECT_ENABLED=1`). Set to `0`, a red holds the queue, and the cycle alerts that a person must fix or revert the commit.
 
 Armed, it reverts exactly one commit. It never reverts its own commits, never more than one per commit, and only when the commit's parent is known good. The work goes back on a branch `auto-eject/<sha>` with a draft pull request. Never press merge on it: the branch opens with the tree the gate refused. Fix it there and land it on `main` as one squashed commit.
 
@@ -803,23 +805,22 @@ built on the shared library `lib/dashkit`. `onboard` does the setup below; by ha
 
 #### Deploy
 
-A timer on the server and the GitHub push webhook both run `infra/auto-deploy/auto-deploy.sh`. It
-takes one commit per cycle, tests it in its own tree, rebuilds only the services that changed and
+CronJob `deploy-cycle` in the cluster, every two minutes and on every push, runs
+`infra/auto-deploy/auto-deploy.sh`. It takes one commit per cycle, tests it in its own tree, rebuilds only the services that changed and
 checks they boot. A red or amber verdict ships nothing. The commit's GitHub page shows `vm/gate`,
 `vm/build`, `vm/boot` and `vm/deploy`.
 
-- First-time setup: `sudo HARNESS_ROOT=/opt/harness /opt/harness/repo/infra/auto-deploy/install.sh`,
-  then register the GitHub webhook with the `gh api` command the script prints, pointing at
-  `https://deploy.$DOMAIN/hooks/deploy`. Keep port 9000 closed in the firewall.
+- First-time setup: the steps in `infra/k8s/deploy/CLAUDE.md`, ending with the push webhook at
+  `https://deploy.$DOMAIN/hooks/deploy`.
 - `DEPLOY_STATUS_TOKEN` needs commit statuses and deployments write.
 - A test needs a row in the register: `python3 -m tools.test_register --new <module> --says "<invariant>"`.
-- The eject ships off. `EJECT_ENABLED=1` in `config/harness.env` (and so in the vault) arms it,
-  with contents and pull-request write added to `DEPLOY_STATUS_TOKEN`; `EJECT_DRY_RUN=1` tries it
-  first.
-- `AUTO_DEPLOY_ENABLED=0` in `config/harness.env` and the vault pauses deploys; `systemctl disable`
-  is undone within two minutes.
-- The gate narrows to the tests a change can reach only after the first green nightly audit
-  (`harness-gate-audit.timer`).
+- The eject is armed in the shipped config (`EJECT_ENABLED=1`) and needs contents and
+  pull-request write on `DEPLOY_STATUS_TOKEN`; `EJECT_ENABLED=0` with `EJECT_DRY_RUN=1` tries it
+  first. A quarantine is committed as `GATE_AUTHOR_EMAIL`; with that empty, no test leaves the
+  gate for longer than one run.
+- `AUTO_DEPLOY_ENABLED=0` pauses deploys; suspending CronJob `deploy-cycle` stops it.
+- The gate narrows to the tests a change can reach only after the first green nightly audit, and
+  the audit has no cluster runner yet, so every commit runs the full suite.
 
 #### Observability
 

@@ -156,6 +156,26 @@ refusal is, follows from the rule above.
 WHAT IT WAS PROVED AGAINST. Applying on a red gate.
 
 GUARDS. Nothing unverified reaches the cluster.
+
+A red is sorted before it is believed, so a wrong test never holds the queue.
+
+WHAT IT PINS. Step 40's answer to a red (`_gate_next_attempt`, `_gate_triage`)
+and `steps/red_triage.sh`, with the real sorter `tools/red_triage` behind them.
+
+HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. A two-commit
+git tree written here, whose old test file the red run names, and a stand-in
+for the two extra gate Jobs that answers what each case says the same commit
+and the last good tree did. What must follow is read off the rule in
+`tools/red_triage/_triage.py`'s docstring by hand: a flip or a failure on the
+last good tree is the test's (quarantined, run again), a file that fails twice
+on this commit and passes on the last good tree is the commit's (the answer),
+a re-run that could not run is the box's (amber), and a red naming no file
+runs the selection once more.
+
+WHAT IT WAS PROVED AGAINST. Every red being the commit's, which is what the
+gate did before the sorter was wired in.
+
+GUARDS. A wrong test leaves the gate and the deploy goes on.
 """
 from __future__ import annotations
 
@@ -643,7 +663,7 @@ def _the_source_list_is_the_step_directory_in_order() -> None:
     steps = sorted(path.name for path in (_HERE / "steps").glob("[0-9][0-9]-*.sh"))
     assert sourced == steps, f"source list {sourced} does not match the steps {steps}"
     assert sourced[0] == "00-lock.sh"
-    for helper in ("doors.sh", "cluster.sh", "eject_body.sh", "build_verdict.sh"):
+    for helper in ("doors.sh", "cluster.sh", "eject_body.sh", "build_verdict.sh", "red_triage.sh"):
         assert helper not in sourced, f"{helper} is not a step and must not be sourced as one"
 
 # From the settings load in order and never override the callers own.
@@ -715,6 +735,65 @@ def _the_manifests_apply_only_on_a_green_gate_that_changed_them(
                      apply_rc=apply_rc) == (called, outcome)
 
 
+# From a red is sorted before it is believed.
+
+_TRIAGE = _STEPS / "red_triage.sh"
+_GATE_FUNCTIONS = ("_gate_leave_out", "_gate_next_attempt", "_gate_quarantine_emptied_run", "_gate_triage")
+
+
+def _step_function(name: str) -> str:
+    """One function of step 40, its opening line to its closing brace."""
+    found = re.search(rf"^{name}\(\) {{\n.*?^}}\n", _STEP.read_text(encoding="utf-8"), re.MULTILINE | re.DOTALL)
+    assert found, f"step 40 has no function {name}"
+    return found.group(0)
+
+
+def _triaged(tmp_path: Path, red_log: str, same: tuple[int, str], good: tuple[int, str], unnamed: int) -> list[str]:
+    """Answer one red of a two-commit tree; the extra runs say what `same` and `good` give."""
+    tree = tmp_path / "tree"
+    (tree / "tests").mkdir(parents=True)
+    (tree / "tools").symlink_to(_HERE.parents[1] / "tools")
+    for name in ("test_a.py", "test_b.py"):
+        (tree / "tests" / name).write_text("def test_x():\n    pass\n", encoding="utf-8")
+    git = ["git", "-C", str(tree), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "tests"], check=True)
+    subprocess.run([*git, "commit", "-qm", "old"], check=True)
+    (tree / "README").write_text("new\n", encoding="utf-8")
+    subprocess.run([*git, "add", "README"], check=True)
+    subprocess.run([*git, "commit", "-qm", "new"], check=True)
+    shas = subprocess.run([*git, "rev-list", "HEAD"], capture_output=True, text=True, check=True).stdout.split()
+    log = tmp_path / "log"
+    log.write_text(red_log, encoding="utf-8")
+    calls = tmp_path / "calls"
+    script = "\n".join((
+        "set -u",
+        f'CALLS="{calls}"; REPO="{tree}"; LOG="{log}"; NEW_SHA="{shas[0]}"; OLD_SHA="{shas[1]}"',
+        'log() { echo "log $*" >> "$CALLS"; }',
+        f". {_TRIAGE}",
+        f'_red_triage_run() {{ case "$1" in same) printf "%s" "{same[1]}" > "$3"; return {same[0]} ;; '
+        f'good) printf "%s" "{good[1]}" > "$3"; return {good[0]} ;; esac; }}',
+        '_red_quarantine() { echo "quarantine $1 | $2" >> "$CALLS"; red_quarantine_issue=7; }',
+        "_gate_run_lost_a_worker() { return 1; }",
+        *(_step_function(name) for name in _GATE_FUNCTIONS),
+        "red_triage_loaded=1; gate_worker_args=(); gate_quarantine_args=(); gate_quarantined_now=()",
+        f"gate_triaged=0; gate_unnamed_reds={unnamed}; GATE_TRIAGE_ROUNDS=6; gate_log_offset=0; gate_rc=1",
+        'gate_scope=selected; gate_paths=(tests/test_a.py tests/test_b.py); gate_paths_before_quarantine=("${gate_paths[@]}")',
+        'if _gate_next_attempt; then echo "again rc=$gate_rc" >> "$CALLS"; else echo "answer rc=$gate_rc" >> "$CALLS"; fi',
+        'echo "left-out ${gate_quarantine_args[*]:-} | paths ${gate_paths[*]:-}" >> "$CALLS"',
+    ))
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, timeout=60)
+    return [line for line in calls.read_text(encoding="utf-8").splitlines() if not line.startswith("log ")]
+
+
+_RED_A = "FAILED tests/test_a.py::test_x - assert 0\n"
+
+
+def _a_red_is_sorted_before_it_is_believed(tmp_path: Path, red_log: str, same: tuple, good: tuple,
+                                           unnamed: int, expected: list) -> None:
+    assert _triaged(tmp_path, red_log, same, good, unnamed) == expected
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -753,6 +832,26 @@ CASES = [
 ),
     *_cases(_a_run_that_never_finished_holds_without_ejecting, "gate_rc", [124, 126, 127, 137]),
     *_cases(_a_green_run_never_lands_on_the_amber_arm),
+    *_cases(
+        _a_red_is_sorted_before_it_is_believed,
+        ("red_log", "same", "good", "unnamed", "expected"),
+        [
+            pytest.param(_RED_A, (0, ""), (0, ""), 0, [
+                "quarantine tests/test_a.py | passes when the same commit runs it again", "again rc=1",
+                "left-out --ignore tests/test_a.py | paths tests/test_b.py"], id="a-flip-is-the-tests"),
+            pytest.param(_RED_A, (1, "tests/test_a.py\n"), (1, "tests/test_a.py\n"), 0, [
+                "quarantine tests/test_a.py | fails on the last good tree too", "again rc=1",
+                "left-out --ignore tests/test_a.py | paths tests/test_b.py"], id="old-on-the-good-tree-is-the-tests"),
+            pytest.param(_RED_A, (1, "tests/test_a.py\n"), (0, ""), 0, [
+                "answer rc=1", "left-out  | paths tests/test_a.py tests/test_b.py"], id="twice-here-and-green-there-is-the-commits"),
+            pytest.param(_RED_A, (125, ""), (0, ""), 0, [
+                "answer rc=125", "left-out  | paths tests/test_a.py tests/test_b.py"], id="a-rerun-that-could-not-run-is-the-boxs"),
+            pytest.param("E   boom\n", (0, ""), (0, ""), 0, [
+                "again rc=1", "left-out  | paths tests/test_a.py tests/test_b.py"], id="naming-no-file-runs-once-more"),
+            pytest.param("E   boom\n", (0, ""), (0, ""), 1, [
+                "answer rc=1", "left-out  | paths tests/test_a.py tests/test_b.py"], id="a-second-red-naming-no-file-is-the-commits"),
+        ],
+    ),
     *_cases(_the_source_list_is_the_step_directory_in_order),
     *_cases(_the_vault_wins_over_the_settings_and_the_caller_wins_over_both),
     *_cases(

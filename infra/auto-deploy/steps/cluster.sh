@@ -10,6 +10,8 @@
 #   cluster_bookmark_push          $LAST_SHA_FILE -> ConfigMap deploy-bookmark
 #   cluster_gate_run SECONDS -- ARGS
 #                                  pytest ARGS in a gate Job for $NEW_SHA; its code
+#   cluster_gate_triage_run SHA PIN SECONDS LOG -- ARGS
+#                                  pytest ARGS in a gate Job for SHA, no replay; its code
 #   cluster_build_image NAME CONTEXT DOCKERFILE
 #                                  build and push one image; prints repo:tag@digest
 #   cluster_roll_image REF         set REF on every object running another tag of it,
@@ -74,6 +76,22 @@ cluster_gate_run() {
         --replay-rc-file "$STATE_DIR/gate-replay-rc" \
         --cpu "${GATE_JOB_CPU:-2}" --memory "${GATE_JOB_MEMORY:-6Gi}" \
         --log "$LOG" -- "$@" ) 2>>"$LOG"
+}
+
+# One triage run (steps/red_triage.sh): the listed test files of SHA, in the
+# gate image the pin file PIN names, in a gate Job of its own, so a re-run is a
+# fresh pod. No changed paths, so no break replay, and its log goes to LOG
+# rather than the cycle's. Returns the Job's verdict code.
+cluster_gate_triage_run() {
+    local sha="$1" pin="$2" seconds="$3" run_log="$4"
+    shift 4
+    [ "${1:-}" = "--" ] && shift
+    (cd "$REPO" && python3 -m infra.deploy_loop gate-run \
+        --sha "$sha" --repo-url "${DEPLOY_REPO_URL:?}" --gate-pin "$pin" \
+        --cycle-image "${DEPLOY_CYCLE_IMAGE:?}" --pool-label "${POOL_ROLE_LABEL:-harness/role}" \
+        --seconds "$seconds" --setup-seconds "${GATE_SETUP_SECONDS:-900}" \
+        --cpu "${GATE_JOB_CPU:-2}" --memory "${GATE_JOB_MEMORY:-6Gi}" \
+        --log "$run_log" -- "$@" ) 2>>"$run_log"
 }
 
 # Prints `<registry>/<name>:git-<sha12>@sha256:<digest>` on success. Its log is
