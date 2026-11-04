@@ -104,14 +104,6 @@ DEBT: tuple[tuple[str, str], ...] = (
     ('apps/assistant/workspace', 'apps/assistant/workspace/tests/test_the_gateway_is_told_to_save_a_mail_reply_with_draft_mail_only_when_draft_mail_is_wired_in.py'),
     ('apps/assistant/workspace', 'apps/assistant/workspace/tests/test_the_morning_brief_never_calls_a_quiet_day_fine.py'),
     ('apps/assistant/workspace', 'apps/assistant/workspace/tests/test_user_md_tells_the_gateway_each_teammates_pronouns_and_forbids_guessing.py'),
-    ('apps/documents', 'apps/documents/tests/test_load_design.py'),
-    ('apps/documents', 'apps/documents/tests/test_pdf_invoice.py'),
-    ('apps/documents', 'apps/documents/tests/test_render_html.py'),
-    ('apps/notulen', 'apps/notulen/tests/test_a_notulen_gpu_job_kubernetes_failed_fails_its_and_a_running_or_finished_one_does_not.py'),
-    ('apps/notulen', 'apps/notulen/tests/test_a_notulen_names_each_person_once_and_caps_the_speakers.py'),
-    ('apps/notulen', 'apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py'),
-    ('apps/notulen', 'apps/notulen/tests/test_a_talk_call_that_is_not_recordable_yet_is_retried_without_paging_and_a_real_refusal_pages_once.py'),
-    ('apps/notulen', 'apps/notulen/tests/test_a_talk_webhook_whose_signature_does_not_match_the_bot_secret_is_refused.py'),
 )
 
 #: 108 files holding more than one test function that day, each with its
@@ -192,9 +184,4 @@ FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
     ('apps/assistant/workspace/tests/test_the_fragment_fills_the_owners_settings_and_never_bakes_a_secret.py', 5),
     ('apps/assistant/workspace/tests/test_the_gateway_is_told_to_save_a_mail_reply_with_draft_mail_only_when_draft_mail_is_wired_in.py', 2),
     ('apps/assistant/workspace/tests/test_user_md_tells_the_gateway_each_teammates_pronouns_and_forbids_guessing.py', 2),
-    ('apps/documents/tests/test_load_design.py', 6),
-    ('apps/documents/tests/test_pdf_invoice.py', 2),
-    ('apps/documents/tests/test_render_html.py', 8),
-    ('apps/notulen/tests/test_a_notulen_names_each_person_once_and_caps_the_speakers.py', 5),
-    ('apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py', 4),
 )

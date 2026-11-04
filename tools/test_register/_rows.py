@@ -73,6 +73,19 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test='apps/notulen/tests/test_a_talk_webhook_whose_signature_does_not_match_the_bot_secret_is_refused.py',
+        pins=('apps/notulen/app',),
+        runs_when=(
+            'apps/notulen/**',
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/entrypoints/talk_routes.py",
+            old="secret.encode(), (random_header.encode() + raw_body), hashlib.sha256",
+            new="secret.encode(), raw_body, hashlib.sha256",
+            why="the correctly signed event is refused, so the first status assertion trips",
+        ),
+    ),
+    Row(
         test='docs/diagrams/tests/test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page.py',
         pins=('docs/diagrams',),
         runs_when=(
@@ -1071,29 +1084,16 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='apps/notulen/tests/test_a_notulen_gpu_job_kubernetes_failed_fails_its_and_a_running_or_finished_one_does_not.py',
-        pins=('apps/notulen',),
+        test='apps/documents/tests/test_a_document_renders_from_its_design_to_html_and_to_a_real_pdf.py',
+        pins=('apps/documents',),
         runs_when=(
-            'apps/notulen/**',
+            'apps/documents/**',
         ),
         proved_by=Break(
-            file='apps/notulen/app/core/sessions/dead_gpu_jobs.py',
-            old='if job_id and cond.type == "Failed" and cond.status == "True":',
-            new='if job_id and cond.type in ("Failed", "Complete") and cond.status == "True":',
-            why='A finished Job reads as failed, so the watch would fail a meeting whose minutes are being committed, and `test_only_the_job_kubernetes_failed_is_reported_with_its_reason` gets the finished job id back beside the dead one.',
-        ),
-    ),
-    Row(
-        test='apps/notulen/tests/test_a_notulen_names_each_person_once_and_caps_the_speakers.py',
-        pins=('apps/notulen',),
-        runs_when=(
-            'apps/notulen/**',
-        ),
-        proved_by=Break(
-            file='apps/notulen/entrypoints/worker.py',
-            old='        name for name, _ in sorted(spoken.items(), key=lambda pair: -pair[1])[:keep]',
-            new='        name for name, _ in sorted(spoken.items(), key=lambda pair: pair[1])[:keep]',
-            why='The fold keeps the voices that speak LEAST, so the two one-second strays survive and the two real speakers are handed to them, and `test_two_people_leave_two_voices_in_the_transcript` gets `stray-1`/`stray-2` where it asserts `A` and `B`.',
+            file='apps/documents/render_html.py',
+            old='f"    --{name}: {value};"',
+            new='f"    {name}: {value};"',
+            why='the tokens reach the HTML without their dashes, so they are not CSS variables',
         ),
     ),
     Row(
@@ -1314,19 +1314,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py',
-        pins=('apps/notulen',),
-        runs_when=(
-            'apps/notulen/**',
-        ),
-        proved_by=Break(
-            file='apps/notulen/entrypoints/worker.py',
-            old='evidence keep the label itself everywhere ("Speaker 1", "Speaker 2"), including',
-            new='evidence keep the label itself everywhere, including',
-            why='the GPU worker loses the label to fall back on, so the twins disagree and the fallback assertion fails',
-        ),
-    ),
-    Row(
         test='infra/gpu-jobs/gpu_jobs/tests/test_a_gpu_job_can_only_land_on_the_pool_it_is_meant_for.py',
         pins=('infra/gpu-jobs/gpu_jobs/config',),
         runs_when=(
@@ -1418,45 +1405,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='apps/documents/tests/test_load_design.py',
-        pins=('apps/documents',),
-        runs_when=(
-            'apps/documents/**',
-        ),
-        proved_by=Break(
-            file='apps/documents/load_design.py',
-            old='        name: value.strip()',
-            new='        name: value',
-            why='token values keep the whitespace around them, so the trimmed-value case fails',
-        ),
-    ),
-    Row(
-        test='apps/documents/tests/test_render_html.py',
-        pins=('apps/documents',),
-        runs_when=(
-            'apps/documents/**',
-        ),
-        proved_by=Break(
-            file='apps/documents/render_html.py',
-            old='f"    --{name}: {value};"',
-            new='f"    {name}: {value};"',
-            why='the tokens reach the HTML without their dashes, so they are not CSS variables',
-        ),
-    ),
-    Row(
-        test='apps/documents/tests/test_pdf_invoice.py',
-        pins=('apps/documents',),
-        runs_when=(
-            'apps/documents/**',
-        ),
-        proved_by=Break(
-            file='apps/documents/make_pdf.py',
-            old='f"sudo apt-get install -y {_APT_PACKAGES}"',
-            new='"sudo apt-get install -y the missing libraries"',
-            why='the error no longer names the apt packages, so the missing-weasyprint case fails',
-        ),
-    ),
-    Row(
         test='infra/observability/tests/test_an_alert_pages_once_through_the_assistant_or_signal_direct_and_a_silent_source_pages_after_its_deadline.py',
         pins=('infra/observability/alerts',),
         runs_when=(
@@ -1483,23 +1431,23 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test="apps/notulen/tests/test_a_talk_webhook_whose_signature_does_not_match_the_bot_secret_is_refused.py",
-        pins=("apps/notulen",),
+        test='apps/notulen/tests/test_a_notulen_names_each_person_once_caps_the_speakers_and_never_names_one_the_transcript_does_not_place.py',
+        pins=('apps/notulen',),
         runs_when=(
-            "apps/notulen/**",
+            'apps/notulen/**',
         ),
         proved_by=Break(
-            file="apps/notulen/app/entrypoints/talk_routes.py",
-            old="secret.encode(), (random_header.encode() + raw_body), hashlib.sha256",
-            new="secret.encode(), raw_body, hashlib.sha256",
-            why="the correctly signed event is refused, so the first status assertion trips",
+            file='apps/notulen/entrypoints/worker.py',
+            old='        name for name, _ in sorted(spoken.items(), key=lambda pair: -pair[1])[:keep]',
+            new='        name for name, _ in sorted(spoken.items(), key=lambda pair: pair[1])[:keep]',
+            why='The fold keeps the voices that speak LEAST, so the two one-second strays survive and the two real speakers are handed to them, and `test_two_people_leave_two_voices_in_the_transcript` gets `stray-1`/`stray-2` where it asserts `A` and `B`.',
         ),
     ),
     Row(
-        test="apps/notulen/tests/test_a_talk_call_that_is_not_recordable_yet_is_retried_without_paging_and_a_real_refusal_pages_once.py",
-        pins=("apps/notulen",),
+        test='apps/notulen/tests/test_a_notulen_session_retries_a_call_not_recordable_yet_and_fails_only_the_job_kubernetes_failed.py',
+        pins=('apps/notulen/app/core/sessions',),
         runs_when=(
-            "apps/notulen/**",
+            'apps/notulen/**',
         ),
         proved_by=Break(
             file="apps/notulen/app/core/sessions/recording_guard.py",
