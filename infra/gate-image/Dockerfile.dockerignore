@@ -1,0 +1,10 @@
+# Deny by default; every COPY source in the Dockerfile is named below.
+*
+!pyproject.toml
+!uv.lock
+!lib/dashkit
+!apps/documents
+!infra/gpu-jobs
+**/__pycache__
+**/*.egg-info
+**/tests

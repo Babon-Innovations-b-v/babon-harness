@@ -629,9 +629,14 @@ python3 -m tools.test_register --replay <test file>
 
 The first writes the test and its register row together; the second applies the row's break and
 demands red. Every test has one row, and the row carries an exact edit that must turn the test
-red, so a test that cannot fail is caught. A test feeds a known input and checks an answer derived
-independently of the code under test, or a property that must hold. It crosses only the public
-seam, and its collaborators are injected rather than patched.
+red, so a test that cannot fail is caught. A test checks against a synthetic ground truth: the
+input it builds itself and an answer worked out without the code under test, never read from the
+live machine, the clock, the network or production data. It crosses only the public seam, and its
+collaborators are injected rather than patched.
+
+A new test is sealed at birth. The commit hook refuses one whose source reads the live machine,
+the clock or the network, then runs it in the gate image (`infra/gate-image/pin`, by digest)
+with the network off and the clock 10,000 days behind.
 
 | Level | Its tests |
 |---|---|
@@ -644,10 +649,9 @@ case of it, never a second function, and a module group is held to the same rule
 refuses both, past a debt list of the tests already over the rule, which only shrinks.
 
 A red that is the test's fault never holds the deploy. When the failing test also fails on the
-last good tree, or passes on a re-run of the same commit, the gate quarantines it: a
-`quarantined=` line on its row that only the gate writes, an issue for its owner, the issue named
-on the commit's status. The deploy goes on without it, with no time limit, and every other test
-still fails closed. A red that is the commit's is reverted and handed back at once.
+last good tree, or passes on a re-run of the same commit, the gate quarantines it (a line on its
+row only the gate writes, an issue for its owner) and goes on without it, with no time limit.
+A red that is the commit's is reverted and handed back at once.
 
 ### Failure tiers
 

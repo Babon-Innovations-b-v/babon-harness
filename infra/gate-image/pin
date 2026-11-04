@@ -1,0 +1,5 @@
+# The gate image the commit hook's sealed run uses, by digest. Written only by
+# infra/gate-image/build.sh; the last line is the reference, and it names an
+# image only when it carries @sha256:. Until the first build it names none, and
+# the hook says so and runs the staged tests locally.
+# built from:

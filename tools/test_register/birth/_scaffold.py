@@ -3,8 +3,8 @@
 OWNS: the module-test template, and the one act that puts a test file and its
 register row in the tree at the same moment.
 
-DOES NOT OWN: what a row means (`_row.py`), or whether the register and the
-tree agree afterwards (`_check.py`).
+DOES NOT OWN: what a row means (`../_row.py`), or whether the register and the
+tree agree afterwards (`../_check.py`).
 
 WHY A COMMAND AND NOT A FILE TO COPY. A template on disk says what a test
 should look like and says nothing about the row, so the row is still
@@ -28,9 +28,13 @@ WHAT IT PINS. <Which module, and which behaviour of it. Name the seam the test
 crosses: the public interface, never an internal.>
 
 HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. <The hard part.
-A hand-computed number, a published vector, a value read out of a specification,
-a property that must hold whatever the constants are. If you cannot say this,
-the test is self-consistency and does not belong here.>
+The synthetic ground truth: the made-up input built here and its answer worked
+out by hand, a published vector, or a property that must hold whatever the
+constants are. Never read from the live machine, the clock, the network or
+production data. If you cannot say this, the test is self-consistency.>
+
+ONE FUNCTION. <This module's one test. A new check is a parametrized case of
+it, never a second function.>
 
 WHAT IT WAS PROVED AGAINST. <The break in this test's register row, in one
 sentence. `python3 -m tools.test_register --replay {test}` applies it

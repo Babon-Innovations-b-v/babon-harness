@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # This repository's own pre-commit checks. Git runs .claude/hooks/pre-commit,
 # which runs the torn-commit guard and then execs this file, so everything here
-# runs after that guard has passed. Two steps, in order: check that the test
-# register and the tree agree, then replay the break of every register row this
-# commit touches.
+# runs after that guard has passed. The steps, in order: check that the test
+# register and the tree agree, refuse a gate image pin the registry does not
+# have, replay the break of every register row this commit touches, then run
+# the test files this commit adds or changes in the pinned gate image, sealed.
 #
 # FAILURE POLICY: fail-open on everything the hook cannot do. No repo, no
 # python3, no pytest, no register package -> that step is skipped, with one line
@@ -71,8 +72,37 @@ fi
 changed="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
 [ -n "$changed" ] || exit 0
 
+# ── A gate image pin the registry does not have never lands ───────────────
+#
+# The sealed run below, and the gate once it reads the same pin, run in the
+# image infra/gate-image/pin names by digest. A digest nobody can pull leaves
+# every one of those runs unable to start, so a staged pin is asked about
+# before it lands.
+#
+# FAILURE POLICY: exit 1 only when the registry answered that the manifest is
+# not there; no docker, no login or no network is one line and a pass.
+gate_pin_file="infra/gate-image/pin"
+if printf '%s\n' "$changed" | grep -qxF "$gate_pin_file"; then
+    gate_pin_ref=$(git -C "$root" show ":$gate_pin_file" 2>/dev/null | grep -v '^#' \
+        | sed '/^[[:space:]]*$/d' | tail -n 1 | tr -d '[:space:]')
+    if [ -z "$gate_pin_ref" ] || ! command -v docker >/dev/null 2>&1; then
+        echo "gate pin: not checked against the registry (no reference staged, or no docker here)" >&2
+    elif ! gate_pin_answer=$(timeout 60 docker manifest inspect "$gate_pin_ref" 2>&1 >/dev/null); then
+        case "$gate_pin_answer" in
+            *"no such manifest"*|*"manifest unknown"*|*"not found"*)
+                echo "" >&2
+                echo "BLOCKED: $gate_pin_file names $gate_pin_ref, which the registry does not have:" >&2
+                echo "  $gate_pin_answer" >&2
+                echo "Pin the digest infra/gate-image/build.sh printed when it pushed." >&2
+                exit 1 ;;
+            *) echo "gate pin: could not ask the registry about $gate_pin_ref: $gate_pin_answer" >&2 ;;
+        esac
+    fi
+fi
+
 # The runner: the uv workspace when there is one, else the system python3 when
 # it has pytest. Neither is a reason to stop a commit.
+runner=()
 if command -v uv >/dev/null 2>&1 && [ -f "$root/uv.lock" ] \
         && ( cd "$root" && uv run --frozen python -c "import pytest" >/dev/null 2>&1 ); then
     runner=(uv run --frozen python)
@@ -80,28 +110,90 @@ elif python3 -c "import pytest" >/dev/null 2>&1; then
     runner=(python3)
 else
     echo "note: no python with pytest on this box, so no break was replayed" >&2
-    exit 0
 fi
 
-replay_list="$(mktemp)"
-replay_log="$(mktemp)"
-printf '%s\n' "$changed" > "$replay_list"
-# Git's own variables are stripped first: a hook's children inherit GIT_DIR,
-# which OVERRIDES cwd, so a test that builds a scratch repository in tmp_path
-# would otherwise commit into the repository being committed to.
+if [ "${#runner[@]}" -gt 0 ]; then
+    replay_list="$(mktemp)"
+    replay_log="$(mktemp)"
+    printf '%s\n' "$changed" > "$replay_list"
+    # Git's own variables are stripped first: a hook's children inherit GIT_DIR,
+    # which OVERRIDES cwd, so a test that builds a scratch repository in tmp_path
+    # would otherwise commit into the repository being committed to.
+    ( cd "$root" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX \
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+        -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_INDEX_VERSION \
+        "${runner[@]}" -m tools.test_register \
+        --changed-file "$replay_list" --repo "$root" ) >"$replay_log" 2>&1
+    replay_verdict=$?
+    rm -f "$replay_list"
+    if [ "$replay_verdict" -ne 0 ]; then
+        echo "" >&2
+        cat "$replay_log" >&2
+        rm -f "$replay_log"
+        exit 1
+    fi
+    grep -E '^(green|unproven)' "$replay_log" >&2 || true
+    rm -f "$replay_log"
+fi
+
+# ── A test passes on the commit that writes it, where the gate runs it ─────
+#
+# A commit that adds a test its own tree fails is red for ever, so the test
+# files a commit adds or changes run before it lands. They run first in the
+# gate image infra/gate-image/pin names by digest, with the network off, the
+# clock 10,000 days behind and a clean environment (`--sealed-run`), so a test
+# that passes on this box and fails in the gate fails here too. Only when this
+# box cannot run that (no docker, no pin, an image it cannot pull, a lock the
+# image was not built from: exit 99) do they run with this box's runner
+# instead, and the hook says so loudly.
+#
+# It runs the WORKING TREE, not the tree the commit will create; the
+# torn-commit guard before this file is what makes the two the same.
+#
+# FAILURE POLICY: fail open on everything the hook cannot do; exit 1 only when
+# a run that happened said no (pytest's 1 to 3; 4 and 5, a usage error or
+# nothing collected, are a note).
+staged_tests=$(git -C "$root" diff --cached --name-only --diff-filter=AM 2>/dev/null \
+    | grep -E '(^|/)test_[^/]*\.py$' || true)
+[ -n "$staged_tests" ] || exit 0
+staged_log="$(mktemp)"
+# shellcheck disable=SC2086
 ( cd "$root" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX \
     -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
     -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_INDEX_VERSION \
-    "${runner[@]}" -m tools.test_register \
-    --changed-file "$replay_list" --repo "$root" ) >"$replay_log" 2>&1
-replay_verdict=$?
-rm -f "$replay_list"
-if [ "$replay_verdict" -ne 0 ]; then
+    python3 -m tools.test_register --repo "$root" --sealed-run $staged_tests ) >"$staged_log" 2>&1
+staged_verdict=$?
+staged_where="in the gate image, sealed (network off, clock 10,000 days behind)"
+if [ "$staged_verdict" -eq 99 ]; then
     echo "" >&2
-    cat "$replay_log" >&2
-    rm -f "$replay_log"
-    exit 1
+    grep -E '^sealed run:' "$staged_log" >&2
+    echo "WARNING: the staged tests were NOT run in the gate image, only with this box's" >&2
+    echo "runner below. A test that passes here can still fail in the gate." >&2
+    staged_where="locally"
+    if [ "${#runner[@]}" -eq 0 ]; then
+        echo "note: and no python with pytest here either, so the staged tests did not run" >&2
+        rm -f "$staged_log"
+        exit 0
+    fi
+    # shellcheck disable=SC2086
+    ( cd "$root" && env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX \
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+        -u GIT_COMMON_DIR -u GIT_NAMESPACE -u GIT_INDEX_VERSION PYTHONPATH="$root" \
+        timeout 300 "${runner[@]}" -m pytest -q --no-header -p no:randomly -p no:cacheprovider \
+        $staged_tests ) >"$staged_log" 2>&1
+    staged_verdict=$?
 fi
-grep -E '^(green|unproven)' "$replay_log" >&2 || true
-rm -f "$replay_log"
+case "$staged_verdict" in
+    0) ;;
+    1|2|3)
+        echo "" >&2
+        tail -n 40 "$staged_log" >&2
+        echo "" >&2
+        echo "BLOCKED: a test this commit adds or changes fails, run $staged_where." >&2
+        echo "A test and the change that makes it pass go in one commit." >&2
+        rm -f "$staged_log"
+        exit 1 ;;
+    *) echo "note: the staged tests did not give a verdict (exit $staged_verdict, run $staged_where)" >&2 ;;
+esac
+rm -f "$staged_log"
 exit 0

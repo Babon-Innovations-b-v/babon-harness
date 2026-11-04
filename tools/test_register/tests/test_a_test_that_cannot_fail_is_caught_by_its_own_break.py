@@ -17,6 +17,18 @@ one selection and says when that emptied it; `owner_login`, `quarantine_issue`
 and `quarantine_note` say who is told and what, from a project file written in
 the case.
 
+A test is sealed at birth. `live_reads` names every place a test's source
+reads the live machine, the wall clock or the network; each sealed case is a
+small test source and its findings written out by hand, line by line, from the
+rule in `birth/_scan.py`, and a docstring naming `/opt`, a clock read given its
+own argument and a stub `kubectl` the test wrote into `tmp_path` are not
+findings. `--check --base` refuses such a test only when this change gives it
+its first row. `sealed_argv` is the `docker run` the commit hook uses, written
+out flag by flag (network off, the tree at its own path, a worktree's git
+directory read-only beside it, a clean `env -i`, the fake clock). `read_pin`
+and `pin_drift` read the gate image pin and name the inputs that moved since
+the commit it was built from, in a scratch git repository.
+
 ONE TEST, PARAMETRIZED. Every case is the same question, "what does the
 register answer here", asked of a different scratch repository. That is the
 rule this file enforces on every other test, so it keeps it itself.
@@ -64,7 +76,9 @@ case fails; dropping the `count > 1` refusal in `_functions.py` turns the
 dropping the apostrophe `.replace(...)`, in `_scaffold.py` turns a scaffold
 case red. Dropping the author test from `gate_quarantines` turns the "another
 author's line" case red, and dropping `not in out` from `left_out` the
-selection cases.
+selection cases. Dropping the clock pair `("time", "time")`, the `/opt`
+prefix or `"kubectl"` from `birth/_scan.py`, or `--network none` from
+`birth/_run.py`, turns a sealed case red.
 
 GUARDS. The register's reason to exist: a test that cannot fail looks exactly
 like a good one.
@@ -92,6 +106,8 @@ from tools.test_register import (
     scaffold,
     with_quarantine,
 )
+from tools.test_register import Pin, live_reads, pin_drift, read_pin, sealed_argv
+from tools.test_register import __main__ as register_main
 from tools.test_register.__main__ import _quarantines_refused
 from tools.test_register._replay import GREEN, RED, UNPROVEN
 
@@ -174,6 +190,54 @@ def _quarantines(commits: tuple, believed: tuple, refused: tuple) -> tuple:
 def _selects(selection: tuple, quarantined: tuple, expected: LeftOut) -> tuple:
     """A selection case: the gate's selection, the honoured quarantines, and what runs."""
     return ("left-out", selection, quarantined, expected)
+
+
+def _seals(source: str, findings: tuple = ()) -> tuple:
+    """A sealed case: one test source and every live read in it, in line order."""
+    return ("sealed", source, findings)
+
+
+_SEALED_TEST = (
+    '"""Reads /opt/service and time.time() only in this sentence."""\n'
+    "import subprocess\n"
+    "import time\n"
+    "def test_it(tmp_path):\n"
+    "    stub = tmp_path / 'kubectl'\n"
+    "    stub.write_text('#!/bin/sh\\necho pods\\n')\n"
+    "    subprocess.run([str(stub), 'get', 'pods'])\n"
+    "    assert time.gmtime(0).tm_year == 1970\n"
+)
+_CLOCK_TEST = (
+    "import datetime, time\n"
+    "started = time.time()\n"
+    "today = datetime.datetime.now(datetime.timezone.utc)\n"
+    "day = datetime.date.today()\n"
+    "stamp = time.localtime()\n"
+)
+_NETWORK_TEST = "import requests\nfrom urllib import request\nfrom urllib.parse import quote\nimport socket\n"
+_MACHINE_TEST = (
+    "import os, shutil, subprocess\n"
+    "from pathlib import Path\n"
+    "state = Path('/opt/service/state').read_text()\n"
+    "subprocess.run(['kubectl', 'get', 'pods'])\n"
+    "has_docker = shutil.which('docker')\n"
+    "os.system('systemctl status caddy')\n"
+    "home = Path.home()\n"
+    "logs = open('/var/lib/service/log')\n"
+)
+
+#: The pytest half of the sealed run, written out from the rule.
+_GATE_PYTEST = (
+    "env", "-i", "HOME=/home/gate", "PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8",
+    "PYTHONPATH={root}", "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1", "FAKETIME=-10000d",
+    "timeout", "300", "/opt/gate-env/bin/pytest", "-q", "--no-header", "-p", "no:randomly",
+    "-p", "no:cacheprovider", "pkg/tests/test_one.py",
+)
+
+
+def _seal_runs(root: str, git_dir: str, mounts: tuple) -> tuple:
+    """A sealed-run case: where the tree and its git directory are, and the mounts the run must carry."""
+    return ("sealed-run", root, git_dir, mounts)
 
 
 def _scaffolds(module: str, sentence: str, files: tuple, before=None) -> tuple:
@@ -264,6 +328,29 @@ _CASES = {
     "left out: an empty selection is not emptied by the quarantine": _selects(
         (), (_ONE,), LeftOut(paths=(), ignores=(), emptied=False)),
     "owner: a row naming a person, a login, and nobody": ("owner",),
+    "sealed: a test that builds its own input reads nothing live": _seals(_SEALED_TEST),
+    "sealed: every wall clock read is named": _seals(_CLOCK_TEST, (
+        "line 2: time.time() reads the wall clock",
+        "line 3: datetime.now() reads the wall clock",
+        "line 4: date.today() reads the wall clock",
+        "line 5: time.localtime() reads the wall clock")),
+    "sealed: every network module is named": _seals(_NETWORK_TEST, (
+        "line 1: imports requests, which reads the network",
+        "line 2: imports urllib.request, which reads the network",
+        "line 4: imports socket, which reads the network")),
+    "sealed: every read of this machine is named": _seals(_MACHINE_TEST, (
+        "line 3: Path() reads /opt/service/state on this machine",
+        "line 4: runs kubectl, which reads this machine",
+        "line 5: looks for docker on this machine",
+        "line 6: runs systemctl, which reads this machine",
+        "line 7: Path.home() reads this machine",
+        "line 8: open() reads /var/lib/service/log on this machine")),
+    "sealed: a new test that reads the clock is refused, an old one is not": ("born",),
+    "sealed-run: a checkout whose git directory is inside the tree": _seal_runs(
+        "/src/repo", "/src/repo/.git", ("-v", "/src/repo:/src/repo")),
+    "sealed-run: a worktree whose git directory is elsewhere is mounted read-only": _seal_runs(
+        "/src/wt", "/src/repo/.git", ("-v", "/src/wt:/src/wt", "-v", "/src/repo/.git:/src/repo/.git:ro")),
+    "pin: the digest, the commit it was built from, and the inputs that moved": ("pin",),
     "scaffold: a tests directory it creates gets its package marker": _scaffolds(
         "gadgets", "a gadget turns", ("gadgets/tests/__init__.py", "gadgets/tests/test_a_gadget_turns.py")),
     "scaffold: a tests directory with no marker keeps its own shape": _scaffolds(
@@ -370,6 +457,48 @@ def _commit(root: Path, author: str, message: str) -> None:
         subprocess.run(["git", "-C", str(root), *argv], check=True, capture_output=True, env=who)
 
 
+def _seal_run_answer(case: tuple) -> None:
+    """`sealed_argv` for one tree, against the argv written out above."""
+    _kind, root, git_dir, mounts = case
+    argv = sealed_argv("registry.example/gate@sha256:ab", root, git_dir, ["pkg/tests/test_one.py"], user="1000:1000")
+    script_at = argv.index("bash") + 2
+    assert argv[:script_at - 2] == [
+        "docker", "run", "--rm", "--network", "none", "--user", "1000:1000", *mounts, "-w", root,
+        "registry.example/gate@sha256:ab"]
+    assert "uv sync --frozen" in argv[script_at] and "UV_OFFLINE=1" in argv[script_at]
+    assert argv[script_at + 1:] == ["sealed", root, *(part.format(root=root) for part in _GATE_PYTEST)]
+
+
+def _born_answer(root: Path, monkeypatch) -> None:
+    """A clock-reading test is refused when this change gives it its first row, and never after."""
+    test = "pkg/tests/test_clock.py"
+    _write(root, {test: _CLOCK_TEST})
+    monkeypatch.setattr(register_main, "ROWS", (_row(test, "pkg"),))
+    before, after = root / "before.py", root / "after.py"
+    before.write_text("ROWS = ()\n", encoding="utf-8")
+    after.write_text(f"ROWS = (Row(test='{test}'),)\n", encoding="utf-8")
+    born = register_main._born_unsealed(root, str(before))
+    assert [sentence.split(";", 1)[0] for sentence in born] == [
+        f"{test} line 2: time.time() reads the wall clock", f"{test} line 3: datetime.now() reads the wall clock",
+        f"{test} line 4: date.today() reads the wall clock", f"{test} line 5: time.localtime() reads the wall clock"]
+    assert register_main._born_unsealed(root, str(after)) == ()
+
+
+def _pin_answer(root: Path) -> None:
+    """The pin's two fields read back, and the drift named against a scratch history."""
+    digest = "registry.example/gate@sha256:" + "a" * 64
+    assert read_pin(f"# a comment\n# built from: abc123\n{digest}\n") == Pin(digest, "abc123")
+    assert read_pin("# built from:\nregistry.example/gate:latest\n") == Pin("", "")
+    _write(root, {"uv.lock": "one\n", "lib/pyproject.toml": "one\n", "docs/notes.txt": "one\n"})
+    _commit(root, _PERSON, "built")
+    built = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True,
+                           check=True).stdout.strip()
+    _write(root, {"lib/pyproject.toml": "two\n", "docs/notes.txt": "two\n", "infra/gate-image/Dockerfile": "FROM x\n"})
+    _commit(root, _PERSON, "moved")
+    assert pin_drift(root, built) == ("infra/gate-image/Dockerfile", "lib/pyproject.toml")
+    assert pin_drift(root, "") == ()
+
+
 def _owner_answer() -> None:
     """Who is told, and what, read off `_PROJECT` by hand."""
     assert [owner_login(name, _PROJECT) for name in ("sam", "lee-login", "")] == [
@@ -407,6 +536,14 @@ def test_the_register_answers_each_scratch_repository_as_written(tmp_path: Path,
         assert left_out(_CASES[case][1], _CASES[case][2]) == _CASES[case][3]
     elif kind == "owner":
         _owner_answer()
+    elif kind == "sealed":
+        assert live_reads(_CASES[case][1]) == _CASES[case][2]
+    elif kind == "sealed-run":
+        _seal_run_answer(_CASES[case])
+    elif kind == "born":
+        _born_answer(tmp_path, monkeypatch)
+    elif kind == "pin":
+        _pin_answer(tmp_path / "repo")
     elif kind == "scaffold":
         _scaffold_answer(tmp_path, _CASES[case])
     else:

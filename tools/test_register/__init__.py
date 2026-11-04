@@ -33,7 +33,7 @@ from ._quarantine import LeftOut, left_out
 from ._replay import replay
 from ._row import Row, gate_quarantines, quarantined_tests, quarantines_added, with_quarantine
 from ._rows import ROWS
-from ._scaffold import scaffold
+from .birth import Pin, live_reads, pin_drift, read_pin, scaffold, sealed_argv
 from ._touched import touched_by
 from ._triggers import triggers_for
 
@@ -41,6 +41,7 @@ __all__ = [
     "ROWS",
     "Break",
     "LeftOut",
+    "Pin",
     "Row",
     "check",
     "gate_quarantines",
@@ -48,14 +49,18 @@ __all__ = [
     "level_of",
     "module_groups",
     "left_out",
+    "live_reads",
     "modules_in",
     "owner_login",
+    "pin_drift",
     "quarantine_issue",
     "quarantine_note",
     "quarantined_tests",
     "quarantines_added",
+    "read_pin",
     "replay",
     "scaffold",
+    "sealed_argv",
     "touched_by",
     "triggers_for",
     "uncovered",

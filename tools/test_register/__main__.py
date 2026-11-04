@@ -3,7 +3,7 @@
 OWNS: turning the things the register can do into exit codes the shell can
 read.
 
-DOES NOT OWN: any of them (`_check.py`, `_replay.py`, `_scaffold.py`,
+DOES NOT OWN: any of them (`_check.py`, `_replay.py`, `birth/`,
 `_coverage.py`, `_row.py`, `_quarantine.py`, `_owner.py`).
 
 The verbs, exactly one per run:
@@ -14,7 +14,9 @@ The verbs, exactly one per run:
                              just the first. With `--base` (the rows before
                              this change) and `--author` (its author's email),
                              a `quarantined=` line added by anyone but the
-                             gate is refused too.
+                             gate is refused too, and so is a python test this
+                             change gives its first row when it reads the live
+                             machine, the clock or the network (`birth/_scan.py`).
   --replay <path>...         apply each named row's break, run its test, demand
                              red. rc 1 when a test passes with its own break
                              applied. `--changed-file` replays every row a
@@ -36,6 +38,13 @@ The verbs, exactly one per run:
                              out: `run <path>`, `ignore <path>`, and `emptied`
                              when the quarantine removed every path.
   --owner <test>             the login a quarantined test's issue goes to.
+  --sealed-run <test>...     run the files in the pinned gate image with the
+                             network off and a fake clock (`birth/_run.py`).
+                             pytest's own exit code, or 99 when this box could
+                             not run it, which is never a verdict.
+  --pin-drift                the gate image inputs that moved past the commit
+                             the pinned image was built from, one per line.
+                             Never a non-zero exit: it is a notice.
   --quarantine-issue <test> --commit <sha> --reason "…" [--failures F]
                              the issue for one quarantined test, as JSON.
 
@@ -60,7 +69,7 @@ from ._quarantine import left_out
 from ._row import ROWS_FILE, gate_author, gate_quarantines, quarantined_tests, quarantines_added, with_quarantine
 from ._replay import GREEN, replay
 from ._rows import ROWS
-from ._scaffold import scaffold
+from .birth import PIN, live_reads, pin_drift, read_pin, scaffold, sealed_run
 from ._touched import touched_by
 
 
@@ -87,6 +96,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if parsed.quarantine_issue:
         return _do_quarantine_issue(repo, parsed)
+    if parsed.sealed_run is not None:
+        return sealed_run(repo, parsed.sealed_run)
+    if parsed.pin_drift:
+        return _do_pin_drift(repo)
     return _do_replay(repo, parsed.replay, parsed.changed_file)
 
 
@@ -113,6 +126,8 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--owner", default="", metavar="TEST")
     parser.add_argument("--quarantine-issue", default="", metavar="TEST")
     parser.add_argument("--failures", default="", metavar="FILE", help="with --quarantine-issue")
+    parser.add_argument("--sealed-run", nargs="+", default=None, metavar="TEST")
+    parser.add_argument("--pin-drift", action="store_true", help="gate image inputs past its build")
     parser.add_argument(
         "--allow-missing-break",
         action="store_true",
@@ -122,7 +137,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
 
 
 def _do_check(repo: Path, base: str = "", author: str = "") -> int:
-    problems = check(repo, ROWS, debt=DEBT, function_debt=FUNCTION_DEBT) + _quarantines_refused(repo, base, author)
+    problems = (
+        check(repo, ROWS, debt=DEBT, function_debt=FUNCTION_DEBT)
+        + _quarantines_refused(repo, base, author)
+        + _born_unsealed(repo, base)
+    )
     if not problems:
         print(f"register: {len(ROWS)} rows, and the tree agrees")
         return 0
@@ -155,6 +174,40 @@ def _quarantines_refused(repo: Path, base: str, author: str) -> tuple[str, ...]:
         f"line, so remove it and fix the test instead"
         for test in quarantines_added(before, current)
     )
+
+
+def _born_unsealed(repo: Path, base: str) -> tuple[str, ...]:
+    """Every live read in a python test this change gives its first row."""
+    if not base:
+        return ()
+    try:
+        before = Path(base).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ()
+    problems = []
+    for row in ROWS:
+        born = f'"{row.test}"' not in before and f"'{row.test}'" not in before
+        if not born or not row.test.endswith(".py") or not (repo / row.test).is_file():
+            continue
+        source = (repo / row.test).read_text(encoding="utf-8", errors="replace")
+        problems.extend(
+            f"{row.test} {finding}; a new test builds its own input and answer (a synthetic "
+            f"ground truth) and never reads the live machine, the clock or the network"
+            for finding in live_reads(source)
+        )
+    return tuple(problems)
+
+
+def _do_pin_drift(repo: Path) -> int:
+    """Print every gate image input that moved past the pinned image's build."""
+    try:
+        pin = read_pin((repo / PIN).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        print(f"register: no gate image pin at {PIN}", file=sys.stderr)
+        return 0
+    for moved in pin_drift(repo, pin.built_from):
+        print(moved)
+    return 0
 
 
 def _do_quarantine(repo: Path, parsed: argparse.Namespace) -> int:

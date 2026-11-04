@@ -1,11 +1,11 @@
 # tools/test_register/
 
 One row per test in this repository. `_rows.py` is the data; everything else
-reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
-`triggers_for`, `uncovered`, `modules_in`, `module_groups`, `level_of`,
-`group_key`, `scaffold`, the quarantine's `with_quarantine`,
-`quarantined_tests`, `quarantines_added`, `gate_quarantines`, `left_out`,
-`LeftOut`, `owner_login`, `quarantine_issue`, `quarantine_note`. Module test, one function over parametrized cases:
+reads it. Public names are `__all__` in `__init__.py`: the rows and the check,
+the levels (`module_groups`, `level_of`), the quarantine (`with_quarantine`,
+`gate_quarantines`, `left_out`, `owner_login`, `quarantine_issue`) and the
+birth (`scaffold`, `live_reads`, `sealed_argv`, `read_pin`, `pin_drift`). Module
+test, one function over parametrized cases:
 `tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py`.
 
 ## Rules
@@ -14,38 +14,34 @@ reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
   --says "<invariant>"` writes the test file and its row together. A test with
   no row is refused by `--check`, at commit time and again in the deploy gate.
 - **Stdlib only, system `python3`.** `tools/gate_scope` imports this on the
-  deploy machine before any venv exists. A third-party import here breaks the
-  gate's scope decision.
-- **Absolute imports across the package boundary.** `gate_scope/select.py`
-  says `from tools.test_register import ...`, not `from ..test_register`:
-  pytest can load `gate_scope` as a top-level package, and a relative import
-  then fails with "beyond top-level package".
+  deploy machine before any venv exists.
+- **Absolute imports across the package boundary** (`from tools.test_register
+  import ...`): pytest can load `gate_scope` as a top-level package, and a
+  relative import then fails with "beyond top-level package".
 - **A break edits a source file, never the test.** `check` refuses it.
-- **`runs_when` is globs, never bare prefixes.** Too wide is worse than none: a
-  row whose trigger matches everything runs on every commit, and `scope none`
-  stops existing.
+- **`runs_when` is globs, never bare prefixes.** A row whose trigger matches
+  everything runs on every commit, and `scope none` stops existing.
 - **Nothing here runs on a timer.** Replay runs on the rows a commit touches,
   at commit time and again in the gate, so a finding always belongs to a commit.
-
-- **Only the gate writes a row's `quarantined=` line.** The gate believes
-  only a line on main that `GATE_AUTHOR_EMAIL` added, and `--check --base
-  --author` refuses one any other author adds. The owner (a `people` name or a
-  login, else the project owner, from `.claude/project.json`) deletes it in the
-  commit that fixes the test. No time limit.
-- **A quarantine outside the selection changes nothing**: `left_out` drops a
-  quarantined file, ignores one under a selected directory, and says `emptied`
-  only when it removed every selected path.
+- **One test per module and per module group, one test function per file.**
+  `--check` refuses a second row for one level and a second `test_*` function in
+  a file. The debt lists in `_debt.py` only shrink, and a note excuses nothing:
+  a new check is a parametrized case of the level's one test.
+- **Only the gate writes a row's `quarantined=` line.** The gate believes only
+  a line on main that `GATE_AUTHOR_EMAIL` added; `--check --base --author`
+  refuses one any other author adds. The owner (`people` name or login, else
+  the project owner, `.claude/project.json`) deletes it with the fix. No time
+  limit. `left_out` drops a quarantined file, ignores one under a selected
+  directory, and says `emptied` only when it removed every selected path.
+- **A new test is sealed.** `--check --base` refuses a python test this change
+  gives its first row when `live_reads` finds it reading the live machine, the
+  wall clock or the network; the hook then runs it in the gate image
+  (`--sealed-run`, exit 99 = this box could not, never a verdict). The gate's
+  own `--check` has no `--base`, so an old test never holds the queue.
 
 ## Gotchas
 
 - **A skipped run is not proof.** pytest exits 0 when every test in a file
   skips, so the replay reads the summary and returns `unproven`, never `green`.
-- **A row's break anchor must appear exactly once** in its file. Two matches is
-  refused rather than guessed at.
-- **One test per module and per module group, one test function per file.**
-  `--check` refuses a second row for one level (`DEBT`) and a file with more
-  than one `test_*` function (`FUNCTION_DEBT`, by count). Both lists in
-  `_debt.py` only shrink: a debt file may not grow, one that shrank lowers its
-  entry, a gone test loses it. A note excuses nothing. A new check goes into the
-  level's one test as a parametrized case, never a pasted second function.
-  Changing `_modules.py` or `_groups.py` moves levels: rerun `--check`.
+- **A row's break anchor must appear exactly once** in its file.
+- **Changing `_modules.py` or `_groups.py` moves levels**: rerun `--check`.
