@@ -3,8 +3,9 @@
 WHAT IT PINS. `infra/deploy_loop` through its public names (`__all__`):
 `push_should_trigger` and `cronjobs_to_start` (the receiver),
 `gate_job_manifest` and `pinned_gate_image` (the Job), `gate_job_outcome`
-(the Job read as an exit code), `bookmark_sha`, `image_targets` and
-`stack_images`.
+(the Job read as an exit code), `read_shards` and `combined_rc` (one run as one
+Job per module group), `bookmark_sha`, `image_targets` and `stack_images`, and
+the `gate-run` verb against a stand-in `kubectl` that records what it is given.
 
 HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. Every input is
 made up here: a secret and a body whose signature the test computes itself with
@@ -28,18 +29,22 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from infra.deploy_loop import (
     bookmark_sha,
+    combined_rc,
     cronjobs_to_start,
     gate_job_manifest,
     gate_job_outcome,
     image_targets,
     pinned_gate_image,
     push_should_trigger,
+    read_shards,
     stack_images,
 )
 
@@ -171,7 +176,62 @@ def _a_stack_image_is_built_from_the_compose_service_of_its_name(tmp_path):
     ]
 
 
+def _shards_add_up_to_the_code_one_pytest_would_give(codes, code, tmp_path):
+    assert combined_rc(codes) == code
+
+
+def _a_shards_file_is_read_as_shards_in_first_seen_order(tmp_path):
+    text = "b\tpkg/b/tests\na\tpkg/a/tests\n\nno-tab-line\nb\tpkg/b/more\n\t\n"
+    assert read_shards(text) == [("b", ["pkg/b/tests", "pkg/b/more"]), ("a", ["pkg/a/tests"])]
+
+
+_FAKE_KUBECTL = """#!/bin/bash
+# A stand-in kubectl: records every Job it is given, and says each one ended 0.
+[ "$1" = "-n" ] && shift 2
+case "$1 $2" in
+  "apply -f") cat > "$JOBS/$(date +%s%N).json"; exit 0 ;;
+  "get job") printf '%s' '{"status": {"conditions": [{"type": "Complete", "status": "True"}], "succeeded": 1}}' ;;
+  "get pods") printf '%s' '{"items": [{"status": {"phase": "Succeeded", "containerStatuses": [{"name": "run", "state": {"terminated": {"exitCode": 0}}}]}}]}' ;;
+  "logs job/"*|logs*) echo "1 passed" ;;
+esac
+"""
+
+
+def _a_shards_file_makes_one_job_per_shard_and_only_the_first_replays(tmp_path):
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "kubectl").write_text(_FAKE_KUBECTL, encoding="utf-8")
+    (tmp_path / "bin" / "kubectl").chmod(0o755)
+    (tmp_path / "pin").write_text(_DIGEST + "\n", encoding="utf-8")
+    (tmp_path / "changed").write_text("pkg/a/code.py\n", encoding="utf-8")
+    (tmp_path / "shards").write_text("a\tpkg/a/tests\nb\tpkg/b/tests\n", encoding="utf-8")
+    answer = subprocess.run(
+        [sys.executable, "-m", "infra.deploy_loop", "gate-run", "--sha", _SHA, "--repo-url", "https://example/r.git",
+         "--gate-pin", str(tmp_path / "pin"), "--cycle-image", _DIGEST, "--pool-label", "role", "--seconds", "60",
+         "--changed-file", str(tmp_path / "changed"), "--shards-file", str(tmp_path / "shards"),
+         "--", "-q", "-rfE"],
+        cwd=Path(__file__).resolve().parents[3], capture_output=True, text=True, timeout=60, check=False,
+        env={"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin", "JOBS": str(jobs)},
+    )
+    made = [json.loads(path.read_text(encoding="utf-8")) for path in sorted(jobs.iterdir())]
+    runs = [job["spec"]["template"]["spec"]["containers"][0] for job in made]
+    assert answer.returncode == 0, answer.stderr
+    assert [run["command"][-1] for run in runs] == ["pkg/a/tests", "pkg/b/tests"]
+    assert [{var["name"]: var["value"] for var in run["env"]}["GATE_CHANGED_PATHS"] for run in runs] == ["pkg/a/code.py\n", ""]
+
+
 CASES = [
+    *[
+        pytest.param(_shards_add_up_to_the_code_one_pytest_would_give, {"codes": codes, "code": code}, id=label)
+        for label, codes, code in [
+            ("all-green", [0, 0], 0), ("one-red", [0, 1], 1), ("red-beats-amber", [137, 1], 1),
+            ("lowest-broken-tree", [0, 3, 2], 2), ("amber-is-amber", [0, 124], 124), ("all-empty", [5, 5], 5),
+            ("one-empty-beside-tests", [5, 0], 0), ("no-shard", [], 125), ("one-job", [126], 126),
+        ]
+    ],
+    pytest.param(_a_shards_file_is_read_as_shards_in_first_seen_order, {}, id="shards-file"),
+    pytest.param(_a_shards_file_makes_one_job_per_shard_and_only_the_first_replays, {}, id="one-job-per-shard"),
     pytest.param(_a_push_starts_only_when_signed_and_on_main,
                  {"secret": _SECRET, "signature_of": _SECRET, "ref": "refs/heads/main", "starts": True}, id="signed-main"),
     pytest.param(_a_push_starts_only_when_signed_and_on_main,

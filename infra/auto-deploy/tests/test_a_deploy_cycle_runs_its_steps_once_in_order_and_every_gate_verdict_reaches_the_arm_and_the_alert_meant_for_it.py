@@ -176,6 +176,21 @@ WHAT IT WAS PROVED AGAINST. Every red being the commit's, which is what the
 gate did before the sorter was wired in.
 
 GUARDS. A wrong test leaves the gate and the deploy goes on.
+
+A gate run is one gate Job per module group, so it grows with the gate nodes.
+
+WHAT IT PINS. Step 40's `_gate_write_shards`, with the real register's
+`--shards` behind it, on a tree whose only content is `tools/`.
+
+HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. In that tree
+`tools/test_register` and `tools/red_triage` are two module groups, so two
+selected paths from them are two shards and one path is one; a shard limit of
+one, or a single shard, means one Job and no shards file, as the step's comment
+says.
+
+WHAT IT WAS PROVED AGAINST. A run that stays one Job whatever it selects.
+
+GUARDS. Commits per hour rise with gate nodes.
 """
 from __future__ import annotations
 
@@ -789,6 +804,23 @@ def _triaged(tmp_path: Path, red_log: str, same: tuple[int, str], good: tuple[in
 _RED_A = "FAILED tests/test_a.py::test_x - assert 0\n"
 
 
+def _a_run_is_split_into_one_job_per_module_group(tmp_path: Path, paths: tuple, limit: str, shards: list) -> None:
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "tools").symlink_to(_HERE.parents[1] / "tools")
+    script = "\n".join((
+        "set -u",
+        f'STATE_DIR="{tmp_path}"; LOG="{tmp_path}/log"; BUILD_TREE="{tree}"; GATE_SHARD_JOBS="{limit}"',
+        "log() { :; }",
+        _step_function("_gate_write_shards"),
+        f"gate_scope=selected; gate_quarantine_args=(); gate_paths=({' '.join(paths)})",
+        "_gate_write_shards",
+        '[ -n "$GATE_SHARDS_FILE" ] && cut -f1 "$GATE_SHARDS_FILE" | LC_ALL=C sort -u',
+    ))
+    answer = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, timeout=60)
+    assert answer.stdout.split() == shards
+
+
 def _a_red_is_sorted_before_it_is_believed(tmp_path: Path, red_log: str, same: tuple, good: tuple,
                                            unnamed: int, expected: list) -> None:
     assert _triaged(tmp_path, red_log, same, good, unnamed) == expected
@@ -850,6 +882,16 @@ CASES = [
                 "again rc=1", "left-out  | paths tests/test_a.py tests/test_b.py"], id="naming-no-file-runs-once-more"),
             pytest.param("E   boom\n", (0, ""), (0, ""), 1, [
                 "answer rc=1", "left-out  | paths tests/test_a.py tests/test_b.py"], id="a-second-red-naming-no-file-is-the-commits"),
+        ],
+    ),
+    *_cases(
+        _a_run_is_split_into_one_job_per_module_group,
+        ("paths", "limit", "shards"),
+        [
+            pytest.param(("tools/test_register/tests", "tools/red_triage/tests"), "64",
+                         ["tools/red_triage", "tools/test_register"], id="two-groups-two-jobs"),
+            pytest.param(("tools/test_register/tests",), "64", [], id="one-group-one-job"),
+            pytest.param(("tools/test_register/tests", "tools/red_triage/tests"), "1", [], id="limit-one-is-one-job"),
         ],
     ),
     *_cases(_the_source_list_is_the_step_directory_in_order),

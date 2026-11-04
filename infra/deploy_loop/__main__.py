@@ -5,7 +5,8 @@ Verbs, each one question:
     receive                      run the push receiver (settings from the environment)
     bookmark-read                print ConfigMap deploy-bookmark's sha ('' = none yet); exit 2 refused
     bookmark-write SHA           set it
-    gate-run [options] -- ARGS   run pytest ARGS in a gate Job; exit with the Job's verdict code
+    gate-run [options] -- ARGS   run pytest ARGS in a gate Job, or one Job per shard with
+                                 --shards-file; exit with the verdict code they add up to
     image-targets IMAGE          print `namespace kind name container` for each object to re-pin
     stack-images REPO            print `name context dockerfile` for each of the stack's own images
 
@@ -32,6 +33,7 @@ from ._images import stack_images
 from ._outcome import RC_COULD_NOT_START, gate_job_outcome
 from ._pins import image_targets
 from ._receiver import serve
+from ._shards import combined_rc, read_shards
 
 _NAMESPACE = os.environ.get("DEPLOY_NAMESPACE", "deploy")
 _POLL_SECONDS = 10
@@ -103,31 +105,65 @@ def _gate_run(args: argparse.Namespace) -> int:
               file=sys.stderr)
         return RC_COULD_NOT_START
     changed = Path(args.changed_file).read_text(encoding="utf-8") if args.changed_file else ""
-    name = f"gate-{args.sha[:12]}-{int(time.time())}"
-    manifest = gate_job_manifest(
-        name=name, namespace=_NAMESPACE, sha=args.sha, repo_url=args.repo_url, gate_image=gate_image,
-        cycle_image=args.cycle_image, pool_label=args.pool_label, pytest_args=args.pytest_args,
-        seconds=args.seconds, setup_seconds=args.setup_seconds, changed_paths=changed,
-        replay_workers=args.replay_workers, ref=args.ref, cpu=args.cpu, memory=args.memory,
-    )
-    created = _kubectl("apply", "-f", "-", stdin=json.dumps(manifest))
-    if created.returncode != 0:
-        print(f"gate-run: could not create Job {name}: {created.stderr.strip()}", file=sys.stderr)
+    shards = _shards_of(args.shards_file)
+    if shards is None:
         return RC_COULD_NOT_START
-    print(f"gate-run: Job {name} runs {args.sha[:12]} in {gate_image}", file=sys.stderr)
-    deadline = time.monotonic() + args.seconds + args.setup_seconds + 60
-    while True:
-        job, pods = _job_state(name)
-        timed_out = time.monotonic() > deadline
-        verdict = gate_job_outcome(job, pods, timed_out, args.pin_is_new) if job is not None else None
-        if verdict is None and timed_out:
-            verdict = RC_COULD_NOT_START if job is None else 124
-        if verdict is not None:
-            break
-        time.sleep(_POLL_SECONDS)
+    # One Job per shard, all made at once; the break replay runs in the first
+    # one only, because it replays every row the commit touches whatever the
+    # shard holds. No shards file: one Job for the whole run, as before.
+    runs = [(name, [*args.pytest_args, *paths]) for name, paths in shards] or [("all", list(args.pytest_args))]
+    stamp = int(time.time())
+    names = []
+    for index, (shard, pytest_args) in enumerate(runs):
+        name = f"gate-{args.sha[:12]}-{stamp}-{index}" if len(runs) > 1 else f"gate-{args.sha[:12]}-{stamp}"
+        manifest = gate_job_manifest(
+            name=name, namespace=_NAMESPACE, sha=args.sha, repo_url=args.repo_url, gate_image=gate_image,
+            cycle_image=args.cycle_image, pool_label=args.pool_label, pytest_args=pytest_args,
+            seconds=args.seconds, setup_seconds=args.setup_seconds, changed_paths=changed if index == 0 else "",
+            replay_workers=args.replay_workers, ref=args.ref, cpu=args.cpu, memory=args.memory,
+        )
+        created = _kubectl("apply", "-f", "-", stdin=json.dumps(manifest))
+        if created.returncode != 0:
+            print(f"gate-run: could not create Job {name}: {created.stderr.strip()}", file=sys.stderr)
+            return RC_COULD_NOT_START
+        print(f"gate-run: Job {name} runs {args.sha[:12]} ({shard}) in {gate_image}", file=sys.stderr)
+        names.append(name)
+    verdicts = _wait_for(names, args)
     if args.log:
-        _append_logs(name, args.log, args.replay_rc_file)
-    return verdict
+        for name in names:
+            _append_logs(name, args.log, args.replay_rc_file)
+    return combined_rc([verdicts[name] for name in names])
+
+
+def _shards_of(path: str) -> list | None:
+    """The shards a shards file names, [] for none given, None when it cannot be read."""
+    if not path:
+        return []
+    try:
+        return read_shards(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as failure:
+        print(f"gate-run: cannot read the shards file {path}: {failure}", file=sys.stderr)
+        return None
+
+
+def _wait_for(names: list, args: argparse.Namespace) -> dict:
+    """Each Job's verdict code once it ends, or a timeout once the run's deadline has passed."""
+    deadline = time.monotonic() + args.seconds + args.setup_seconds + 60
+    verdicts: dict = {}
+    while True:
+        timed_out = time.monotonic() > deadline
+        for name in names:
+            if name in verdicts:
+                continue
+            job, pods = _job_state(name)
+            verdict = gate_job_outcome(job, pods, timed_out, args.pin_is_new) if job is not None else None
+            if verdict is None and timed_out:
+                verdict = RC_COULD_NOT_START if job is None else 124
+            if verdict is not None:
+                verdicts[name] = verdict
+        if len(verdicts) == len(names):
+            return verdicts
+        time.sleep(_POLL_SECONDS)
 
 
 def _image_targets(args: argparse.Namespace) -> int:
@@ -171,6 +207,8 @@ def _parser() -> argparse.ArgumentParser:
     gate.add_argument("--cpu", default="2")
     gate.add_argument("--memory", default="6Gi")
     gate.add_argument("--log", default="")
+    gate.add_argument("--shards-file", default="",
+                      help="`<shard>\\t<path>` lines (test_register --shards): one Job per shard, at once")
     gate.add_argument("pytest_args", nargs="+")
     gate.set_defaults(run=_gate_run)
     targets = verbs.add_parser("image-targets")

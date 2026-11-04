@@ -7,6 +7,7 @@ The deploy loop's cluster half: the questions the cycle asks Kubernetes, as pure
 | `_receiver.py` | the push receiver: HMAC + `refs/heads/main`, then a Job from every idle CronJob in `DEPLOY_RECEIVER_CRONJOBS` |
 | `_gate_job.py`, `gate_fetch.sh`, `gate_run.sh` | one gate Job: a full clone in its own emptyDir, the gated tree's pinned gate image, pytest then the break replay in one pod |
 | `_outcome.py` | a Job and its pod read as the exit code `40-gate.sh` classifies |
+| `_shards.py` | one run as one Job per module group (`--shards-file`, from `test_register --shards`), all at once, and the one code their answers add up to; the break replay runs in the first Job only |
 | `_bookmark.py` | what ConfigMap `deploy-bookmark` may hold |
 | `_pins.py` | which objects run another tag of an image just built |
 | `_images.py` | the stack's own images and the compose service that builds each |
@@ -14,6 +15,7 @@ The deploy loop's cluster half: the questions the cycle asks Kubernetes, as pure
 
 ## Do not
 
+- Never let a shard that gave no answer add up to green: `combined_rc` of no codes is 125.
 - Never map a Job fault to 0 to 5. Those are pytest's answers and 1 is the one the eject acts on; a deadline, an eviction, an OOM, an unpullable image or a failed fetch stay 124/125/137 (amber). `DeadlineExceeded` is asked before the container's exit code on purpose.
 - Never give a gate Job a shared volume. Owning none is what lets Jobs run on any gate node in any zone, so the pools, not slots, bound how many run at once.
 - Never fetch blobless or shallow, and never put the read token in env or in the run container. The run is `env -i` and must stay off the API and the network for git objects.

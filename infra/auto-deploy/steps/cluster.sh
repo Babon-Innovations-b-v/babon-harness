@@ -9,7 +9,8 @@
 #   cluster_bookmark_pull          ConfigMap deploy-bookmark -> $LAST_SHA_FILE
 #   cluster_bookmark_push          $LAST_SHA_FILE -> ConfigMap deploy-bookmark
 #   cluster_gate_run SECONDS -- ARGS
-#                                  pytest ARGS in a gate Job for $NEW_SHA; its code
+#                                  pytest ARGS in a gate Job for $NEW_SHA, or one Job per
+#                                  shard of $GATE_SHARDS_FILE at once; their code
 #   cluster_gate_triage_run SHA PIN SECONDS LOG -- ARGS
 #                                  pytest ARGS in a gate Job for SHA, no replay; its code
 #   cluster_build_image NAME CONTEXT DOCKERFILE
@@ -75,6 +76,7 @@ cluster_gate_run() {
         --changed-file "$STATE_DIR/gate-changed-paths" --replay-workers "${GATE_REPLAY_WORKERS:-1}" \
         --replay-rc-file "$STATE_DIR/gate-replay-rc" \
         --cpu "${GATE_JOB_CPU:-2}" --memory "${GATE_JOB_MEMORY:-6Gi}" \
+        --shards-file "${GATE_SHARDS_FILE:-}" \
         --log "$LOG" -- "$@" ) 2>>"$LOG"
 }
 

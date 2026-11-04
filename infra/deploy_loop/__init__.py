@@ -9,6 +9,7 @@ Tier S, standard library only: the cycle runs `python3 -m infra.deploy_loop
     _bookmark.py  what ConfigMap deploy-bookmark may hold
     _pins.py      which objects run another tag of an image the cycle just built
     _images.py    the stack's own images: which compose service builds each, from which Dockerfile
+    _shards.py    one gate run as one Job per module group, and the code their answers add up to
     __main__.py   the verbs the steps call; the only file here that runs kubectl
 
 Bash callers: `infra/auto-deploy/steps/cluster.sh`. Manifests: `infra/k8s/deploy/`.
@@ -21,14 +22,17 @@ from ._images import stack_images
 from ._outcome import gate_job_outcome
 from ._pins import image_targets
 from ._receiver import cronjobs_to_start, push_should_trigger
+from ._shards import combined_rc, read_shards
 
 __all__ = [
     "bookmark_sha",
+    "combined_rc",
     "cronjobs_to_start",
     "gate_job_manifest",
     "gate_job_outcome",
     "image_targets",
     "pinned_gate_image",
     "push_should_trigger",
+    "read_shards",
     "stack_images",
 ]

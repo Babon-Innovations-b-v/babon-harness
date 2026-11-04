@@ -214,6 +214,38 @@ if [ "$gate_scope" != "none" ] && [ -n "${BUILD_TREE:-}" ] && [ -d "${BUILD_TREE
     gate_selected_count="${#gate_paths[@]}"
 fi
 
+# ── One gate Job per module group ───────────────────────────────────────────
+# The run is split into at most GATE_SHARD_JOBS shards, one module group each
+# (`test_register --shards`, the GATED tree's own register), and every shard is
+# its own gate Job, all made at once: what the autoscaler adds gate nodes for,
+# so a gate run gets faster as the gate pools grow. A full run is every python
+# test the register holds, less the quarantined. Anything that cannot be split
+# (one shard, no register, a split that fails) is one Job as before; the paths
+# are then pytest's own arguments. Sets GATE_SHARDS_FILE, empty for one Job.
+_gate_write_shards() {
+    local list="$STATE_DIR/gate-shard-paths" out="$STATE_DIR/gate-shards" quarantined
+    GATE_SHARDS_FILE=""
+    case "${GATE_SHARD_JOBS:-64}" in ''|*[!0-9]*|0|1) return 0 ;; esac
+    [ -n "${BUILD_TREE:-}" ] && [ -d "$BUILD_TREE/tools/test_register" ] || return 0
+    if [ "$gate_scope" = "selected" ]; then
+        printf '%s\n' ${gate_paths[@]+"${gate_paths[@]}"} > "$list"
+    else
+        ( cd "$BUILD_TREE" && python3 -c 'from tools.test_register import ROWS
+print("\n".join(row.test for row in ROWS if row.test.endswith(".py")))' ) > "$list" 2>>"$LOG" || return 0
+        if [ "${#gate_quarantine_args[@]}" -gt 0 ]; then
+            quarantined="$(printf '%s\n' "${gate_quarantine_args[@]}" | grep -vx -- '--ignore')"
+            grep -vxF -- "$quarantined" "$list" > "$list.kept" 2>/dev/null || : > "$list.kept"
+            mv -f "$list.kept" "$list"
+        fi
+    fi
+    [ -s "$list" ] || return 0
+    ( cd "$BUILD_TREE" && python3 -m tools.test_register --shards "$list" --max "${GATE_SHARD_JOBS:-64}" \
+        --repo "$BUILD_TREE" ) > "$out" 2>>"$LOG" || return 0
+    [ "$(cut -f1 "$out" | LC_ALL=C sort -u | wc -l)" -gt 1 ] || return 0
+    GATE_SHARDS_FILE="$out"
+    log "[gate] the run is $(cut -f1 "$out" | LC_ALL=C sort -u | wc -l) gate Jobs at once, one per module group"
+}
+
 # ── After a red: run it again, or is this the answer? ──────────────────────
 # 0 runs again at once, 1 is the answer. Nothing waits for a tick.
 #
@@ -403,11 +435,14 @@ else
     # tools/gate_scope/audit_full_run.sh, or the audit stops being evidence.
     while :; do
         gate_log_offset=$(wc -c < "$LOG" 2>/dev/null || echo 0)
+        _gate_write_shards
+        gate_run_paths=(${gate_paths[@]+"${gate_paths[@]}"})
+        [ -n "$GATE_SHARDS_FILE" ] && gate_run_paths=()
         cluster_gate_run "$gate_timeout" -- -q -rfE \
             ${gate_worker_args[@]+"${gate_worker_args[@]}"} \
             --ignore=.claude/worktrees \
             ${gate_quarantine_args[@]+"${gate_quarantine_args[@]}"} \
-            ${gate_paths[@]+"${gate_paths[@]}"}
+            ${gate_run_paths[@]+"${gate_run_paths[@]}"}
         gate_rc=$?
         _gate_next_attempt || break
     done
