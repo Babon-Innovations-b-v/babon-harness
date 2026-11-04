@@ -21,6 +21,8 @@ from __future__ import annotations
 from ._break import Break
 from ._check import check
 from ._coverage import uncovered
+from ._groups import module_groups
+from ._level import group_key, level_of
 from ._modules import modules_in
 from ._replay import replay
 from ._row import Row
@@ -34,6 +36,9 @@ __all__ = [
     "Break",
     "Row",
     "check",
+    "group_key",
+    "level_of",
+    "module_groups",
     "modules_in",
     "replay",
     "scaffold",

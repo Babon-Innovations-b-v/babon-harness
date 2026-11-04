@@ -33,6 +33,7 @@ from pathlib import Path
 
 from ._check import check
 from ._coverage import uncovered
+from ._debt import DEBT, FUNCTION_DEBT
 from ._modules import modules_in
 from ._replay import GREEN, replay
 from ._rows import ROWS
@@ -72,7 +73,7 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
 
 
 def _do_check(repo: Path) -> int:
-    problems = check(repo, ROWS)
+    problems = check(repo, ROWS, debt=DEBT, function_debt=FUNCTION_DEBT)
     if not problems:
         print(f"register: {len(ROWS)} rows, and the tree agrees")
         return 0
@@ -81,7 +82,8 @@ def _do_check(repo: Path) -> int:
     print(
         f"\n{len(problems)} problem(s). Every test in this repository needs a row in\n"
         "tools/test_register/_rows.py saying what it pins, what selects it,\n"
-        "and the break that proves it can fail.",
+        "and the break that proves it can fail; every module and module group\n"
+        "has one test, and every test file holds one test function.",
         file=sys.stderr,
     )
     return 1

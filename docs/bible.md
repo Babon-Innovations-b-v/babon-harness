@@ -633,6 +633,18 @@ red, so a test that cannot fail is caught. A test feeds a known input and checks
 independently of the code under test, or a property that must hold. It crosses only the public
 seam, and its collaborators are injected rather than patched.
 
+| Level | Its tests |
+|---|---|
+| a module | one file, one test function |
+| a module group | one file, one test function, of how its modules fit |
+| the whole tree | the full suite |
+
+A module has one clear purpose, so it has one test function checking that purpose. A second
+check is a parametrized case of that function, never a second function pasted beside it, and a
+module group is held to the same rule. `--check` refuses a second test for a level and a second
+function in a file; the tests that were already over the rule are listed in the register's debt
+file, which only shrinks.
+
 ### Failure tiers
 
 | Tier | What | Rule |

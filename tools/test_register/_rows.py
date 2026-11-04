@@ -249,19 +249,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='tools/test_register/tests/test_a_new_test_does_not_turn_an_existing_tests_directory_into_a_package.py',
-        pins=('tools/test_register',),
-        runs_when=(
-            'tools/test_register/**',
-        ),
-        proved_by=Break(
-            file='tools/test_register/_scaffold.py',
-            old='    if is_new_directory:',
-            new='    if not (tests_dir / "__init__.py").exists():',
-            why='a tests directory that already exists without a package marker is given one',
-        ),
-    ),
-    Row(
         test='tools/test_register/tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py',
         pins=('tools/test_register',),
         runs_when=(
@@ -272,19 +259,6 @@ ROWS: tuple[Row, ...] = (
             old='        return GREEN, (',
             new='        return RED, (',
             why='a test that passed with its own break applied is reported red, so the shape-only case gets red where it asserts green',
-        ),
-    ),
-    Row(
-        test='tools/test_register/tests/test_a_word_with_an_apostrophe_keeps_its_place_in_the_test_filename.py',
-        pins=('tools/test_register',),
-        runs_when=(
-            'tools/test_register/**',
-        ),
-        proved_by=Break(
-            file='tools/test_register/_scaffold.py',
-            old='.replace("\'", "").replace("\\u2019", "")',
-            new='',
-            why='every word holding an apostrophe is dropped again, so the filename loses subjects',
         ),
     ),
     Row(

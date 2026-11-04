@@ -2,7 +2,8 @@
 
 One row per test in this repository. `_rows.py` is the data; everything else
 reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
-`triggers_for`, `uncovered`, `modules_in`, `scaffold`. Module test:
+`triggers_for`, `uncovered`, `modules_in`, `module_groups`, `level_of`,
+`group_key`, `scaffold`. Module test, one function over parametrized cases:
 `tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py`.
 
 ## Rules
@@ -30,3 +31,10 @@ reads it. Public names: `ROWS`, `Row`, `Break`, `check`, `replay`, `touched_by`,
   skips, so the replay reads the summary and returns `unproven`, never `green`.
 - **A row's break anchor must appear exactly once** in its file. Two matches is
   refused rather than guessed at.
+- **One test per module and per module group, one test function per file.**
+  `--check` refuses a second row for one level (`DEBT`) and a file with more
+  than one `test_*` function (`FUNCTION_DEBT`, by count). Both lists in
+  `_debt.py` only shrink: a debt file may not grow, one that shrank lowers its
+  entry, a gone test loses it. A note excuses nothing. A new check goes into the
+  level's one test as a parametrized case, never a pasted second function.
+  Changing `_modules.py` or `_groups.py` moves levels: rerun `--check`.
