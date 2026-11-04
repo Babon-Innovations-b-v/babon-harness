@@ -1,5 +1,9 @@
 """A db_query that names a wrong column comes back with the table's real columns.
 
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 WHAT IT PINS. `db_query.execute`: when Postgres refuses a column or table
 name, the FAILED answer lists the columns of the tables the query names, read
 from information_schema on the same read-only connection, filtered to columns
@@ -16,17 +20,35 @@ resolved). The tables each query reads are plain from reading the SQL.
 """
 from __future__ import annotations
 
+import inspect
+
+
+# From a wrong column is answered with the real columns of the tables the query names.
+
 from typing import Any, Self
 
+
 import psycopg2
+
+
 import psycopg2.errors
+
+
 import pytest
 
+
 from apps.assistant.core.tools.infra import db_query
+
+
 from apps.assistant.core.tools.meta import result
 
+
 _WRONG_COLUMN_SQL = "SELECT name, severity, opened_at, resolved_at FROM ops_secret_alerts"
+
+
 _REFUSAL = 'column "name" does not exist'
+
+
 _ALERT_COLUMNS = [
     ("public", "ops_secret_alerts", "id"),
     ("public", "ops_secret_alerts", "secret_id"),
@@ -96,7 +118,7 @@ def _lookups(connection: _FakeConnection) -> list[tuple[str, Any]]:
     return [(sql, params) for sql, params in connection.statements if "information_schema.columns" in sql]
 
 
-def test_a_wrong_column_is_answered_with_the_real_columns_of_the_tables_the_query_names(
+def _a_wrong_column_is_answered_with_the_real_columns_of_the_tables_the_query_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A query naming a wrong column comes back FAILED, carrying ops_secret_alerts' real columns."""
@@ -115,7 +137,7 @@ def test_a_wrong_column_is_answered_with_the_real_columns_of_the_tables_the_quer
     assert connection.rolled_back, "the aborted transaction must be rolled back before the lookup"
 
 
-def test_the_from_inside_extract_is_not_read_as_a_table(monkeypatch: pytest.MonkeyPatch) -> None:
+def _the_from_inside_extract_is_not_read_as_a_table(monkeypatch: pytest.MonkeyPatch) -> None:
     """EXTRACT(EPOCH FROM a column) and a joined alias name only the two real tables."""
     sql = (
         "SELECT s.name, EXTRACT(EPOCH FROM now() - s.last_rotated_at) / 86400 AS age"
@@ -127,14 +149,14 @@ def test_the_from_inside_extract_is_not_read_as_a_table(monkeypatch: pytest.Monk
     assert _lookups(connection)[0][1] == (["ops_secrets", "ops_secret_alerts"],)
 
 
-def test_a_table_the_role_cannot_read_is_named_unfound_not_listed(monkeypatch: pytest.MonkeyPatch) -> None:
+def _a_table_the_role_cannot_read_is_named_unfound_not_listed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A table information_schema returns nothing for is said to be unreadable."""
     answer, _connection = _run(monkeypatch, "SELECT name FROM assistant_secret_vault", [])
 
     assert "assistant_secret_vault: no table this role can read has that name" in answer.error
 
 
-def test_a_failed_lookup_leaves_the_original_failure_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+def _a_failed_lookup_leaves_the_original_failure_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     """When information_schema refuses too, the answer is the first failure, still FAILED."""
     answer, _connection = _run(
         monkeypatch, _WRONG_COLUMN_SQL, _ALERT_COLUMNS, psycopg2.OperationalError("connection lost")
@@ -144,9 +166,45 @@ def test_a_failed_lookup_leaves_the_original_failure_unchanged(monkeypatch: pyte
     assert answer.error == f"UndefinedColumn: {_REFUSAL}", answer.error
 
 
-def test_a_query_with_no_readable_table_name_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+def _a_query_with_no_readable_table_name_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     """A query whose only FROM is a subquery gets no guessed columns."""
     answer, connection = _run(monkeypatch, "SELECT name FROM (SELECT 1 AS one) sub", _ALERT_COLUMNS)
 
     assert "No table name could be read from this query" in answer.error
     assert not _lookups(connection), "nothing may be looked up for a name that was never found"
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_a_wrong_column_is_answered_with_the_real_columns_of_the_tables_the_query_names),
+    *_cases(_the_from_inside_extract_is_not_read_as_a_table),
+    *_cases(_a_table_the_role_cannot_read_is_named_unfound_not_listed),
+    *_cases(_a_failed_lookup_leaves_the_original_failure_unchanged),
+    *_cases(_a_query_with_no_readable_table_name_says_so),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_a_wrong_column_is_answered_with_the_real_columns_of_the_tables_the_query_names(scenario, given, uses, request):
+    """A db_query that names a wrong column comes back with the table's real columns: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})
