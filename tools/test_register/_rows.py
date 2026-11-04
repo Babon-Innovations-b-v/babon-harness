@@ -113,7 +113,7 @@ ROWS: tuple[Row, ...] = (
     ),
     Row(
         test='infra/observability/tests/test_the_textfile_collector_and_probe_targets_render_what_the_rules_read.py',
-        pins=('infra/observability/node_textfile',),
+        pins=('infra/observability',),
         runs_when=(
             'infra/observability/**',
         ),
@@ -549,6 +549,19 @@ ROWS: tuple[Row, ...] = (
             old="    old = sorted(still & (good_failing or frozenset()) - new_files)",
             new="    old = sorted(still & (good_failing or frozenset()))",
             why="a test the commit changed reads as old and is quarantined, so the changed-test case fails",
+        ),
+    ),
+    Row(
+        test="infra/gpu-jobs/gpu_jobs/tests/test_a_notulen_job_carries_the_name_the_naming_grammar_the_hardened_contexts_and_the_cluster_namespace.py",
+        pins=("infra/gpu-jobs/gpu_jobs",),
+        runs_when=(
+        "infra/gpu-jobs/gpu_jobs/**",
+        ),
+        proved_by=Break(
+            file="infra/gpu-jobs/gpu_jobs/security/worker_security_context.py",
+            old='capabilities=client.V1Capabilities(drop=["ALL"]),',
+            new='capabilities=client.V1Capabilities(drop=[]),',
+            why="the worker container keeps every capability, so the container-context case fails",
         ),
     ),
 )
