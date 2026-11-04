@@ -41,7 +41,7 @@ The core depth/seam vocabulary used by `improve-codebase-architecture`, `tdd`, `
 
 ## Project vocabulary
 
-- **deploy gate**: the step on the server that runs the tests a commit can reach, against that commit's own tree, before anything is swapped in. Only a green verdict ships. _Avoid_: CI, pipeline, checks.
+- **deploy gate**: the step of the deploy cycle in the cluster that runs the tests a commit can reach, against that commit's own tree, as gate Jobs in its gate image, before anything is rolled out. Only a green verdict ships. _Avoid_: CI, pipeline, checks.
 - **verdict**: what one gate run says about one commit: green (ship it), red (a run that happened and said no), or amber (a run that could not start or finish; retried, never cached, never ejected). _Avoid_: result, status, outcome.
 - **eject**: the gate's answer to a red commit when `EJECT_ENABLED=1`: revert it on `main` and hand the work back, byte for byte, on a branch and pull request for its author to fix and land again as one commit. _Avoid_: rollback, auto-revert.
 - **test register**: `tools/test_register`, one row per test file naming the module it pins, the changes that select it, and the break that proves it can fail. _Avoid_: test list, test manifest.
@@ -51,9 +51,13 @@ The core depth/seam vocabulary used by `improve-codebase-architecture`, `tdd`, `
 - **gate image**: the one container image a gate test run uses, built from `infra/gate-image/Dockerfile` and named by digest in `infra/gate-image/pin`; the commit hook runs a new or changed test in it with the network off and a fake clock. _Avoid_: CI image, test container, runner image.
 - **break**: the exact edit in a register row that must turn its test red; replayed by the pre-commit hook for every row a commit touches. _Avoid_: mutation, sabotage.
 - **marker**: the ◈ link at the end of a piece of bible text that claims one box on one drawn page; `linkmap.py` checks every box has exactly one. _Avoid_: anchor, diagram link.
-- **vault**: the one Scaleway Secret Manager secret holding the full environment, every change a new version, pulled to the server each deploy cycle. _Avoid_: secrets file, env file, keystore.
+- **vault**: the one Scaleway Secret Manager secret holding the full environment, every change a new version, read into the cluster as Secrets by the External Secrets operator. _Avoid_: secrets file, env file, keystore, env cache (the VM-era copy pulled to a server).
 - **pool role**: what a node pool is for (`system`, `gate`, `media`, `gpu`), set as a node label every pool of the role carries; a pod selects the role, never a pool by name, so it can land on any of the role's pools. _Avoid_: node group, pool type, workload class.
 - **stock fallback**: an empty pool of a pool role in another machine type or zone, tried by the autoscaler only after the role's preferred pool could not get a node because the provider had none in stock. _Avoid_: backup pool, spare pool, failover pool.
+- **cluster**: the one Kubernetes cluster the whole stack runs in, created or adopted from `config/harness.env` by `infra/cluster/`: its services as Deployments, the deploy loop as a CronJob and the gate as Jobs. _Avoid_: server, VM, host, box (the single-server era it replaced).
+- **warm gate node**: a node of the `gate` pool role kept up during working hours (`POOL_GATE_WARM`, `WORKING_DAYS`, `WORKING_HOURS`), so a gate Job in working hours does not wait for a node to boot. _Avoid_: standby node, hot node, reserved node.
+- **media node**: the one node of the `media` pool role, holding the reserved public address, where video calls and their recording run. _Avoid_: TURN server, call server, media VM.
+- **lane**: the verifying lane, `infra/auto-deploy/commit_gate/`: the verifier that judges commits ahead of the deploy cycle and writes a verdict per commit the cycle can trust. _Avoid_: pre-gate, CI, commit-gate timer.
 - **assistant**: the company's assistant on Signal, built on an OpenClaw gateway plus this repository's tools, answering from the calendar, the repository and the server's own health. Ships empty and is wired to the owner's own number. _Avoid_: bot, agent, chatbot.
 - **gateway**: the upstream OpenClaw process that owns the chat channel, the conversations and the sessions. It reaches this repository's tools only through the door. _Avoid_: bot server, chat backend.
 - **door**: the MCP server in `apps/assistant` that serves the assistant's tools to the gateway; the only way the gateway reaches anything of ours. _Avoid_: tool server, API, bridge.

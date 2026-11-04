@@ -20,8 +20,8 @@ it, never a second function.
 WHAT IT WAS PROVED AGAINST. Reading a Job the deadline killed by its container's
 exit code instead of as a timeout, which the deadline case catches.
 
-GUARDS. Joey's decision of 2026-11-04 (babon #1210): a red is the commit's or
-the test's, and a run that could not finish is neither.
+GUARDS. The owner's rule that a red is the commit's or the test's, and a run
+that could not finish is neither.
 """
 from __future__ import annotations
 
