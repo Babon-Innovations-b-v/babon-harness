@@ -564,4 +564,30 @@ ROWS: tuple[Row, ...] = (
             why="the worker container keeps every capability, so the container-context case fails",
         ),
     ),
+    Row(
+        test="apps/assistant/mcp/agenda/tests/test_an_event_the_agenda_tools_create_is_listed_back_with_every_field_it_was_given.py",
+        pins=("apps/assistant/mcp/agenda/ical", "apps/assistant/mcp/agenda/tools"),
+        runs_when=(
+        "apps/assistant/mcp/agenda/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/mcp/agenda/ical/build_vcal.py",
+            old="    if event.location:",
+            new="    if event.location and False:",
+            why="the location never reaches the calendar text, so the location case fails",
+        ),
+    ),
+    Row(
+        test="apps/notulen/app/core/publish/tests/test_a_commit_that_lands_marks_the_job_complete_with_its_url_and_path_and_one_that_fails_leaves_it_to_retry.py",
+        pins=("apps/notulen/app/core/publish/github", "apps/notulen/app/core/publish/retry"),
+        runs_when=(
+        "apps/notulen/app/core/publish/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/publish/retry/finalize_commit.py",
+            old="        output_path=committed.path,",
+            new="        output_path=committed.url,",
+            why="the job records the commit URL as its path, so the two landed cases fail",
+        ),
+    ),
 )
