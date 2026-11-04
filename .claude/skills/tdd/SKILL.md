@@ -61,7 +61,7 @@ Ask: "What should the public interface look like? Which behaviors are most impor
 
 ### 2. Tracer Bullet
 
-Write ONE test that confirms ONE thing about the system:
+Write ONE test that confirms ONE thing about the system. A module has one test file holding one test function (`python3 -m tools.test_register --new` writes it and its row), and it checks the module's purpose against a synthetic ground truth: an input made up inside the test and an answer worked out by hand, never read from the live machine, the clock or the network.
 
 ```
 RED:   Write test for first behavior → test fails
@@ -75,13 +75,13 @@ This is your tracer bullet - proves the path works end-to-end.
 For each remaining behavior:
 
 ```
-RED:   Write next test → fails
+RED:   Add the next case to the module's one test → fails
 GREEN: Minimal code to pass → passes
 ```
 
 Rules:
 
-- One test at a time
+- One case at a time; a new behavior is a parametrized case of the one test function, never a second function pasted beside it
 - Only enough code to pass current test
 - Don't anticipate future tests
 - Keep tests focused on observable behavior
