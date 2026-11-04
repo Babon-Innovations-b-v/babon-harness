@@ -86,147 +86,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/auto-deploy/tests/test_a_change_rebuilds_the_services_of_its_own_fragment_and_no_others.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/compose_fragments.py',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/compose_fragments.py',
-            old='    return path == prefix or path.startswith(prefix + "/")',
-            new='    return path.startswith(prefix)',
-            why='the apps/web fragment the test plants then also claims apps/website, so a website change restarts its services too',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_a_commit_gate_run_refuses_a_commit_whose_suite_is_not_the_cycles.py',
-        pins=('infra/auto-deploy/commit_gate',),
-        runs_when=(
-            'infra/auto-deploy/commit_gate/**',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/commit_gate/run_one.sh',
-            old='TREE_IGNORES="$(git -C "$REPO" show "$SHA:$GATE_STEP_PATH" 2>/dev/null | _cg_ignore_flags)"',
-            new='TREE_IGNORES="$(_cg_ignore_flags < "$REPO/$GATE_STEP_PATH" 2>/dev/null)"',
-            why="the commit's list is read from the clone too, so the two never disagree and a run whose suite is not the cycle's goes on",
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_a_deploy_alert_wakes_nobody_unless_the_sender_says_a_person_must_act.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/doors.sh',
-            'infra/auto-deploy/notify.py',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/doors.sh',
-            old='    if [ -z "$wake" ]; then\n        log "RECORD: $subject | $body"\n        return 0\n    fi',
-            new='    if false; then\n        log "RECORD: $subject | $body"\n        return 0\n    fi',
-            why='every alert is sent whether or not its sender marked it, so the unmarked case sees a send',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_a_rejected_commit_is_one_alert_and_with_the_eject_armed_it_is_the_ejects.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/40-gate.sh',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/40-gate.sh',
-            old='            if [ "${EJECT_ENABLED:-0}" = "1" ]; then',
-            new='            if [ "${EJECT_ENABLED:-0}" != "1" ]; then',
-            why='step 40 alerts exactly when the eject is armed and stays silent when nothing else will speak',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_an_eject_that_is_off_decides_nothing_and_claims_nothing.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/eject_body.sh',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/eject_body.sh',
-            old='    if [ "${EJECT_ENABLED:-0}" != "1" ] && [ "${EJECT_DRY_RUN:-0}" != "1" ]; then\n        eject_outcome="off"',
-            new='    if false; then\n        eject_outcome="off"',
-            why='the off switch no longer stops the decision, so an off eject reaches the preconditions',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_every_gate_exit_code_reaches_the_arm_that_is_for_it.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/40-gate.sh',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/40-gate.sh',
-            old='    elif [ "$gate_rc" -eq 5 ]; then',
-            new='    elif [ "$gate_rc" -eq 55 ]; then',
-            why='a run that collected nothing falls into the amber catch-all instead of being red, and the rc=5 case asserts red',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_every_step_is_sourced_once_in_order_and_the_lock_is_first.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/auto-deploy.sh',
-            'infra/auto-deploy/steps/**',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/auto-deploy.sh',
-            old='. "$AUTO_DEPLOY_DIR/steps/45-verified.sh"\n',
-            new='',
-            why='step 45 is no longer sourced, so the source list stops matching the step directory',
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_the_settings_load_in_order_and_never_override_the_callers_own.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/doors.sh',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/doors.sh',
-            old='        if [ -z "${!key+set}" ] || [ -n "${_HARNESS_LOADED_KEYS[$key]+set}" ]; then',
-            new='        if true; then',
-            why="a settings file overrides a key the caller already set, so the caller's EJECT_ENABLED is lost",
-        ),
-    ),
-    Row(
-        test='infra/auto-deploy/tests/test_the_unit_sweep_removes_only_what_it_installed.py',
-        pins=('infra/auto-deploy',),
-        runs_when=(
-            'infra/auto-deploy/steps/80-units.sh',
-            'infra/auto-deploy/tests/**',
-        ),
-        proved_by=Break(
-            file='infra/auto-deploy/steps/80-units.sh',
-            old='            case " ${names[*]} " in *" $name "*) continue ;; esac\n            $UNIT_SUDO systemctl disable',
-            new='            case " ${names[*]} " in *" $name "*) ;; esac\n            $UNIT_SUDO systemctl disable',
-            why='every unit in the manifest is removed, the ones the repository still has included',
-        ),
-    ),
-    Row(
-        test='infra/webhook/tests/test_a_reset_that_lost_the_index_lock_pages_nobody.py',
-        pins=('infra/webhook',),
-        runs_when=(
-            'infra/webhook/**',
-        ),
-        proved_by=Break(
-            file='infra/webhook/trigger-deploy.sh',
-            old='if [ -n "$reset_failed" ] && grep -qE \'index\\.lock|Another git process seems to be running\' "$reset_output"; then',
-            new='if [ -n "$reset_failed" ] && grep -qE \'no such lock message\' "$reset_output"; then',
-            why='a lost race is no longer recognised, so a reset that lost the index lock counts as a failed repair',
-        ),
-    ),
-    Row(
         test='tools/test_register/tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py',
         pins=('tools/test_register',),
         runs_when=(
@@ -276,6 +135,32 @@ ROWS: tuple[Row, ...] = (
             old='explicit = os.environ.get("DB_URL") or os.environ.get("DB_URL_OPS")',
             new='explicit = os.environ.get("DB_URL_OPS") or os.environ.get("DB_URL")',
             why='DB_URL_OPS wins over DB_URL, so the order case fails',
+        ),
+    ),
+    Row(
+        test='infra/observability/tests/test_the_textfile_collector_and_probe_targets_render_what_the_rules_read.py',
+        pins=('infra/observability/node_textfile',),
+        runs_when=(
+            'infra/observability/**',
+        ),
+        proved_by=Break(
+            file='infra/observability/node_textfile/collect.py',
+            old='{1 if active == "failed" else 0}',
+            new='{1 if active == "active" else 0}',
+            why='a failed unit is published as 0, so the failed-unit case fails',
+        ),
+    ),
+    Row(
+        test='infra/webhook/tests/test_a_reset_that_lost_the_index_lock_pages_nobody.py',
+        pins=('infra/webhook',),
+        runs_when=(
+            'infra/webhook/**',
+        ),
+        proved_by=Break(
+            file='infra/webhook/trigger-deploy.sh',
+            old='if [ -n "$reset_failed" ] && grep -qE \'index\\.lock|Another git process seems to be running\' "$reset_output"; then',
+            new='if [ -n "$reset_failed" ] && grep -qE \'no such lock message\' "$reset_output"; then',
+            why='a lost race is no longer recognised, so a reset that lost the index lock counts as a failed repair',
         ),
     ),
     Row(
@@ -1264,32 +1149,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/gpu-jobs/gpu_jobs/tests/test_a_gpu_job_can_only_land_on_the_pool_it_is_meant_for.py',
-        pins=('infra/gpu-jobs/gpu_jobs',),
-        runs_when=(
-            'infra/gpu-jobs/gpu_jobs/**',
-        ),
-        proved_by=Break(
-            file='infra/gpu-jobs/gpu_jobs/config/notulen_pool.py',
-            old='NOTULEN_POOL_TAINT_VALUE = "notulen"',
-            new='NOTULEN_POOL_TAINT_VALUE = "test"',
-            why='The notulen Job\'s toleration is built from this constant (creators/notulen_tolerations.py), so with "test" it no longer tolerates the notulen node\'s `workload=notulen` NoSchedule taint, `_where_it_can_land` returns `[]`, and `test_the_notulen_job_fits_the_notulen_pool_and_no_other`\'s `assert _where_it_can_land(pod) == ["notulen-gpu", "notulen-gpu-z1"]` fails.',
-        ),
-    ),
-    Row(
-        test='infra/gpu-jobs/gpu_jobs/tests/test_a_notulen_job_waits_for_a_gpu_without_a_deadline_and_its_run_is_still_capped.py',
-        pins=('infra/gpu-jobs/gpu_jobs',),
-        runs_when=(
-            'infra/gpu-jobs/gpu_jobs/**',
-        ),
-        proved_by=Break(
-            file='infra/gpu-jobs/gpu_jobs/creators/create_notulen_job.py',
-            old='            ttl_seconds_after_finished=300,  # clean up 5 min after done\n',
-            new='            active_deadline_seconds=14400,\n            ttl_seconds_after_finished=300,  # clean up 5 min after done\n',
-            why='The Job-level 4 h deadline comes back, the older manifest, so the Job\'s clock counts the wait for a GPU node and `"activeDeadlineSeconds" not in manifest["spec"]` fails.',
-        ),
-    ),
-    Row(
         test='apps/assistant/core/tests/test_every_house_rule_reaches_assistants_voice.py',
         pins=('apps/assistant/core',),
         runs_when=(
@@ -1520,29 +1379,16 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/gpu-jobs/gpu_jobs/tests/test_a_notulen_gpu_pod_is_never_bound_to_one_zones_gpu_stock.py',
-        pins=('infra/gpu-jobs/gpu_jobs',),
+        test='infra/gpu-jobs/gpu_jobs/tests/test_a_gpu_job_can_only_land_on_the_pool_it_is_meant_for.py',
+        pins=('infra/gpu-jobs/gpu_jobs/config',),
         runs_when=(
             'infra/gpu-jobs/gpu_jobs/**',
         ),
         proved_by=Break(
-            file='infra/gpu-jobs/gpu_jobs/creators/notulen_affinity.py',
-            old='key=label, operator="In", values=list(pools),',
-            new='key=label, operator="In", values=list(pools)[:1],',
-            why='the pod may only land on the first pool, one zone, so the two-zone assertion fails',
-        ),
-    ),
-    Row(
-        test='infra/gpu-jobs/gpu_jobs/tests/test_a_notulen_pod_carries_no_credential_as_a_value_in_its_spec.py',
-        pins=('infra/gpu-jobs/gpu_jobs',),
-        runs_when=(
-            'infra/gpu-jobs/gpu_jobs/**',
-        ),
-        proved_by=Break(
-            file='infra/gpu-jobs/gpu_jobs/creators/create_notulen_job.py',
-            old='        _secret_env(env_name, key, required)\n        for env_name',
-            new='        client.V1EnvVar(name=env_name, value=__import__("os").environ.get(env_name, ""))\n        for env_name',
-            why='credentials are copied from the environment as values, so the leak assertion fails',
+            file='infra/gpu-jobs/gpu_jobs/config/notulen_pool.py',
+            old='NOTULEN_POOL_TAINT_VALUE = "notulen"',
+            new='NOTULEN_POOL_TAINT_VALUE = "test"',
+            why='The notulen Job\'s toleration is built from this constant (creators/notulen_tolerations.py), so with "test" it no longer tolerates the notulen node\'s `workload=notulen` NoSchedule taint, `_where_it_can_land` returns `[]`, and `test_the_notulen_job_fits_the_notulen_pool_and_no_other`\'s `assert _where_it_can_land(pod) == ["notulen-gpu", "notulen-gpu-z1"]` fails.',
         ),
     ),
     Row(
@@ -1663,8 +1509,8 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/observability/tests/test_a_page_goes_through_the_assistant_and_falls_back_to_signal_direct.py',
-        pins=('infra/observability',),
+        test='infra/observability/tests/test_an_alert_pages_once_through_the_assistant_or_signal_direct_and_a_silent_source_pages_after_its_deadline.py',
+        pins=('infra/observability/alerts',),
         runs_when=(
             'infra/observability/**',
         ),
@@ -1676,47 +1522,8 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/observability/tests/test_one_unit_outage_pages_once_and_names_the_line_it_failed_on.py',
-        pins=('infra/observability',),
-        runs_when=(
-            'infra/observability/**',
-        ),
-        proved_by=Break(
-            file='infra/observability/alerts/systemd_failure_notify.py',
-            old='    if unit in SIGNAL_UNDER_TEST_UNITS:',
-            new='    if False:',
-            why="the Signal canary's own failure is paged over Signal, so the canary case fails",
-        ),
-    ),
-    Row(
-        test='infra/observability/tests/test_the_assistant_deadman_flags_after_three_failures_and_pages_once.py',
-        pins=('infra/observability',),
-        runs_when=(
-            'infra/observability/**',
-        ),
-        proved_by=Break(
-            file='infra/observability/alerts/deadman.py',
-            old='FAIL_THRESHOLD = 3',
-            new='FAIL_THRESHOLD = 2',
-            why='two misses already count as down, so the third-failure case fails',
-        ),
-    ),
-    Row(
-        test='infra/observability/tests/test_the_dead_mans_switch_pages_after_an_hour_of_silence_and_then_hourly.py',
-        pins=('infra/observability',),
-        runs_when=(
-            'infra/observability/**',
-        ),
-        proved_by=Break(
-            file='infra/observability/alerts/dead_mans_switch.py',
-            old='    if last_paged_ts is not None and (now - last_paged_ts) < repage_interval_s:\n        return False\n',
-            new='',
-            why='a page goes out on every run of a silence instead of hourly, so the repage cases fail',
-        ),
-    ),
-    Row(
         test='infra/observability/tests/test_the_relay_hands_alerts_to_the_assistant_and_speaks_only_when_it_is_down.py',
-        pins=('infra/observability',),
+        pins=('infra/observability/alert_relay',),
         runs_when=(
             'infra/observability/**',
         ),
@@ -1725,19 +1532,6 @@ ROWS: tuple[Row, ...] = (
             old='DEDUPE_WINDOW_S = 1800',
             new='DEDUPE_WINDOW_S = 0',
             why='a repeated group is sent again at once, so the half-hour case fails',
-        ),
-    ),
-    Row(
-        test='infra/observability/tests/test_the_textfile_collector_and_probe_targets_render_what_the_rules_read.py',
-        pins=('infra/observability',),
-        runs_when=(
-            'infra/observability/**',
-        ),
-        proved_by=Break(
-            file='infra/observability/node_textfile/collect.py',
-            old='{1 if active == "failed" else 0}',
-            new='{1 if active == "active" else 0}',
-            why='a failed unit is published as 0, so the failed-unit case fails',
         ),
     ),
     Row(
@@ -1767,6 +1561,19 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test='infra/gpu-jobs/gpu_jobs/tests/test_a_notulen_job_waits_for_a_gpu_in_any_zone_without_a_deadline_and_its_pod_carries_no_credential_as_a_value.py',
+        pins=('infra/gpu-jobs/gpu_jobs/creators',),
+        runs_when=(
+            'infra/gpu-jobs/gpu_jobs/**',
+        ),
+        proved_by=Break(
+            file='infra/gpu-jobs/gpu_jobs/creators/create_notulen_job.py',
+            old='            ttl_seconds_after_finished=300,  # clean up 5 min after done\n',
+            new='            active_deadline_seconds=14400,\n            ttl_seconds_after_finished=300,  # clean up 5 min after done\n',
+            why='The Job-level 4 h deadline comes back, the older manifest, so the Job\'s clock counts the wait for a GPU node and `"activeDeadlineSeconds" not in manifest["spec"]` fails.',
+        ),
+    ),
+    Row(
         test="infra/media/tests/test_the_recorder_patch_swaps_the_sink_index_for_its_name_once_and_stops_when_upstream_moved_the_line.py",
         pins=("infra/media",),
         runs_when=(
@@ -1777,6 +1584,42 @@ ROWS: tuple[Row, ...] = (
             old='if "_pulseNameLookup" in src:',
             new='if "_pulseNameLookup" in src or True:',
             why="every file reads as already patched, so the upstream line survives the first run",
+        ),
+    ),
+    Row(
+        test='infra/auto-deploy/tests/test_a_commit_gate_run_refuses_a_commit_whose_suite_is_not_the_cycles.py',
+        pins=('infra/auto-deploy/commit_gate',),
+        runs_when=(
+            'infra/auto-deploy/commit_gate/**',
+            'infra/auto-deploy/tests/**',
+        ),
+        proved_by=Break(
+            file='infra/auto-deploy/commit_gate/run_one.sh',
+            old='TREE_IGNORES="$(git -C "$REPO" show "$SHA:$GATE_STEP_PATH" 2>/dev/null | _cg_ignore_flags)"',
+            new='TREE_IGNORES="$(_cg_ignore_flags < "$REPO/$GATE_STEP_PATH" 2>/dev/null)"',
+            why="the commit's list is read from the clone too, so the two never disagree and a run whose suite is not the cycle's goes on",
+        ),
+    ),
+    Row(
+        test='infra/auto-deploy/tests/test_a_deploy_cycle_runs_its_steps_once_in_order_and_every_gate_verdict_reaches_the_arm_and_the_alert_meant_for_it.py',
+        pins=('infra/auto-deploy',),
+        runs_when=(
+            'infra/auto-deploy/compose_fragments.py',
+            'infra/auto-deploy/tests/**',
+            'infra/auto-deploy/steps/doors.sh',
+            'infra/auto-deploy/notify.py',
+            'infra/auto-deploy/steps/40-gate.sh',
+            'infra/auto-deploy/steps/eject_body.sh',
+            'infra/auto-deploy/auto-deploy.sh',
+            'infra/auto-deploy/steps/**',
+            'infra/auto-deploy/steps/80-units.sh',
+            'infra/auto-deploy/**',
+        ),
+        proved_by=Break(
+            file='infra/auto-deploy/steps/40-gate.sh',
+            old='    elif [ "$gate_rc" -eq 5 ]; then',
+            new='    elif [ "$gate_rc" -eq 55 ]; then',
+            why='a run that collected nothing falls into the amber catch-all instead of being red, and the rc=5 case asserts red',
         ),
     ),
     Row(

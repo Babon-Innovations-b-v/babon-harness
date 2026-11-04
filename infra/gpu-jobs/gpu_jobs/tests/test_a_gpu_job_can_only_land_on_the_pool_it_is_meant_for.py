@@ -1,4 +1,9 @@
 """A notulen GPU pod may land on exactly the notulen pools, and its manifest
+
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 must be one the API server will accept.
 
 WHY THIS IS THE MODULE'S TEST. This package builds a Kubernetes Job manifest
@@ -30,16 +35,34 @@ run for real.
 """
 from __future__ import annotations
 
+import inspect
+
+
+# From a gpu job can only land on the pool it is meant for.
+
 import base64
+
+
 import re
+
+
 from pathlib import Path
+
+
 from typing import Any
 
+
 import pytest
+
+
 from kubernetes import client
 
+
 from gpu_jobs import create_notulen_job, warm_notulen_gpu
+
+
 from gpu_jobs.cluster import ensure_config as ensure_config_module
+
 
 # ── The cluster, as modelled ────────────────────────────────────────────────
 #
@@ -47,10 +70,15 @@ from gpu_jobs.cluster import ensure_config as ensure_config_module
 # (one per zone) also taint themselves `workload=notulen` so only notulen
 # lands there; another workload's pool is tainted for it; one GPU pool is
 # untainted, which is exactly the pool an unpinned GPU pod would wander onto.
-
 _POOL_LABEL = "k8s.scaleway.com/pool-name"
+
+
 _NVIDIA_TAINT = {"key": "nvidia.com/gpu", "value": "present", "effect": "NoSchedule"}
+
+
 _POOLS = "notulen-gpu,notulen-gpu-z1"
+
+
 _IMAGE = "registry.example.com/harness/notulen-worker:v1"
 
 
@@ -71,8 +99,6 @@ CLUSTER = [
 
 
 # ── The Kubernetes scheduling predicate, implemented independently ──────────
-
-
 def _toleration_matches(toleration: dict[str, Any], taint: dict[str, Any]) -> bool:
     """Does one toleration tolerate one taint?
 
@@ -144,16 +170,21 @@ def _where_it_can_land(pod_spec: dict[str, Any]) -> list[str]:
 
 
 # ── Kubernetes API-server validation, implemented independently ─────────────
-
 # A DNS-1123 subdomain, which is what an object name must be.
 _DNS_1123_SUBDOMAIN = re.compile(
     r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
 )
+
+
 # A label value. Also the cap on a Job name, because the Job controller stamps
 # that name into a `job-name` label on every pod it creates.
 _LABEL_VALUE = re.compile(r"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+
+
 # The name half of a label key; an optional DNS-subdomain prefix may precede "/".
 _LABEL_KEY_NAME = re.compile(r"^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$")
+
+
 # resource.Quantity: <signedNumber><suffix>, suffix binary SI, decimal SI or exponent.
 _QUANTITY = re.compile(
     r"^[+-]?(\d+(\.\d*)?|\.\d+)((Ki|Mi|Gi|Ti|Pi|Ei)|([eE][+-]?\d+)|[mkMGTPE])?$"
@@ -168,7 +199,6 @@ def _label_key_is_valid(key: str) -> bool:
 
 
 # ── Driving the real creators and reading back the real manifest ────────────
-
 # A kubeconfig that parses and points nowhere. The bootstrap in `ensure_config`
 # runs for real against it; only the POST is intercepted.
 _DEAD_KUBECONFIG = """apiVersion: v1
@@ -186,6 +216,7 @@ users:
 - name: nowhere
   user: {token: not-a-real-token}
 """
+
 
 # A notulen job id is the recording's uuid4, as the dashboard hands it over.
 NOTULEN_JOB_ID = "00000000-1111-4222-8333-444444444444"
@@ -242,9 +273,7 @@ def _notulen_manifest(submit) -> dict[str, Any]:
 
 
 # ── Half one: where the pod can land ────────────────────────────────────────
-
-
-def test_the_notulen_job_fits_the_notulen_pools_and_no_other(submit) -> None:
+def _the_notulen_job_fits_the_notulen_pools_and_no_other(submit) -> None:
     """Worked out by hand, then checked against the manifest.
 
     `inference-gpu`, `general-gpu` and `system` are all excluded by the
@@ -260,9 +289,7 @@ def test_the_notulen_job_fits_the_notulen_pools_and_no_other(submit) -> None:
 
 
 # ── Half two: a manifest the API server will accept ─────────────────────────
-
-
-def test_the_manifest_is_one_the_api_server_would_accept(submit) -> None:
+def _the_manifest_is_one_the_api_server_would_accept(submit) -> None:
     """Checked against Kubernetes' published validation, not against a fixture.
 
     Four published rules, every one of them breakable by a caller's own id:
@@ -312,12 +339,13 @@ def test_the_manifest_is_one_the_api_server_would_accept(submit) -> None:
 
 
 # ── The placeholder that holds a notulen GPU during a recording ─────────────
-
 # The PriorityClass as the cluster carries it, read from the manifest applied
 # by hand, not from this package.
 _WARMUP_PRIORITY_MANIFEST = (
     Path(__file__).resolve().parents[4] / "infra/gpu/k8s/priorityclass.yaml"
 )
+
+
 # The cluster autoscaler's default expendable_pods_priority_cutoff: a pod
 # below it never brings up a node.
 _AUTOSCALER_EXPENDABLE_CUTOFF = -10
@@ -345,7 +373,7 @@ def _warmup_manifest(monkeypatch) -> dict[str, Any]:
         client.Configuration.set_default(previous_default)
 
 
-def test_the_gpu_placeholder_holds_a_node_the_notulen_job_can_take_over(
+def _the_gpu_placeholder_holds_a_node_the_notulen_job_can_take_over(
     monkeypatch,
 ) -> None:
     """The placeholder is only worth its GPU if the notulen Job can have it.
@@ -372,3 +400,37 @@ def test_the_gpu_placeholder_holds_a_node_the_notulen_job_can_take_over(
     assert pod["spec"]["priorityClassName"] == priority_class["metadata"]["name"]
     assert _AUTOSCALER_EXPENDABLE_CUTOFF <= priority_class["value"] < 0
     assert priority_class["preemptionPolicy"] == "Never"
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_the_notulen_job_fits_the_notulen_pools_and_no_other),
+    *_cases(_the_manifest_is_one_the_api_server_would_accept),
+    *_cases(_the_gpu_placeholder_holds_a_node_the_notulen_job_can_take_over),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_a_gpu_job_can_only_land_on_the_pool_it_is_meant_for(scenario, given, uses, request):
+    """A notulen GPU pod may land on exactly the notulen pools, and its manifest: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})

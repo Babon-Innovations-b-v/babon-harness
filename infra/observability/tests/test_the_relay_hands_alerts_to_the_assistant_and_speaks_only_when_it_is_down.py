@@ -1,4 +1,9 @@
 """The relay hands every alert group to the assistant, and speaks itself only
+
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 while the assistant is verified down, once per group, saying what fired.
 
 WHAT IT PINS. `alert_relay.relay.relay_payload` with the real deadman-flag
@@ -14,17 +19,35 @@ the outage reaches nobody.
 """
 from __future__ import annotations
 
+import inspect
+
+
+# From the relay hands alerts to the assistant and speaks only when it is down.
+
 import os
+
 
 import pytest
 
+
 from infra.observability.alert_relay.assistant_gate import assistant_is_down, flag_mount_present
+
+
 from infra.observability.alert_relay.deduper import Deduper
+
+
 from infra.observability.alert_relay.relay import relay_payload
 
+
 T0 = 1_760_000_000.0
+
+
 FLAG_FRESH_FOR_S = 300
+
+
 REPEAT_WINDOW_S = 1800
+
+
 AM_RETRY_S = 30
 
 
@@ -81,7 +104,7 @@ def _relay(payload, roads, deduper, now):
     return relay_payload(payload, forward=roads.forward, fan_out=roads.fan_out, deduper=deduper, now=now)
 
 
-def test_while_the_assistant_answers_the_group_is_handed_over_whole_and_nothing_is_sent(flag) -> None:
+def _while_the_assistant_answers_the_group_is_handed_over_whole_and_nothing_is_sent(flag) -> None:
     roads = Roads()
     outcomes = _relay(GROUP, roads, Deduper(), now=T0)
     assert roads.forwarded == [GROUP], "the assistant did not get the group exactly once, unchanged"
@@ -89,7 +112,7 @@ def test_while_the_assistant_answers_the_group_is_handed_over_whole_and_nothing_
     assert {(o.fingerprint, o.route) for o in outcomes} == {("a1", "assistant"), ("b2", "assistant")}
 
 
-def test_a_refused_hand_over_raises_so_alertmanager_retries(flag) -> None:
+def _a_refused_hand_over_raises_so_alertmanager_retries(flag) -> None:
     roads = Roads()
 
     def refuse(payload):
@@ -99,7 +122,7 @@ def test_a_refused_hand_over_raises_so_alertmanager_retries(flag) -> None:
         relay_payload(GROUP, forward=refuse, fan_out=roads.fan_out, deduper=Deduper(), now=T0)
 
 
-def test_while_the_assistant_is_down_one_message_carries_every_alert_and_its_first_action(flag) -> None:
+def _while_the_assistant_is_down_one_message_carries_every_alert_and_its_first_action(flag) -> None:
     _down_since(flag, T0)
     roads = Roads()
     outcomes = _relay(GROUP, roads, Deduper(), now=T0)
@@ -113,12 +136,7 @@ def test_while_the_assistant_is_down_one_message_carries_every_alert_and_its_fir
     assert {o.route for o in outcomes} == {"signal"}
 
 
-@pytest.mark.parametrize(
-    ("flag_age_s", "raw"),
-    [(0, True), (FLAG_FRESH_FOR_S - 1, True), (FLAG_FRESH_FOR_S, True),
-     (FLAG_FRESH_FOR_S + 1, False), (3600, False)],
-)
-def test_a_stale_flag_means_the_deadman_stopped_writing_not_that_the_assistant_is_down(
+def _a_stale_flag_means_the_deadman_stopped_writing_not_that_the_assistant_is_down(
     flag, flag_age_s, raw
 ) -> None:
     _down_since(flag, T0 - flag_age_s)
@@ -128,7 +146,7 @@ def test_a_stale_flag_means_the_deadman_stopped_writing_not_that_the_assistant_i
     assert bool(roads.forwarded) is not raw
 
 
-def test_alertmanager_repeating_a_group_does_not_repeat_the_message_until_half_an_hour_has_passed(flag) -> None:
+def _alertmanager_repeating_a_group_does_not_repeat_the_message_until_half_an_hour_has_passed(flag) -> None:
     _down_since(flag, T0)
     roads, deduper = Roads(), Deduper()
     _relay(GROUP, roads, deduper, now=T0)
@@ -143,7 +161,7 @@ def test_alertmanager_repeating_a_group_does_not_repeat_the_message_until_half_a
     assert len(roads.messages) == 2, "an incident still firing half an hour later was never mentioned again"
 
 
-def test_an_alert_clearing_is_never_muted_by_the_firing_before_it(flag) -> None:
+def _an_alert_clearing_is_never_muted_by_the_firing_before_it(flag) -> None:
     _down_since(flag, T0)
     roads, deduper = Roads(), Deduper()
     _relay(GROUP, roads, deduper, now=T0)
@@ -155,13 +173,13 @@ def test_an_alert_clearing_is_never_muted_by_the_firing_before_it(flag) -> None:
     assert "RESOLVED" in roads.messages[-1][0] and "disk back under 85%" in roads.messages[-1][1]
 
 
-def test_a_relay_that_cannot_see_the_flag_directory_can_say_so(tmp_path, monkeypatch) -> None:
+def _a_relay_that_cannot_see_the_flag_directory_can_say_so(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ASSISTANT_DOWN_FLAG_PATH", str(tmp_path / "no-such-mount" / "assistant-down"))
     assert assistant_is_down(now=T0) is False
     assert flag_mount_present() is False
 
 
-def test_no_alert_is_lost_between_the_webhook_and_the_message(flag) -> None:
+def _no_alert_is_lost_between_the_webhook_and_the_message(flag) -> None:
     """Every fingerprint comes back once, and every sent alert's summary is in the message."""
     payloads = [
         _payload(_alert("solo", summary="one thing broke")),
@@ -182,3 +200,46 @@ def test_no_alert_is_lost_between_the_webhook_and_the_message(flag) -> None:
             summary = alert["annotations"].get("summary")
             if alert.get("fingerprint") and summary:
                 assert summary in body
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_while_the_assistant_answers_the_group_is_handed_over_whole_and_nothing_is_sent),
+    *_cases(_a_refused_hand_over_raises_so_alertmanager_retries),
+    *_cases(_while_the_assistant_is_down_one_message_carries_every_alert_and_its_first_action),
+    *_cases(_a_stale_flag_means_the_deadman_stopped_writing_not_that_the_assistant_is_down, 
+    ("flag_age_s", "raw"),
+    [(0, True), (FLAG_FRESH_FOR_S - 1, True), (FLAG_FRESH_FOR_S, True),
+     (FLAG_FRESH_FOR_S + 1, False), (3600, False)],
+),
+    *_cases(_alertmanager_repeating_a_group_does_not_repeat_the_message_until_half_an_hour_has_passed),
+    *_cases(_an_alert_clearing_is_never_muted_by_the_firing_before_it),
+    *_cases(_a_relay_that_cannot_see_the_flag_directory_can_say_so),
+    *_cases(_no_alert_is_lost_between_the_webhook_and_the_message),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_the_relay_hands_alerts_to_the_assistant_and_speaks_only_when_it_is_down(scenario, given, uses, request):
+    """The relay hands every alert group to the assistant, and speaks itself only: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})

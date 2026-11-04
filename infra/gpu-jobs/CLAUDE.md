@@ -4,7 +4,7 @@ The `gpu_jobs` package: the only code that submits anything to the GPU cluster. 
 
 ## Rules
 
-- **Credentials by reference only.** Every secret reaches the pod through `secretKeyRef` on `notulen-worker-secrets`; settings through the `notulen-worker-config` ConfigMap. A value in the spec is readable by anyone who can read pods. `tests/test_a_notulen_pod_carries_no_credential_as_a_value_in_its_spec.py` pins it.
+- **Credentials by reference only.** Every secret reaches the pod through `secretKeyRef` on `notulen-worker-secrets`; settings through the `notulen-worker-config` ConfigMap. A value in the spec is readable by anyone who can read pods. `gpu_jobs/tests/test_a_notulen_job_waits_for_a_gpu_in_any_zone_without_a_deadline_and_its_pod_carries_no_credential_as_a_value.py` pins it.
 - **The run cap sits on the pod, never the Job.** A Job-level `activeDeadlineSeconds` counts the wait for a GPU node and kills a meeting still Pending on a stock-out.
 - **The placeholder stays a bare Pod at the `notulen-gpu-warmup` PriorityClass** (`infra/gpu/k8s/priorityclass.yaml`, value between -10 and -1). As a Job, every preemption is a failed Job and the dead-job watch pages on it.
 - **Job and placeholder share `notulen_affinity` and `notulen_tolerations`**, or the placeholder warms a node the Job cannot use.

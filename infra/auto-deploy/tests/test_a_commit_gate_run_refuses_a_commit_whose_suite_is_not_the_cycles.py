@@ -1,5 +1,9 @@
 """A verifying run's verdict is only about the suite the deploy cycle runs.
 
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 WHAT IT PINS. The refusal at the top of `commit_gate/run_one.sh`: the run reads
 the gate's `--ignore` list out of the commit under test AND out of the clone the
 cycle sources its steps from, and refuses (exit 79) unless the two are equal.
@@ -21,22 +25,36 @@ GUARDS. The verdict cache.
 """
 from __future__ import annotations
 
+import inspect
+
+
+# From a commit gate run refuses a commit whose suite is not the cycles.
+
 import subprocess
+
+
 from pathlib import Path
+
 
 import pytest
 
+
 _LANE = Path(__file__).resolve().parents[1] / "commit_gate" / "run_one.sh"
+
 
 #: The line the refusal opens on: the path of the step file it compares.
 _GUARD_OPENS = 'GATE_STEP_PATH="infra/auto-deploy/steps/40-gate.sh"'
 
+
 #: The last line of the refusal. Both arms exit 79; this closes the second.
 _GUARD_CLOSES = "fi"
+
 
 #: What a `40-gate.sh` has to contain for the comparison to have an answer.
 #: Only the `--ignore=` flags are read, so the rest of the file is not modelled.
 _IGNORES_A = "pytest --ignore=.claude/worktrees --ignore=vendor\n"
+
+
 _IGNORES_B = "pytest --ignore=.claude/worktrees\n"
 
 
@@ -120,7 +138,7 @@ def _run_guard(tmp_path: Path, repo: Path, sha: str) -> int:
     return done.returncode
 
 
-def test_a_run_whose_suite_is_the_cycles_suite_goes_on(tmp_path: Path) -> None:
+def _a_run_whose_suite_is_the_cycles_suite_goes_on(tmp_path: Path) -> None:
     """Both lists the same is the ordinary case, and it must not be refused.
 
     Without this the other cases pass for a refusal that refuses everything,
@@ -130,7 +148,7 @@ def test_a_run_whose_suite_is_the_cycles_suite_goes_on(tmp_path: Path) -> None:
     assert _run_guard(tmp_path, repo, sha) == 0
 
 
-def test_a_run_whose_ignore_list_came_from_another_commit_is_refused(
+def _a_run_whose_ignore_list_came_from_another_commit_is_refused(
     tmp_path: Path,
 ) -> None:
     """The commit says one suite and the clone says another, so neither is safe.
@@ -143,14 +161,7 @@ def test_a_run_whose_ignore_list_came_from_another_commit_is_refused(
     assert _run_guard(tmp_path, repo, sha) == 79
 
 
-@pytest.mark.parametrize(
-    ("committed", "on_disk"),
-    [
-        pytest.param("pytest -q\n", _IGNORES_A, id="the commit names no ignore list"),
-        pytest.param(_IGNORES_A, "pytest -q\n", id="the clone names no ignore list"),
-    ],
-)
-def test_a_run_that_cannot_read_both_lists_is_refused(
+def _a_run_that_cannot_read_both_lists_is_refused(
     tmp_path: Path, committed: str, on_disk: str
 ) -> None:
     """Unreadable is not the same as equal, and it may not be treated as equal.
@@ -162,7 +173,7 @@ def test_a_run_that_cannot_read_both_lists_is_refused(
     assert _run_guard(tmp_path, repo, sha) == 79
 
 
-def test_the_only_clone_file_the_lane_opens_is_the_one_it_compares() -> None:
+def _the_only_clone_file_the_lane_opens_is_the_one_it_compares() -> None:
     """A second clone read is a second way for the two commits to differ.
 
     The refusal above closes exactly one hole: the ignore list. Every other file
@@ -181,3 +192,44 @@ def test_the_only_clone_file_the_lane_opens_is_the_one_it_compares() -> None:
         "run_one.sh reads a file out of the clone that the ignore-list refusal "
         f"does not compare: {opened}"
     )
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_a_run_whose_suite_is_the_cycles_suite_goes_on),
+    *_cases(_a_run_whose_ignore_list_came_from_another_commit_is_refused),
+    *_cases(_a_run_that_cannot_read_both_lists_is_refused, 
+    ("committed", "on_disk"),
+    [
+        pytest.param("pytest -q\n", _IGNORES_A, id="the commit names no ignore list"),
+        pytest.param(_IGNORES_A, "pytest -q\n", id="the clone names no ignore list"),
+    ],
+),
+    *_cases(_the_only_clone_file_the_lane_opens_is_the_one_it_compares),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_a_commit_gate_run_refuses_a_commit_whose_suite_is_not_the_cycles(scenario, given, uses, request):
+    """A verifying run's verdict is only about the suite the deploy cycle runs: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})
