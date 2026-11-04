@@ -244,8 +244,7 @@ def build(repo: Path, tracked: tuple[str, ...] | None = None) -> ImportGraph:
     The key is a hash of every first-party file's CONTENT, so a tree that has
     been edited since is a different key and is parsed again; the gate
     selecting against a stale tree is the one failure this package may not
-    have. `tests/test_the_graph_is_rebuilt_when_the_tree_moves_under_it.py`
-    pins that.
+    have. The graph-rebuild cases of the module test pin that.
     """
     tracked = tracked_files(repo) if tracked is None else tuple(tracked)
     first_party = tuple(

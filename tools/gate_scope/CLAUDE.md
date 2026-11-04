@@ -5,7 +5,7 @@ Decides which tests one commit can reach, for the deploy gate. Sealed seam:
 asks, `steps/40-gate.sh` obeys, `commit_gate/run_one.sh` asks the commit's own
 copy, and `audit_full_run.sh` (harness-gate-audit.timer, nightly) is the
 unselected run whose green stamp licenses narrowing at all. Module test:
-`tests/test_the_gate_runs_every_test_the_change_can_break.py`.
+`tests/test_the_gate_runs_every_test_a_change_can_break_on_a_fresh_graph_in_the_environment_the_audit_checks.py`.
 
 ## Rules
 

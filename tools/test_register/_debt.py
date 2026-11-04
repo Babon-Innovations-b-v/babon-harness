@@ -134,9 +134,6 @@ DEBT: tuple[tuple[str, str], ...] = (
     ('lib/dashkit', 'lib/dashkit/core/tests/test_db_dsn_resolution_order.py'),
     ('lib/dashkit', 'lib/dashkit/core/tests/test_get_user_reads_the_sso_headers.py'),
     ('lib/dashkit', 'lib/dashkit/core/tests/test_identifier_allowlist.py'),
-    ('tools/gate_scope', 'tools/gate_scope/tests/test_the_gate_runs_every_test_the_change_can_break.py'),
-    ('tools/gate_scope', 'tools/gate_scope/tests/test_the_graph_is_rebuilt_when_the_tree_moves_under_it.py'),
-    ('tools/gate_scope', 'tools/gate_scope/tests/test_the_nightly_audit_runs_the_suite_the_gate_would_run_in_the_environment_the_gate_would_run_it_in.py'),
 )
 
 #: 108 files holding more than one test function that day, each with its
@@ -241,7 +238,4 @@ FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
     ('lib/dashkit/core/tests/test_db_dsn_resolution_order.py', 4),
     ('lib/dashkit/core/tests/test_get_user_reads_the_sso_headers.py', 5),
     ('lib/dashkit/core/tests/test_identifier_allowlist.py', 2),
-    ('tools/gate_scope/tests/test_the_gate_runs_every_test_the_change_can_break.py', 5),
-    ('tools/gate_scope/tests/test_the_graph_is_rebuilt_when_the_tree_moves_under_it.py', 3),
-    ('tools/gate_scope/tests/test_the_nightly_audit_runs_the_suite_the_gate_would_run_in_the_environment_the_gate_would_run_it_in.py', 3),
 )

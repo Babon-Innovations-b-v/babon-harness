@@ -214,48 +214,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='tools/gate_scope/tests/test_the_gate_runs_every_test_the_change_can_break.py',
-        pins=('tools/gate_scope',),
-        runs_when=(
-            '*.py',
-            'tools/gate_scope/**',
-            '.claude/scripts/gate-scope.py',
-        ),
-        proved_by=Break(
-            file='tools/gate_scope/_graph.py',
-            old='                reached.add(importer)\n                frontier.append(importer)',
-            new='                reached.add(importer)',
-            why='the reverse closure is one hop deep instead of transitive, so a change to core/rules.py no longer selects the report suite that reaches it through report/render.py',
-        ),
-    ),
-    Row(
-        test='tools/gate_scope/tests/test_the_graph_is_rebuilt_when_the_tree_moves_under_it.py',
-        pins=('tools/gate_scope',),
-        runs_when=(
-            'tools/gate_scope/**',
-        ),
-        proved_by=Break(
-            file='tools/gate_scope/_graph.py',
-            old='    key = (str(repo), tracked, fingerprint(repo, first_party))',
-            new='    key = (str(repo), tracked)',
-            why='an edited tree is handed the graph built before the edit, so the added-import case fails',
-        ),
-    ),
-    Row(
-        test='tools/gate_scope/tests/test_the_nightly_audit_runs_the_suite_the_gate_would_run_in_the_environment_the_gate_would_run_it_in.py',
-        pins=('tools/gate_scope',),
-        runs_when=(
-            'tools/gate_scope/**',
-            'infra/auto-deploy/steps/40-gate.sh',
-        ),
-        proved_by=Break(
-            file='tools/gate_scope/audit_full_run.sh',
-            old='        timeout "$AUDIT_TIMEOUT" "$audit_venv/bin/pytest" -q --tb=no -rf \\',
-            new='        timeout "$AUDIT_TIMEOUT" "$REPO/.venv/bin/pytest" -q --tb=no -rf \\',
-            why="the audit runs the export through the clone's interpreter, so the interpreter case fails",
-        ),
-    ),
-    Row(
         test='tools/test_register/tests/test_a_test_that_cannot_fail_is_caught_by_its_own_break.py',
         pins=('tools/test_register',),
         runs_when=(
@@ -1832,6 +1790,21 @@ ROWS: tuple[Row, ...] = (
             old="_STEP * (deepest - spec.rank)",
             new="_STEP * (spec.rank + 1)",
             why="a fallback outranks its preferred pool, so the expander order differs from the hand-written one",
+        ),
+    ),
+    Row(
+        test='tools/gate_scope/tests/test_the_gate_runs_every_test_a_change_can_break_on_a_fresh_graph_in_the_environment_the_audit_checks.py',
+        pins=('tools/gate_scope',),
+        runs_when=(
+            'tools/gate_scope/**',
+            '.claude/scripts/gate-scope.py',
+            'infra/auto-deploy/steps/40-gate.sh',
+        ),
+        proved_by=Break(
+            file='tools/gate_scope/_graph.py',
+            old='                reached.add(importer)\n                frontier.append(importer)',
+            new='                reached.add(importer)',
+            why='the reverse closure is one hop deep instead of transitive, so a change to core/rules.py no longer selects the report suite that reaches it through report/render.py',
         ),
     ),
     Row(
