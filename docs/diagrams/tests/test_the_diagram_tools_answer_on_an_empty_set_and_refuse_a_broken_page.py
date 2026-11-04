@@ -1,5 +1,9 @@
 """The diagram tools work on a fresh repository and refuse what a machine can see.
 
+Every check below is one row of CASES under the one test function; a
+row that fails fails the test. The sections below are the notes each
+check was written with.
+
 WHAT IS CHECKED. Three promises a new owner relies on before drawing anything.
 The link map passes on an empty set, so a fresh clone is clean rather than red.
 The MCP tools import and answer without the ``mcp`` library, which only
@@ -12,13 +16,30 @@ one known defect each, so the expected fault is the one that was planted.
 """
 from __future__ import annotations
 
+import inspect
+import pytest
+
+
+# From the diagram tools answer on an empty set and refuse a broken page.
+
 import importlib
+
+
 import shutil
+
+
 import subprocess
+
+
 import sys
+
+
 from pathlib import Path
 
+
 _REPO = Path(__file__).resolve().parents[3]
+
+
 _MCP = _REPO / "docs" / "diagrams" / "mcp"
 
 
@@ -46,7 +67,7 @@ def _good_page() -> tuple[dict, dict]:
     return spec, layout
 
 
-def test_the_link_map_is_clean_on_an_empty_set(tmp_path: Path) -> None:
+def _the_link_map_is_clean_on_an_empty_set(tmp_path: Path) -> None:
     copy = tmp_path / "repo"
     shutil.copytree(_REPO / "docs/diagrams/tools", copy / "docs/diagrams/tools")
     (copy / "docs/bible.md").write_text("# Book\n\n## workflow/loop\n\nNo drawing yet.\n")
@@ -56,25 +77,61 @@ def test_the_link_map_is_clean_on_an_empty_set(tmp_path: Path) -> None:
     assert "0 boxes claimed" in done.stdout
 
 
-def test_the_tools_import_without_the_mcp_library() -> None:
+def _the_tools_import_without_the_mcp_library() -> None:
     for name in ("draw_module", "link_module", "check_diagrams"):
         assert callable(getattr(_tool(name), name))
 
 
-def test_a_page_with_no_faults_comes_back_empty() -> None:
+def _a_page_with_no_faults_comes_back_empty() -> None:
     spec, layout = _good_page()
     assert _tool("page_faults").page_faults(spec, layout) == []
 
 
-def test_a_page_that_cannot_be_told_is_refused() -> None:
+def _a_page_that_cannot_be_told_is_refused() -> None:
     spec, layout = _good_page()
     spec.pop("slides")
     faults = _tool("page_faults").page_faults(spec, layout)
     assert any("slide" in fault for fault in faults), faults
 
 
-def test_an_edge_to_a_box_never_placed_is_refused() -> None:
+def _an_edge_to_a_box_never_placed_is_refused() -> None:
     spec, layout = _good_page()
     layout["edges"].append(["store", "nowhere", ""])
     faults = _tool("page_faults").page_faults(spec, layout)
     assert any("nowhere" in fault for fault in faults), faults
+
+
+def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
+    """One case per row a check is given; a check given no rows is one case of its fixtures."""
+    names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
+    rows = []
+    for index, row in enumerate(argvalues):
+        row_marks, row_id = (), None
+        if isinstance(row, type(pytest.param())):
+            row, row_marks, row_id = row.values, row.marks, row.id
+        elif len(names) == 1:
+            row = (row,)
+        if row_id is None and isinstance(ids, (list, tuple)):
+            row_id = ids[index]
+        label = scenario.__name__.lstrip("_") + (f"-{row_id if row_id is not None else index}" if names else "")
+        rows.append(pytest.param(scenario, dict(zip(names, row)), tuple(uses), id=label, marks=(*marks, *row_marks)))
+    return rows
+
+
+CASES = [
+    *_cases(_the_link_map_is_clean_on_an_empty_set),
+    *_cases(_the_tools_import_without_the_mcp_library),
+    *_cases(_a_page_with_no_faults_comes_back_empty),
+    *_cases(_a_page_that_cannot_be_told_is_refused),
+    *_cases(_an_edge_to_a_box_never_placed_is_refused),
+]
+
+
+@pytest.mark.parametrize("scenario, given, uses", CASES)
+def test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page(scenario, given, uses, request):
+    """The diagram tools work on a fresh repository and refuse what a machine can see: every row of CASES must hold."""
+    for name in uses:
+        request.getfixturevalue(name)
+    wanted = [name for name, parameter in inspect.signature(scenario).parameters.items()
+              if name not in given and parameter.default is parameter.empty]
+    scenario(**given, **{name: request.getfixturevalue(name) for name in wanted})

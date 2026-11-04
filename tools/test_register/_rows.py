@@ -73,6 +73,19 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test='docs/diagrams/tests/test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page.py',
+        pins=('docs/diagrams',),
+        runs_when=(
+            'docs/diagrams/**',
+        ),
+        proved_by=Break(
+            file='docs/diagrams/tools/linkmap.py',
+            old='            continue  # not drawn yet: an empty set is a clean set',
+            new='            pass',
+            why='a page not drawn yet is read as broken, so the empty-set case fails',
+        ),
+    ),
+    Row(
         test='infra/auto-deploy/tests/test_a_change_rebuilds_the_services_of_its_own_fragment_and_no_others.py',
         pins=('infra/auto-deploy',),
         runs_when=(
@@ -224,19 +237,6 @@ ROWS: tuple[Row, ...] = (
             old='        return GREEN, (',
             new='        return RED, (',
             why='a test that passed with its own break applied is reported red, so the shape-only case gets red where it asserts green',
-        ),
-    ),
-    Row(
-        test='docs/diagrams/tests/test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page.py',
-        pins=('docs/diagrams',),
-        runs_when=(
-            'docs/diagrams/**',
-        ),
-        proved_by=Break(
-            file='docs/diagrams/tools/linkmap.py',
-            old='            continue  # not drawn yet: an empty set is a clean set',
-            new='            pass',
-            why='a page not drawn yet is read as broken, so the empty-set case fails',
         ),
     ),
     Row(

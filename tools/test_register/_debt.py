@@ -219,7 +219,6 @@ FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
     ('apps/documents/tests/test_render_html.py', 8),
     ('apps/notulen/tests/test_a_notulen_names_each_person_once_and_caps_the_speakers.py', 5),
     ('apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py', 4),
-    ('docs/diagrams/tests/test_the_diagram_tools_answer_on_an_empty_set_and_refuse_a_broken_page.py', 5),
     ('infra/auto-deploy/tests/test_a_change_rebuilds_the_services_of_its_own_fragment_and_no_others.py', 4),
     ('infra/auto-deploy/tests/test_a_commit_gate_run_refuses_a_commit_whose_suite_is_not_the_cycles.py', 4),
     ('infra/auto-deploy/tests/test_a_deploy_alert_wakes_nobody_unless_the_sender_says_a_person_must_act.py', 3),
