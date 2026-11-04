@@ -1,8 +1,8 @@
 #!/bin/bash
-# Auto-deploy: the whole CI/CD of this repository, run on the owner's VM.
+# Auto-deploy: the whole CI/CD of this repository, run in the cluster.
 #
-# A systemd timer (systemd/harness-auto-deploy.timer) runs this every two
-# minutes, and the push webhook (infra/webhook) starts it on every push to main.
+# CronJob deploy-cycle (infra/k8s/deploy) runs this every two minutes, and the
+# push receiver (infra/deploy_loop) starts it on every push to main.
 # Pushing to main IS the deploy: the cycle takes ONE commit past the deploy
 # bookmark, verifies it with the gate, rebuilds the containers it changed,
 # checks they boot, and only then moves the bookmark.
@@ -15,23 +15,22 @@
 #   10-prelude.sh            configuration, the vault cache, the kill switch,
 #                            the shared result variables
 #   15-freshness.sh          fast-forward the clone to origin/main
-#   16-unit-repair.sh        re-copy a unit whose module this commit moved
 #   18-verdicts.sh           fetch verdicts from a verifying lane on another box
 #   20-changes.sh            pick the one commit, diff it, decide the gate scope
-#   30-edge.sh               validate and reload Caddy when its config changed
 #   35-export.sh             git archive the commit: the tree the gate verifies
 #                            and every image is built from
-#   40-gate.sh               the gate: pytest, narrowed, fails closed
+#   40-gate.sh               the gate: pytest in a gate Job, narrowed, fails closed
 #   45-verified.sh           keep a passed tree that outlives the cycle
-#   50-deploy.sh             docker compose build + up for the changed
-#                            services, a boot check each, rollback on failure
+#   50-deploy.sh             build the changed stack images (BuildKit), roll
+#                            each out by digest, undo a rollout that fails
 #   68-assistant-workspace.sh  render the assistant's workspace
-#   80-units.sh              install the repository's systemd units
+#   80-manifests.sh          apply infra/k8s when the commit changed it
 #   88-eject.sh              take a rejected commit back off main (off by default)
 #   90-outcome.sh            move the bookmark, post the statuses, clean up
 #
 # Not steps, sourced by the steps that need them: steps/doors.sh (config,
-# alerts, GitHub), steps/eject_body.sh, steps/build_verdict.sh.
+# alerts, GitHub), steps/cluster.sh (the cluster calls), steps/eject_body.sh,
+# steps/build_verdict.sh.
 #
 # FAILURE POLICY: declared per step. Summary: the gate fails CLOSED (red and
 # amber both ship nothing); a failed build or boot holds the bookmark and the
@@ -40,7 +39,7 @@
 
 set -u
 
-# systemd does not read ~/.bashrc, so name the usual tool locations here.
+# Name the usual tool locations; the cycle's pod has no login shell.
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 AUTO_DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,15 +70,13 @@ fi
 unset _snapshot_dir
 . "$AUTO_DEPLOY_DIR/steps/10-prelude.sh"
 . "$AUTO_DEPLOY_DIR/steps/15-freshness.sh"
-. "$AUTO_DEPLOY_DIR/steps/16-unit-repair.sh"
 . "$AUTO_DEPLOY_DIR/steps/18-verdicts.sh"
 . "$AUTO_DEPLOY_DIR/steps/20-changes.sh"
-. "$AUTO_DEPLOY_DIR/steps/30-edge.sh"
 . "$AUTO_DEPLOY_DIR/steps/35-export.sh"
 . "$AUTO_DEPLOY_DIR/steps/40-gate.sh"
 . "$AUTO_DEPLOY_DIR/steps/45-verified.sh"
 . "$AUTO_DEPLOY_DIR/steps/50-deploy.sh"
 . "$AUTO_DEPLOY_DIR/steps/68-assistant-workspace.sh"
-. "$AUTO_DEPLOY_DIR/steps/80-units.sh"
+. "$AUTO_DEPLOY_DIR/steps/80-manifests.sh"
 . "$AUTO_DEPLOY_DIR/steps/88-eject.sh"
 . "$AUTO_DEPLOY_DIR/steps/90-outcome.sh"

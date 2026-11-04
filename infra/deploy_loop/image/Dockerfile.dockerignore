@@ -1,0 +1,7 @@
+# Deny by default: the context is the repository root, and the image takes
+# only what its COPY lines name.
+**
+!infra/__init__.py
+!infra/deploy_loop/**
+infra/deploy_loop/tests/**
+**/__pycache__/**

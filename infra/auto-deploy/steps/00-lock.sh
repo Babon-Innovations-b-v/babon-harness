@@ -17,12 +17,9 @@ STATE_DIR="${AUTO_DEPLOY_STATE_DIR:-/var/lib/harness}"
 LAST_SHA_FILE="$STATE_DIR/last-deployed-sha"
 
 # Where the cycle builds from: an export of the commit the gate verifies, one
-# directory per sha. The gate's environment is a SIBLING of the export, never
-# inside it, because the export is also a docker build context and a venv in it
-# would be sent to the daemon once per service. Both on one filesystem with
-# ~/.cache/uv, so uv hardlinks instead of copying.
+# directory per sha, and the build context of every image. The gate itself
+# runs in a gate Job with a clone of its own (infra/deploy_loop).
 BUILD_TREE_ROOT="${AUTO_DEPLOY_BUILD_ROOT:-$HARNESS_ROOT/build-tree}"
-GATE_VENV_ROOT="${AUTO_DEPLOY_GATE_VENV_ROOT:-$HARNESS_ROOT/gate-venv}"
 BUILD_TREE_MIN_FREE_MB="${AUTO_DEPLOY_BUILD_MIN_FREE_MB:-2048}"
 # A passed tree that outlives the cycle, for anything that bind-mounts it.
 VERIFIED_ROOT="${AUTO_DEPLOY_VERIFIED_ROOT:-$HARNESS_ROOT/verified-trees}"

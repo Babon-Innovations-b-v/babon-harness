@@ -1,0 +1,66 @@
+# Who the deploy loop's pods are to the cluster.
+#
+# deploy-cycle: the cycle applies all of infra/k8s (step 80: namespaces,
+# RBAC, ExternalSecrets, workloads), sets images and reads rollouts in every
+# namespace, so it holds what applying needs, which is cluster-admin. Its token
+# is in the cycle pod only: every gate Job sets automountServiceAccountToken
+# false and runs as the namespace's default account, which holds nothing.
+#
+# deploy-webhook: the push receiver may only read CronJobs and Jobs in this
+# namespace and create a Job; it can start a cycle, never change one.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-cycle
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: deploy-cycle
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: deploy-cycle
+    namespace: deploy
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-webhook
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploy-webhook
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+rules:
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploy-webhook
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deploy-webhook
+subjects:
+  - kind: ServiceAccount
+    name: deploy-webhook

@@ -144,7 +144,7 @@ fi
 # tree. Here only whether anything deployable moved at all, so step 40 can tell
 # a documents-only commit from one that ships something.
 caddy_changed=false
-units_changed=false
+manifests_changed=false
 assistant_workspace_changed=false
 vm_runs_changed_code=false
 compose_changed=false
@@ -154,7 +154,7 @@ while IFS= read -r path; do
         infra/caddy/*) caddy_changed=true ;;
     esac
     case "$path" in
-        */systemd/*.service|*/systemd/*.timer) units_changed=true ;;
+        infra/k8s/*|infra/cluster/*|infra/caddy/*) manifests_changed=true ;;
     esac
     case "$path" in
         apps/assistant/*) assistant_workspace_changed=true ;;
@@ -169,7 +169,7 @@ while IFS= read -r path; do
             compose_changed=true ;;
     esac
 done <<< "$CHANGED"
-log "touches: compose=$compose_changed caddy=$caddy_changed units=$units_changed assistant=$assistant_workspace_changed code=$vm_runs_changed_code env=$ENV_CHANGED"
+log "touches: compose=$compose_changed caddy=$caddy_changed manifests=$manifests_changed assistant=$assistant_workspace_changed code=$vm_runs_changed_code env=$ENV_CHANGED"
 
 # ── The gate's scope ────────────────────────────────────────────────────────
 # The ONE place it is decided. Narrowing is licensed only while the nightly
@@ -193,7 +193,7 @@ if [ "$OLD_SHA" = "$NEW_SHA" ]; then
 elif [ -f "$STATE_DIR/gate-selection-miss" ]; then
     log "[scope] a nightly audit proved a selection miss; full gate until $STATE_DIR/gate-selection-miss is removed by hand"
 elif [ "$last_audit_at" -eq 0 ] || [ "$last_audit_age" -gt 172800 ] || [ "$last_audit_age" -lt 0 ]; then
-    log "[scope] no successful unselected audit in 48h; full gate until harness-gate-audit.service goes green"
+    log "[scope] no successful unselected audit in 48h; full gate until the unselected audit goes green"
 else
     scope_word=$(cd "$REPO" && python3 -m tools.gate_scope \
         --changed-file "$STATE_DIR/gate-changed-paths" --repo "$REPO" \

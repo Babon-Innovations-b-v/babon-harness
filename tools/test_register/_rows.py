@@ -125,19 +125,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='infra/webhook/tests/test_a_reset_that_lost_the_index_lock_pages_nobody.py',
-        pins=('infra/webhook',),
-        runs_when=(
-            'infra/webhook/**',
-        ),
-        proved_by=Break(
-            file='infra/webhook/trigger-deploy.sh',
-            old='if [ -n "$reset_failed" ] && grep -qE \'index\\.lock|Another git process seems to be running\' "$reset_output"; then',
-            new='if [ -n "$reset_failed" ] && grep -qE \'no such lock message\' "$reset_output"; then',
-            why='a lost race is no longer recognised, so a reset that lost the index lock counts as a failed repair',
-        ),
-    ),
-    Row(
         test='.claude/scripts/tests/test_gate_scope.py',
         pins=('.claude/scripts',),
         runs_when=(
@@ -487,7 +474,6 @@ ROWS: tuple[Row, ...] = (
             'infra/auto-deploy/steps/eject_body.sh',
             'infra/auto-deploy/auto-deploy.sh',
             'infra/auto-deploy/steps/**',
-            'infra/auto-deploy/steps/80-units.sh',
             'infra/auto-deploy/**',
         ),
         proved_by=Break(
@@ -530,6 +516,7 @@ ROWS: tuple[Row, ...] = (
             'tools/gate_scope/**',
             '.claude/scripts/gate-scope.py',
             'infra/auto-deploy/steps/40-gate.sh',
+            'infra/deploy_loop/gate_run.sh',
         ),
         proved_by=Break(
             file='tools/gate_scope/_graph.py',
@@ -628,6 +615,19 @@ ROWS: tuple[Row, ...] = (
             old='if [ "$count" -ne 1 ]; then',
             new='if [ "$count" -lt 1 ]; then',
             why="two Ready media nodes reach the move, which the two-node case says never happens",
+        ),
+    ),
+    Row(
+        test="infra/deploy_loop/tests/test_the_deploy_loop_asks_the_cluster_only_what_the_cycle_may_act_a_signed_push_to_main_starts_each_idle_loop_cronjob_a_gate_job_runs_the_gated_commit_in_its_own_pinned_image_on_a_clone_of_its_and_a_job_fault_never_reads_as_a_test_verdict.py",
+        pins=("infra/deploy_loop",),
+        runs_when=(
+            "infra/deploy_loop/**",
+        ),
+        proved_by=Break(
+            file="infra/deploy_loop/_outcome.py",
+            old='if failed is not None and failed.get("reason") == "DeadlineExceeded":',
+            new='if failed is not None and failed.get("reason") == "Deadline":',
+            why="a Job the deadline killed reads as its container's exit code, so the deadline case gets 0 instead of 124",
         ),
     ),
 )

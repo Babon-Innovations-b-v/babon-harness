@@ -2,11 +2,11 @@ Budget: the deploy gate everything ships through. The status vocabulary, the gat
 
 # infra/auto-deploy/
 
-The deploy loop. `auto-deploy.sh` sources `steps/NN-*.sh` in one shell, every
-two minutes (`systemd/harness-auto-deploy.timer`) and on every push
-(`infra/webhook/trigger-deploy.sh`). `commit_gate/` verifies queued commits
-ahead of it; `branch_gate/` verifies the eject's hand-backs. First-time setup:
-`sudo infra/auto-deploy/install.sh`. Bible chapter: `infra/deploy` in `docs/bible.md`.
+The deploy loop's steps. `auto-deploy.sh` sources `steps/NN-*.sh` in one shell,
+in the cycle pod of CronJob `deploy-cycle` (`infra/k8s/deploy/`), every two
+minutes and on every push (the receiver, `infra/deploy_loop/`). Every call to
+the cluster is in `steps/cluster.sh`. `commit_gate/` (the verifying lane) and
+`branch_gate/` (hand-backs) are not in the cluster yet. Bible: `infra/deploy`.
 
 ## Rules
 
@@ -14,39 +14,46 @@ ahead of it; `branch_gate/` verifies the eject's hand-backs. First-time setup:
   with a green verdict for its exact tree, otherwise the next one. Never HEAD,
   never a batch: a red on a batch names no commit.
 - **The gate fails closed.** Red (rc 1 to 5, no register row, a test that
-  survives its own break) and amber (rc 124/126/127/137, uv sync failed) both
-  ship nothing. Only rc 0 and rc 1 are cached; amber is never cached, never
-  ejects, and three in a row alert. Scope `none` posts no `vm/gate`.
+  survives its own break) and amber (rc 124 timeout, 125 a gate Job that could
+  not start or was evicted, 126/127, 137) both ship nothing. Only rc 0 and rc 1
+  are cached; amber is never cached, never ejects, and three in a row alert.
+  Scope `none` posts no `vm/gate`.
+- **A gate Job runs in the image the GATED tree's `infra/gate-image/pin`
+  names**, by digest. A pin with no digest is 125 for every commit: build and
+  pin the gate image before the loop goes live.
 - **Statuses**: `vm/gate`, `vm/build`, `vm/boot`, `vm/deploy` (and
-  `vm/branch-gate` on hand-backs). `failure` = ran and said no; `error` = could
-  not form an opinion. Never collapse `error` into either other word. Never post
-  a `pending` the same cycle cannot resolve.
-- **The export, never the clone.** The gate tests `$BUILD_TREE` (a `git
-  archive` of the commit), images build from `$VERIFIED_TREE`, compose starts
-  from `$VERIFIED_TREE`. The webhook moves the clone at any moment.
+  `vm/branch-gate` on hand-backs). The names stayed when the loop moved off the
+  server: the watchdog and the branch gate read them, and only the owner
+  renames them. `failure` = ran and said no; `error` = could not form an
+  opinion. Never collapse `error` into either other word.
+- **The export, never the clone.** Images build from `$VERIFIED_TREE` and step
+  80 applies from it; the gate Job fetches the commit itself.
+- **The bookmark is ConfigMap `deploy-bookmark`**, read into
+  `$STATE_DIR/last-deployed-sha` by step 10 and written back by
+  `cluster_bookmark_push` wherever that file moves. A ConfigMap without a `sha`
+  key stops every cycle: seed it once with
+  `kubectl -n deploy patch configmap deploy-bookmark --type merge -p '{"data":{"sha":"<last live sha>"}}'`
+  (or `""` on a fresh install, which gates from the first commit).
 - **A new step goes in the explicit source list** in `auto-deploy.sh`; a test
-  checks the list against `steps/`. `doors.sh`, `eject_body.sh` and
-  `build_verdict.sh` are not steps and must never be sourced as one.
+  checks the list against `steps/`. `doors.sh`, `cluster.sh`, `eject_body.sh`
+  and `build_verdict.sh` are not steps and must never be sourced as one.
 - **The eject ships OFF** (`EJECT_ENABLED=0`). Off decides nothing: no claim, no
   revert, no issue; step 90 alerts that a red holds the queue. Armed, it takes
-  back ONE commit (restore or lift, never a wider range) and hands it back on a
-  branch `auto-eject/<sha12>` with a draft pull request.
+  back ONE commit and hands it back on `auto-eject/<sha12>` with a draft pull
+  request.
 - **Never press merge on a hand-back pull request.** Its first commit is the
-  tree the gate refused, and the gate judges every commit against its own tree,
-  so a merge puts a permanently red commit on main and freezes the bookmark.
-  Fix it on the branch, then squash it onto main as ONE commit with
-  `Closes #<the PR>` in the message; landing on main is what re-tests it.
-- **A test and the change that makes it pass go in one commit.** A commit whose
-  own tree fails its own test is red for ever.
+  tree the gate refused. Fix it on the branch, then squash it onto main as ONE
+  commit with `Closes #<the PR>` in the message.
+- **A test and the change that makes it pass go in one commit.**
 
 ## Don't
 
-- `*.timer` must never `Requires=` its service: stop propagates and the timer
-  dies silently. The activation link is `[Timer] Unit=`.
-- Never `uv sync` into the clone's `.venv` from a step: the gate's environment
-  is `$GATE_VENV_ROOT/<sha>`, a sibling of the export.
-- Never hand-edit `/etc/systemd/system/harness-*`: step 80 rewrites units from
-  the repository, and removes those it installed that the repository dropped.
-- A compose fragment must not bind-mount a git-ignored file by a relative path:
-  the stack runs from the verified tree, which only holds tracked files. Use
-  `$HARNESS_ROOT/...` for runtime files.
+- Never `kubectl apply -k` by hand while the loop runs: the stack images go
+  back to the placeholder tag `set-by-deploy-loop` until the next cycle that
+  changes a manifest re-pins them. Apply through a commit.
+- Never map a gate Job's fault to 0 to 5 (`infra/deploy_loop/_outcome.py`).
+- `compose_fragments.py` still decides which stack images a commit changes:
+  a stack image is a compose service with a `build:` block whose name a
+  manifest uses with the placeholder tag.
+- Step 68 (the assistant's workspace) still renders on the cycle's own volume;
+  the gateway in the cluster does not read it yet.

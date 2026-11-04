@@ -4,5 +4,11 @@ namespace: deploy
 resources:
   - namespace.yaml
   - priorityclass.yaml
+  - rbac.yaml
+  - state.yaml
+  - secrets.yaml
+  - buildkitd.yaml
+  - cycle.yaml
+  - receiver.yaml
 components:
   - ../vault-secret

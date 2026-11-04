@@ -10,8 +10,9 @@
 #          nothing, a test with no register row, or a test that passed with its
 #          own break applied. Nothing ships. Only rc 0 and rc 1 are cached,
 #          because only those are a function of the tree alone.
-#   amber  the run could not start or finish: uv sync failed, a timeout (124),
-#          no interpreter (126/127), killed (137). Nothing ships either, from
+#   amber  the run could not start or finish: a timeout (124), a gate Job
+#          that could not start or was evicted (125), uv sync failed in the
+#          Job or no interpreter (126/127), killed or out of memory (137). Nothing ships either, from
 #          the first one. Amber is never cached, never a regression and never
 #          ejects; the bookmark holds and the next tick retries. Three ambers in
 #          a row escalate the alert to red.
@@ -28,12 +29,13 @@
 #
 # Sourced by auto-deploy.sh; shares its shell. Not executable on its own.
 
-if ! ${compose_changed:-false} && ! ${caddy_changed:-false} && ! ${units_changed:-false} \
+if ! ${compose_changed:-false} && ! ${caddy_changed:-false} && ! ${manifests_changed:-false} \
         && ! ${assistant_workspace_changed:-false} && ! ${vm_runs_changed_code:-false} \
         && [ "${ENV_CHANGED:-false}" != true ] && [ "${gate_scope:-full}" = "none" ]; then
     log "no deployable change and no reachable test; marking ${NEW_SHA:0:8} done without deploys"
     gh_status_range "success" "no deployable change (documents only)"
     echo "$NEW_SHA" > "$LAST_SHA_FILE"
+    cluster_bookmark_push
     record_deploy_verdict noop
     exit 0
 fi
@@ -168,24 +170,10 @@ if [ "$gate_scope" = "selected" ] && [ -n "${BUILD_TREE:-}" ] && [ -d "${BUILD_T
     fi
 fi
 
-# ── The environment: the export's own, a sibling of the export ──────────────
-GATE_UV_SYNC_ARGS="${GATE_UV_SYNC_ARGS:---all-packages --all-extras --all-groups}"
-sync_ok=1
-if [ "$gate_cached" -eq 0 ] && [ "${GATE_ENABLED:-1}" = "1" ] && [ "$gate_scope" != "none" ] \
-        && [ -n "${BUILD_TREE:-}" ] && [ -d "${BUILD_TREE:-}" ]; then
-    GATE_VENV="$GATE_VENV_ROOT/$NEW_SHA"
-    mkdir -p "$GATE_VENV_ROOT" 2>/dev/null
-    rm -rf "${GATE_VENV_ROOT:?}"/* 2>/dev/null
-    # shellcheck disable=SC2086
-    if ( cd "$BUILD_TREE" && UV_PROJECT_ENVIRONMENT="$GATE_VENV" \
-            timeout "${GATE_SYNC_TIMEOUT:-1200}" uv sync $GATE_UV_SYNC_ARGS ) >> "$LOG" 2>&1; then
-        log "[gate] the exported tree has its own environment at $GATE_VENV"
-    else
-        log "[gate] uv sync for $BUILD_TREE failed; the gate has no environment to run in"
-        sync_ok=0
-        GATE_VENV=""
-    fi
-fi
+# ── Where it runs: a gate Job in the image the commit pins ──────────────────
+# steps/cluster.sh and infra/deploy_loop: the gated tree's own
+# infra/gate-image/pin names the image, and the Job re-syncs its environment
+# against the tree. A sync that fails there is rc 126, amber.
 
 gate_worker_args=()
 case "${GATE_PYTEST_WORKERS:-0}" in
@@ -218,23 +206,16 @@ elif [ -d "$BUILD_TREE/tools/test_register" ] \
     log "[gate] the test register and the tree disagree; nothing was tested and nothing ships"
     printf '%s\n' "$register_report" | while IFS= read -r register_line; do log "[gate]   $register_line"; done
     gh_stage_head "vm/gate" "failure" "a test in the tree has no register row; nothing verified, nothing shipped"
-elif [ "$sync_ok" -eq 1 ]; then
+else
     gh_stage_head "vm/gate" "pending" "verifying ($gate_scope scope, $gate_selected_count paths)"
     gate_log_offset=$(wc -c < "$LOG" 2>/dev/null || echo 0)
-    # A clean environment: the box's production settings must not be visible
-    # to a test that asserts a variable is ABSENT. Keep this list identical to
+    # The clean environment pytest runs in is set inside the Job
+    # (infra/deploy_loop/gate_run.sh). Keep it identical to
     # tools/gate_scope/audit_full_run.sh, or the audit stops being evidence.
-    ( cd "$BUILD_TREE" || exit 126
-    env -i \
-        HOME="$HOME" \
-        PATH="/usr/local/bin:/usr/bin:/bin" \
-        LANG=C.UTF-8 \
-        PYTHONPATH="$BUILD_TREE" \
-        timeout "$gate_timeout" "$GATE_VENV/bin/pytest" -q -rfE \
+    cluster_gate_run "$gate_timeout" -- -q -rfE \
         ${gate_worker_args[@]+"${gate_worker_args[@]}"} \
         --ignore=.claude/worktrees \
-        ${gate_paths[@]+"${gate_paths[@]}"} \
-        >> "$LOG" 2>&1 )
+        ${gate_paths[@]+"${gate_paths[@]}"}
     gate_rc=$?
     _record_gate_run "$gate_rc"
     if [ "$gate_rc" -eq 0 ]; then
@@ -242,15 +223,10 @@ elif [ "$sync_ok" -eq 1 ]; then
         # A green suite is not yet proof: every register row this commit
         # touches has its break replayed, and a test that passes with its own
         # break applied checks nothing.
-        if [ -d "$BUILD_TREE/tools/test_register" ] && [ -s "$STATE_DIR/gate-changed-paths" ]; then
-            replay_report=$( cd "$BUILD_TREE" && env -i \
-                HOME="$HOME" PATH="/usr/local/bin:/usr/bin:/bin" LANG=C.UTF-8 PYTHONPATH="$BUILD_TREE" \
-                timeout 900 "$GATE_VENV/bin/python" -m tools.test_register \
-                --changed-file "$STATE_DIR/gate-changed-paths" --repo "$BUILD_TREE" 2>&1 )
-            replay_rc=$?
-            printf '%s\n' "$replay_report" | while IFS= read -r replay_line; do
-                [ -n "$replay_line" ] && log "[gate] $replay_line"
-            done
+        # The Job replayed them after the green suite, in the same pod.
+        if [ -s "$STATE_DIR/gate-replay-rc" ]; then
+            replay_rc=$(cat "$STATE_DIR/gate-replay-rc" 2>/dev/null || echo 125)
+            case "$replay_rc" in ''|*[!0-9]*) replay_rc=125 ;; esac
             if [ "$replay_rc" -eq 1 ]; then
                 gate_ok=0
                 gate_red=1
@@ -343,23 +319,6 @@ elif [ "$sync_ok" -eq 1 ]; then
             gh_stage_head "vm/gate" "error" "gate could not run (rc=$gate_rc, streak $amber_streak/$AMBER_LIMIT); nothing shipped, the next tick retries"
             gh_status_range "error" "the gate could not run (rc=$gate_rc); nothing shipped"
         fi
-    fi
-else
-    gate_ok=0
-    gate_red=1
-    amber_streak=$(( $(cat "$AMBER_FILE" 2>/dev/null || echo 0) + 1 ))
-    echo "$amber_streak" > "$AMBER_FILE"
-    if [ "$amber_streak" -ge "$AMBER_LIMIT" ]; then
-        gate_red_reason="sync_stuck"
-        gh_stage_head "vm/gate" "error" "uv sync failed $amber_streak times; escalated to red"
-        fire_alert_once "gate-sync-stuck" "$NEW_SHA" "auto-deploy: the gate cannot prepare its environment" \
-            "uv sync failed for $amber_streak cycles at ${NEW_SHA:0:12}; nothing ships until it works. Log: $LOG" \
-            --wakes-somebody --blocks-deploy yes
-    else
-        gate_red_reason="sync_failed"
-        log "[gate] uv sync failed (streak $amber_streak); nothing shipped, the next tick retries"
-        gh_stage_head "vm/gate" "error" "uv sync failed (streak $amber_streak/$AMBER_LIMIT); nothing shipped, the next tick retries"
-        gh_status_range "error" "the gate could not be prepared (uv sync failed); nothing shipped"
     fi
 fi
 

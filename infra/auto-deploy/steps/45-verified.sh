@@ -9,7 +9,8 @@
 # and must stay on the build tree's filesystem.
 #
 # The sweep keeps the newest VERIFIED_KEEP trees plus anything a container
-# still mounts; a docker that does not answer sweeps nothing.
+# still mounts; a docker that does not answer sweeps nothing. In the cluster
+# there is no docker and nothing mounts a tree: only the newest are kept.
 #
 # FAILURE POLICY: best-effort and quiet, never blocks a deploy.
 #
@@ -18,9 +19,12 @@
 _sweep_verified_trees() {
     local in_use container_ids trees=() tree index=0
     [ -d "$VERIFIED_ROOT" ] || return 0
-    container_ids=$(docker ps -a -q 2>/dev/null) || { log "[verified] docker did not answer; sweeping nothing"; return 0; }
-    in_use=$(printf '%s\n' "$container_ids" \
-        | xargs -r docker inspect --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' 2>/dev/null | sort -u)
+    in_use=""
+    if command -v docker >/dev/null 2>&1; then
+        container_ids=$(docker ps -a -q 2>/dev/null) || { log "[verified] docker did not answer; sweeping nothing"; return 0; }
+        in_use=$(printf '%s\n' "$container_ids" \
+            | xargs -r docker inspect --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' 2>/dev/null | sort -u)
+    fi
     while IFS= read -r tree; do
         [ -d "$tree" ] && trees+=("$tree")
     done < <(ls -1dt "$VERIFIED_ROOT"/* 2>/dev/null)

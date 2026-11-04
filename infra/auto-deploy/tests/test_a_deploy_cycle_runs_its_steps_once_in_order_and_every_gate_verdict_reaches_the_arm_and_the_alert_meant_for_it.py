@@ -117,8 +117,8 @@ a step sourced before the lock races a cycle already in flight.
 
 HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. The directory
 listing is the oracle: every `NN-*.sh` file must appear once, in lexical order,
-and `00-lock.sh` first. Files that are not steps (doors.sh, eject_body.sh,
-build_verdict.sh) must never be in the list.
+and `00-lock.sh` first. Files that are not steps (doors.sh, cluster.sh,
+eject_body.sh, build_verdict.sh) must never be in the list.
 
 WHAT IT WAS PROVED AGAINST. Dropping a step from the source list.
 
@@ -140,21 +140,22 @@ environment, which is how a hand run's override would silently not apply.
 
 GUARDS. The three-place configuration contract.
 
-Step 80 removes a unit only when IT installed it and the repository dropped it.
+Step 80 applies the manifests only on a green gate that changed them, and a refused apply holds the bookmark with its fault named.
 
-WHAT IT PINS. `_install_units` in `steps/80-units.sh`: units found in
-`*/<name>/systemd/` are installed, and the manifest of what was installed is
-the only list removal reads, so a unit the owner installed by hand survives.
+WHAT IT PINS. `_apply_manifests` in `steps/80-manifests.sh`: infra/cluster/apply.sh
+runs from the verified tree with the vault's settings file when the commit
+changed a manifest and the gate is green, and never otherwise; a refused apply
+is `manifests` in FAILED_SERVICES, and the commit's fault only when the log
+carries no sign of the box (steps/build_verdict.sh).
 
 HOW THE EXPECTED ANSWER IS DERIVED WITHOUT THE CODE UNDER TEST. A verified tree
-with one unit, a unit directory holding a hand-installed unit and a unit the
-manifest says this step installed earlier, and stubs for sudo and systemctl.
-What must remain follows from the rule above.
+whose apply.sh is a stub that records its argument and prints a chosen line,
+and the real build_verdict.sh. Whether apply must run, and whose fault a
+refusal is, follows from the rule above.
 
-WHAT IT WAS PROVED AGAINST. Sweeping every installed `harness-*` unit the tree
-lacks, which deletes the hand-installed one.
+WHAT IT WAS PROVED AGAINST. Applying on a red gate.
 
-GUARDS. Step 80's orphan sweep.
+GUARDS. Nothing unverified reaches the cluster.
 """
 from __future__ import annotations
 
@@ -642,7 +643,7 @@ def _the_source_list_is_the_step_directory_in_order() -> None:
     steps = sorted(path.name for path in (_HERE / "steps").glob("[0-9][0-9]-*.sh"))
     assert sourced == steps, f"source list {sourced} does not match the steps {steps}"
     assert sourced[0] == "00-lock.sh"
-    for helper in ("doors.sh", "eject_body.sh", "build_verdict.sh"):
+    for helper in ("doors.sh", "cluster.sh", "eject_body.sh", "build_verdict.sh"):
         assert helper not in sourced, f"{helper} is not a step and must not be sourced as one"
 
 # From the settings load in order and never override the callers own.
@@ -669,45 +670,49 @@ def _the_vault_wins_over_the_settings_and_the_caller_wins_over_both(tmp_path: Pa
     assert done.stdout.strip() == "example.org|from-vault|caller|a b|$(touch " + str(tmp_path / "ran") + ")"
     assert not (tmp_path / "ran").exists(), "the loader executed a value"
 
-# From the unit sweep removes only what it installed.
+# From step 80 applies the manifests only on a green gate that changed them.
 
 _STEPS = Path(__file__).resolve().parents[1] / "steps"
 
 
-def _only_a_dropped_unit_this_step_installed_is_removed(tmp_path: Path) -> None:
+def _apply_on(tmp_path: Path, *, gate_red: int, changed: str, apply_says: str, apply_rc: int) -> tuple[str, str]:
+    """Run step 80 once; return (what apply.sh was called with, the FAILED/RED arrays)."""
     tree = tmp_path / "tree"
-    (tree / "infra/thing/systemd").mkdir(parents=True)
-    (tree / "infra/thing/systemd/harness-thing.timer").write_text(
-        "[Timer]\nOnCalendar=daily\nUnit=harness-thing.service\n", encoding="utf-8"
-    )
-    units = tmp_path / "units"
-    units.mkdir()
-    (units / "harness-by-hand.service").write_text("[Service]\n", encoding="utf-8")
-    (units / "harness-dropped.service").write_text("[Service]\n", encoding="utf-8")
+    (tree / "infra/cluster").mkdir(parents=True)
+    calls = tmp_path / "apply-calls"
+    apply = tree / "infra/cluster/apply.sh"
+    apply.write_text(f'#!/bin/sh\necho "$1" >> "{calls}"\necho "{apply_says}"\nexit {apply_rc}\n', encoding="utf-8")
+    apply.chmod(0o755)
     state = tmp_path / "state"
     state.mkdir()
-    (state / "installed-units").write_text("harness-dropped.service\nharness-thing.timer\n", encoding="utf-8")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "systemctl").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    (bin_dir / "systemctl").chmod(0o755)
     script = "\n".join((
         "set -u",
-        f'export PATH="{bin_dir}:/usr/bin:/bin"',
         f'LOG="{tmp_path}/log"',
         'log() { echo "$*" >> "$LOG"; }',
-        f'. "{_STEPS}/doors.sh"',
+        "tree_is_pinned() { return 0; }",
+        'cluster_repin_images() { echo repinned >> "$LOG"; }',
+        f'. "{_STEPS}/build_verdict.sh"',
         f'STATE_DIR="{state}"',
-        f'UNIT_DIR="{units}"',
-        'UNIT_SUDO=""',
         f'VERIFIED_TREE="{tree}"',
-        "gate_red=0",
-        f'. "{_STEPS}/80-units.sh"',
+        'HARNESS_ENV_FILE="/vault/harness.env"',
+        'NEW_SHA="0123456789abcdef0123456789abcdef01234567"',
+        f"gate_red={gate_red}",
+        f"manifests_changed={changed}",
+        "ship_abandoned=0",
+        "FAILED_SERVICES=(); BUILD_FAILED_SERVICES=(); BUILD_RED_SERVICES=()",
+        f'. "{_STEPS}/80-manifests.sh"',
+        'echo "failed=${FAILED_SERVICES[*]:-} red=${BUILD_RED_SERVICES[*]:-}"',
     ))
-    subprocess.run(["bash", "-c", script], check=True, timeout=30, capture_output=True)
-    remaining = sorted(path.name for path in units.iterdir())
-    assert remaining == ["harness-by-hand.service", "harness-thing.timer"], remaining
-    assert (state / "installed-units").read_text(encoding="utf-8").split() == ["harness-thing.timer"]
+    done = subprocess.run(["bash", "-c", script], check=True, timeout=30, capture_output=True, text=True)
+    called = calls.read_text(encoding="utf-8").strip() if calls.exists() else ""
+    return called, done.stdout.strip()
+
+
+def _the_manifests_apply_only_on_a_green_gate_that_changed_them(
+    tmp_path: Path, gate_red: int, changed: str, apply_says: str, apply_rc: int, called: str, outcome: str
+) -> None:
+    assert _apply_on(tmp_path, gate_red=gate_red, changed=changed, apply_says=apply_says,
+                     apply_rc=apply_rc) == (called, outcome)
 
 
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
@@ -750,7 +755,19 @@ CASES = [
     *_cases(_a_green_run_never_lands_on_the_amber_arm),
     *_cases(_the_source_list_is_the_step_directory_in_order),
     *_cases(_the_vault_wins_over_the_settings_and_the_caller_wins_over_both),
-    *_cases(_only_a_dropped_unit_this_step_installed_is_removed),
+    *_cases(
+        _the_manifests_apply_only_on_a_green_gate_that_changed_them,
+        ("gate_red", "changed", "apply_says", "apply_rc", "called", "outcome"),
+        [
+            pytest.param(0, "true", "applied", 0, "/vault/harness.env", "failed= red=", id="green-and-changed"),
+            pytest.param(1, "true", "applied", 0, "", "failed= red=", id="red"),
+            pytest.param(0, "false", "applied", 0, "", "failed= red=", id="unchanged"),
+            pytest.param(0, "true", "the server rejected the manifest", 1, "/vault/harness.env",
+                         "failed=manifests red=manifests", id="refused-commit"),
+            pytest.param(0, "true", "dial tcp: connection refused", 1, "/vault/harness.env",
+                         "failed=manifests red=", id="refused-box"),
+        ],
+    ),
 ]
 
 

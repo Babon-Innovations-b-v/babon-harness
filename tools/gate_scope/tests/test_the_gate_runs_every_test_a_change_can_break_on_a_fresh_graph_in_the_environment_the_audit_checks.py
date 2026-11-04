@@ -65,7 +65,8 @@ GUARDS. The selector's memory.
 
 The control that licenses narrowing has to be about the thing it licenses.
 
-WHAT IT PINS. The four ways `audit_full_run.sh` and `steps/40-gate.sh` have to
+WHAT IT PINS. The four ways `audit_full_run.sh` and the gate (`steps/40-gate.sh`
+for its ignore list, `infra/deploy_loop/gate_run.sh` for its clean environment) have to
 agree, because the audit's whole job is to answer whether the gate's narrowing
 dropped a test that would have failed. It can only answer that if the two run
 the same suite the same way: the same ignore list, the same clean environment,
@@ -636,7 +637,7 @@ _REPO = Path(__file__).resolve().parents[3]
 _AUDIT = _REPO / "tools/gate_scope/audit_full_run.sh"
 
 
-_GATE = _REPO / "infra/auto-deploy/steps/40-gate.sh"
+_GATE = _REPO / "infra/deploy_loop/gate_run.sh"
 
 
 #: A variable set on an `env -i` line, e.g. `PYTHONPATH="$BUILD_TREE"`.

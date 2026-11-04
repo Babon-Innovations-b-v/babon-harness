@@ -1,0 +1,127 @@
+# The deploy cycle: infra/auto-deploy/auto-deploy.sh every two minutes, and on
+# every push (deploy-webhook starts a Job from this CronJob).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: deploy-cycle
+  labels:
+    app.kubernetes.io/name: deploy-cycle
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  schedule: "*/2 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 110
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deploy-cycle
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: deploy-cycle
+        spec:
+          serviceAccountName: deploy-cycle
+          priorityClassName: deploy-loop
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          tolerations:
+            - key: ${POOL_ROLE_LABEL}
+              operator: Equal
+              value: system
+              effect: NoSchedule
+          imagePullSecrets:
+            - name: registry-pull
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsNonRoot: true
+          containers:
+            - name: cycle
+              image: ${DEPLOY_CYCLE_IMAGE}
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/app/infra/deploy_loop/cycle_entry.sh"]
+              env:
+                - name: DEPLOY_RUNTIME
+                  value: cluster
+                - name: DEPLOY_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: DEPLOY_CYCLE_IMAGE
+                  value: ${DEPLOY_CYCLE_IMAGE}
+                - name: DEPLOY_REPO_URL
+                  value: ${DEPLOY_REPO_URL}
+                - name: POOL_ROLE_LABEL
+                  value: ${POOL_ROLE_LABEL}
+                - name: IMAGE_REGISTRY
+                  value: ${IMAGE_REGISTRY}
+                - name: HARNESS_ROOT
+                  value: /opt/harness
+                - name: HARNESS_ENV_FILE
+                  value: /var/run/harness/env/harness.env
+                - name: AUTO_DEPLOY_VAULT_PULL
+                  value: "0"
+                - name: AUTO_DEPLOY_LOCK
+                  value: /var/lib/harness/auto-deploy.lock
+                - name: BUILDKIT_HOST
+                  value: tcp://buildkitd.deploy.svc.cluster.local:1234
+                - name: DOCKER_CONFIG
+                  value: /home/deploy/.docker
+                - name: XDG_CACHE_HOME
+                  value: /var/lib/harness/cache
+              volumeMounts:
+                - name: state
+                  mountPath: /var/lib/harness
+                  subPath: state
+                - name: state
+                  mountPath: /opt/harness
+                  subPath: root
+                - name: state
+                  mountPath: /var/log/harness
+                  subPath: log
+                - name: vault
+                  mountPath: /var/run/harness/env
+                  readOnly: true
+                - name: registry-push
+                  mountPath: /home/deploy/.docker
+                  readOnly: true
+                - name: git-read
+                  mountPath: /var/run/deploy/git
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  memory: 4Gi
+          volumes:
+            - name: state
+              persistentVolumeClaim:
+                claimName: deploy-state
+            - name: vault
+              secret:
+                secretName: harness-env
+            - name: registry-push
+              secret:
+                secretName: registry-push
+                items:
+                  - key: .dockerconfigjson
+                    path: config.json
+            - name: git-read
+              secret:
+                secretName: deploy-git-read
+                optional: true
+            - name: tmp
+              emptyDir:
+                sizeLimit: 4Gi

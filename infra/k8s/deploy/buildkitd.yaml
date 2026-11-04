@@ -1,0 +1,149 @@
+# The image builder: one rootless BuildKit daemon on the gate pool, reached
+# only by the cycle (NetworkPolicy below; buildkitd speaks plain TCP). Every
+# build reads and writes the registry cache <image>:buildcache, so a new node
+# or a pruned volume starts warm from the registry.
+#
+# GC is fitted to the volume: maxUsedSpace stays 10 GB under the claim's size.
+# Change both together, then kubectl -n deploy rollout restart deploy/buildkitd
+# (the config is read at start). Never use the deprecated keepBytes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildkitd
+  labels:
+    app.kubernetes.io/name: buildkitd
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: buildkitd
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: buildkitd
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      nodeSelector:
+        ${POOL_ROLE_LABEL}: gate
+      tolerations:
+        - key: ${POOL_ROLE_LABEL}
+          operator: Equal
+          value: gate
+          effect: NoSchedule
+      automountServiceAccountToken: false
+      priorityClassName: deploy-loop
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: buildkitd
+          image: moby/buildkit:v0.23.2-rootless
+          args:
+            - --addr
+            - unix:///run/user/1000/buildkit/buildkitd.sock
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --oci-worker-no-process-sandbox
+            - --config
+            - /etc/buildkit/buildkitd.toml
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          ports:
+            - name: buildkit
+              containerPort: 1234
+          readinessProbe:
+            exec:
+              command: ["buildctl", "debug", "workers"]
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          volumeMounts:
+            - name: cache
+              mountPath: /home/user/.local/share/buildkit
+            - name: config
+              mountPath: /etc/buildkit
+              readOnly: true
+          resources:
+            requests:
+              cpu: "2"
+              memory: 2Gi
+            limits:
+              memory: 8Gi
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: buildkit-cache
+        - name: config
+          configMap:
+            name: buildkitd-config
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildkit-cache
+  labels:
+    app.kubernetes.io/name: buildkitd
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkitd-config
+  labels:
+    app.kubernetes.io/name: buildkitd
+data:
+  buildkitd.toml: |
+    [worker.oci]
+      gc = true
+      [[worker.oci.gcpolicy]]
+        all = true
+        reservedSpace = "10GB"
+        maxUsedSpace = "40GB"
+        minFreeSpace = "5GB"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildkitd
+  labels:
+    app.kubernetes.io/name: buildkitd
+spec:
+  selector:
+    app.kubernetes.io/name: buildkitd
+  ports:
+    - name: buildkit
+      port: 1234
+      targetPort: 1234
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: buildkitd-from-the-cycle
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: buildkitd
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: deploy-cycle
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: commit-gate
+      ports:
+        - protocol: TCP
+          port: 1234

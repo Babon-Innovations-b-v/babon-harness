@@ -94,18 +94,6 @@ except Exception:
     print("")' "$repo/.claude/project.json" 2>/dev/null
 }
 
-# Put this box's paths and user into a systemd unit as written in the repo.
-# Units in the repository are written for HARNESS_ROOT=/opt/harness and the
-# user `harness`; install.sh and step 80 both install through this, so a box
-# with other values gets units that match it and step 80 does not see drift.
-harness_render_unit() {
-    local src="$1" root="${HARNESS_ROOT:-/opt/harness}" user="${DEPLOY_USER:-harness}"
-    sed -e "s#/opt/harness#${root}#g" \
-        -e "s#^User=harness\$#User=${user}#" \
-        -e "s#^Group=harness\$#Group=${user}#" \
-        -e "s#/home/harness/#/home/${user}/#g" "$src"
-}
-
 # ── Alerts ──────────────────────────────────────────────────────────────────
 # fire_alert <subject> <body> [--wakes-somebody] [--blocks-deploy yes|no]
 #                             [--exit-code N] [--qualifier TEXT]

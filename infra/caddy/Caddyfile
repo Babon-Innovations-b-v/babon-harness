@@ -130,11 +130,11 @@ notulen.{$DOMAIN} {
 	}
 }
 
-# Deploy webhook. GitHub POSTs push events to /hooks/<id>, and the
-# webhook service on the host (infra/webhook) starts a deploy cycle. NOT
+# Deploy webhook. GitHub POSTs push events to /hooks/<id>, and the push
+# receiver (infra/deploy_loop, Service deploy-webhook) starts a deploy cycle. NOT
 # behind the single sign-on, and it must not be: GitHub cannot answer a
 # login redirect, so the HMAC-SHA256 signature against
-# DEPLOY_WEBHOOK_SECRET, checked by the webhook service, is the real auth.
+# DEPLOY_WEBHOOK_SECRET, checked by the receiver, is the real auth.
 # Everything else on this host is 404.
 deploy.{$DOMAIN} {
 	@hooks path /hooks/*

@@ -96,7 +96,6 @@ licences. `docs/diagrams/tools/build_free.py` and `deliver.sh` run this renderer
 | Piece | Licence | How it arrives |
 |---|---|---|
 | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) v0.12.1 | MIT, Copyright (c) 2025 DeusData | `.claude/index/install.sh` downloads the release named in `.claude/index/pin.env` and checks both checksums; the tarball carries its own `LICENSE` |
-| [adnanh/webhook](https://github.com/adnanh/webhook) 2.8.1 | MIT | downloaded by `infra/auto-deploy/install.sh` |
 
 ## 4. Container images
 

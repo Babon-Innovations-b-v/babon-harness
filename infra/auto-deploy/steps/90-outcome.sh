@@ -2,7 +2,8 @@
 # Step 90: decide what the cycle did, move the bookmark, post the statuses,
 # and clean up.
 #
-# THE BOOKMARK ($STATE_DIR/last-deployed-sha) moves only when the commit shipped
+# THE BOOKMARK ($STATE_DIR/last-deployed-sha, copied to ConfigMap
+# deploy-bookmark when it moves) moves only when the commit shipped
 # whole: a green gate (or nothing to verify), every changed service built and
 # booted, no ship action abandoned. One exception: a red whose eject PUSHED a
 # revert sitting directly on the rejected commit (the restore route) moves it to
@@ -18,8 +19,8 @@
 # (the default) that alert is the whole hand-back, so it fires on the first
 # cycle a red holds the queue.
 #
-# FAILURE POLICY: exits 1 when the cycle failed, so the systemd unit goes red
-# and its OnFailure handler pages; never before the bookkeeping is done.
+# FAILURE POLICY: exits 1 when the cycle failed, so the cycle's Job is marked
+# failed; never before the bookkeeping is done.
 #
 # Sourced by auto-deploy.sh; shares its shell. Not executable on its own.
 
@@ -56,6 +57,7 @@ else
     gh_status_range "error" "deploy failed: ${FAILED_SERVICES[*]}"
     log "PARTIAL FAILURE: ok=${DEPLOYED_SERVICES[*]:-none} failed=${FAILED_SERVICES[*]}; the bookmark holds and the next cycle retries"
 fi
+[ "$bookmark_moved" -eq 1 ] && cluster_bookmark_push
 
 if [ "${gate_red:-0}" -eq 0 ]; then
     if [ "${#BUILD_RED_SERVICES[@]}" -ne 0 ]; then
@@ -131,9 +133,6 @@ for evidence_dir in "$GATE_VERDICT_DIR" "$STATE_DIR/gate-red-tails" "$STATE_DIR/
 done
 if [ -n "${BUILD_TREE:-}" ] && [ "${BUILD_TREE#"$BUILD_TREE_ROOT"/}" != "$BUILD_TREE" ]; then
     rm -rf "$BUILD_TREE" 2>/dev/null || true
-fi
-if [ -n "${GATE_VENV:-}" ] && [ "${GATE_VENV#"$GATE_VENV_ROOT"/}" != "$GATE_VENV" ]; then
-    rm -rf "$GATE_VENV" 2>/dev/null || true
 fi
 if [ -n "${STEPS_SNAPSHOT:-}" ] && [ "${STEPS_SNAPSHOT#/tmp/harness-deploy-steps-}" != "$STEPS_SNAPSHOT" ]; then
     rm -rf "$STEPS_SNAPSHOT" 2>/dev/null || true

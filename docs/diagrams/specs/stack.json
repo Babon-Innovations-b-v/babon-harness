@@ -105,10 +105,10 @@
    "type": "backend",
    "label": "auto-deploy",
    "sublabel": "tests, then ships",
-   "note": "`harness-auto-deploy.timer`, every two minutes, plus the push webhook, runs `infra/auto-deploy/auto-deploy.sh`. It picks one commit, the gate tests it in its own tree, and only the changed services are rebuilt and must boot. Red or amber ships nothing. The eject ships off.",
+   "note": "CronJob `deploy-cycle` in the cluster, every two minutes and on every push, runs `infra/auto-deploy/auto-deploy.sh`. It picks one commit, a gate Job tests it in the gate image its own tree pins, and only the changed images are built and must roll out. Red or amber ships nothing. The eject ships off.",
    "code": [
     "infra/auto-deploy",
-    "infra/webhook"
+    "infra/deploy_loop"
    ],
    "bible": "Pushing to `main` is the deploy.",
    "code_seen": "cc4cffb45cbb"

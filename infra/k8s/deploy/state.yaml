@@ -1,0 +1,26 @@
+# The cycle's memory: its clone, the exported trees, the verdict cache, the
+# log. ReadWriteOnce, and only the cycle pod mounts it; one cycle runs at a
+# time (concurrencyPolicy Forbid, and the receiver checks). Losing it costs
+# the verdict cache, never the bookmark (ConfigMap deploy-bookmark). The size
+# is a starting point, not measured; raise it with kubectl edit pvc.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: deploy-state
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 30Gi
+---
+# The deploy bookmark: the last commit the cycle deployed. Never put `data:`
+# here: the next apply would move the bookmark. Step 90 writes it with
+# kubectl patch; a fresh install seeds it once (infra/auto-deploy/CLAUDE.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deploy-bookmark
+  labels:
+    app.kubernetes.io/part-of: deploy-loop

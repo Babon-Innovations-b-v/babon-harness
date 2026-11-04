@@ -7,7 +7,7 @@
  ],
  "deploy": [
   "infra/auto-deploy",
-  "infra/webhook"
+  "infra/deploy_loop"
  ],
  "gpu": [
   "infra/gpu",

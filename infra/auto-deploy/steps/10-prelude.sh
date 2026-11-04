@@ -10,6 +10,8 @@
 
 # shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/doors.sh"
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/cluster.sh"
 
 # ── The vault: refresh the env cache before reading it ──────────────────────
 # infra/secrets/pull-env.sh writes the secret named VAULT_SECRET_NAME to
@@ -33,6 +35,7 @@ fi
 harness_load_config "$REPO"
 GH_REPO_SLUG="${GH_REPO_SLUG:-$(harness_repo_slug "$REPO")}"
 GH_REPO_OWNER="${GH_REPO_OWNER:-$(harness_repo_owner "$REPO")}"
+DEPLOY_REPO_URL="${DEPLOY_REPO_URL:-https://github.com/$GH_REPO_SLUG.git}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-harness}"
 
 AUTO_DEPLOY_ENABLED="${AUTO_DEPLOY_ENABLED:-1}"
@@ -40,6 +43,10 @@ if [ -z "${RELEASE_FORCE:-}" ] && [ "$AUTO_DEPLOY_ENABLED" != "1" ]; then
     log "AUTO_DEPLOY_ENABLED=$AUTO_DEPLOY_ENABLED: scheduled deploys are paused"
     exit 0
 fi
+
+# The bookmark's durable copy is ConfigMap deploy-bookmark; every step reads
+# the file it always read.
+cluster_bookmark_pull
 
 # How far back the eject may reach, in commits.
 EJECT_MAX_RANGE="${EJECT_MAX_RANGE:-5}"
@@ -136,7 +143,6 @@ build_head_jumped=0
 queue_depth=0
 bookmark_depth=0
 BUILD_TREE=""
-GATE_VENV=""
 VERIFIED_TREE=""
 ship_abandoned=0
 DEPLOYED_SERVICES=()
