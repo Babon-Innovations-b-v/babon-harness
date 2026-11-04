@@ -398,8 +398,11 @@ Every `harness-*` timer job carries `OnFailure=harness-notify-failure@%n.service
 | prometheus, alertmanager, node-exporter, blackbox-exporter, alert-relay | `infra/observability/compose.yml` |
 | deadmen, canary, textfile collector, failure pager | systemd units, installed by `infra/observability/systemd/install.sh` |
 | state, flag, textfile metrics | `/var/lib/harness` |
+| all of it, in the cluster | namespace `monitoring` (`infra/k8s/monitoring`); the deadmen, the switch and the canary are containers in the alert-relay pod, on its claim `alert-state` |
 
 Everything is published on loopback only: Prometheus 9090, Alertmanager 9094, relay 9095. Read Prometheus through an SSH tunnel.
+
+The cluster Prometheus loads `rules/cluster.yml` instead of `harness.yml`: kube-state-metrics stands in for the textfile collector, so a restarting or memory-killed container, a failed Job in any namespace, a CronJob an hour past its run and a workload short of ready pods each page. A job whose pod ends with its run, the deploy cycle and the canary, pushes its gauge to the Pushgateway. The switch runs in the cluster it watches, so a whole-cluster outage silences it too.
 
 ## infra/gpu
 

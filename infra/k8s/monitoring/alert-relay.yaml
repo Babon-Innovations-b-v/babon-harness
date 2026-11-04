@@ -1,0 +1,198 @@
+# The alert relay and the deadmen, one pod. The assistant deadman writes the
+# flag the relay reads, and a ReadWriteOnce claim has one writer, so every job
+# that keeps state here is a container beside the relay and not a CronJob:
+# the two 60-second deadmen, the dead-man's switch every 15 minutes and the
+# Signal send canary every 30.
+#
+# A deadman or the switch stops on a non-zero exit, so the container restarts
+# and PodRestarting pages: the cluster's form of the server's
+# OnFailure=harness-notify-failure@. The canary keeps looping on a failed send
+# instead, and SignalSendStale (rules/cluster.yml) is its page. A deadman
+# never pages through the assistant (fan_out(..., signal_direct=True)), so this
+# pod is one of the callers NetworkPolicy signal-cli-callers lets in
+# (infra/k8s/assistant/signal-cli.yaml).
+#
+# The switch runs in the cluster it watches: a whole-cluster outage silences
+# it with everything else, and only the deploy watchdog on GitHub, which
+# watches deploys and not alerts, is left outside.
+#
+# The image is the stack's own ops-runner (infra/observability/Dockerfile.ops-runner),
+# built and set by digest by the deploy loop.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alert-state
+  labels:
+    harness/backup: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-relay
+  labels:
+    app: alert-relay
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alert-relay
+  template:
+    metadata:
+      labels:
+        app: alert-relay
+    spec:
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        fsGroup: 65534
+      imagePullSecrets:
+        - name: registry-pull
+      containers:
+        - name: relay
+          image: ${IMAGE_REGISTRY}/ops-runner:set-by-deploy-loop
+          command: ["python", "-m", "infra.observability.alert_relay.app"]
+          env: &paging
+            - name: ASSISTANT_URL
+              value: http://assistant.assistant.svc.cluster.local:8000
+            - name: SIGNAL_CLI_URL
+              value: http://signal-cli.assistant.svc.cluster.local:8080
+            - name: RELAY_URL
+              value: http://127.0.0.1:8000
+            - name: ASSISTANT_GATEWAY_HEALTH_URL
+              value: http://gateway.assistant-gateway.svc.cluster.local:18789/healthz
+            - name: HARNESS_STATE_DIR
+              value: /var/lib/harness
+            - name: ALERTMANAGER_URL
+              value: http://alertmanager:9093
+            - name: PUSHGATEWAY_URL
+              value: http://pushgateway:9091
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: OPENCLAW_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: OPENCLAW_WEBHOOK_SECRET, optional: true}
+            - name: SIGNAL_BOT_NUMBER
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_BOT_NUMBER, optional: true}
+            - name: SIGNAL_RECIPIENT
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_RECIPIENT, optional: true}
+            - name: SIGNAL_ALLOWLIST
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SIGNAL_ALLOWLIST, optional: true}
+            - name: ASSISTANT_NAME
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: ASSISTANT_NAME, optional: true}
+            - name: SCW_REGION
+              valueFrom:
+                secretKeyRef: {name: harness-keys, key: SCW_REGION, optional: true}
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/harness
+              subPath: alert-state
+              readOnly: true
+        - name: assistant-deadman
+          image: ${IMAGE_REGISTRY}/ops-runner:set-by-deploy-loop
+          command: ["sh", "-c", "while python -m infra.observability.alerts.assistant_deadman; do sleep 60; done"]
+          env: *paging
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/harness
+              subPath: alert-state
+        - name: gateway-deadman
+          image: ${IMAGE_REGISTRY}/ops-runner:set-by-deploy-loop
+          command: ["sh", "-c", "while python -m infra.observability.alerts.gateway_deadman; do sleep 60; done"]
+          env: *paging
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/harness
+              subPath: alert-state
+        # First look after 15 minutes, so a fresh pod does not page before
+        # Prometheus has fired Watchdog once.
+        - name: dead-mans-switch
+          image: ${IMAGE_REGISTRY}/ops-runner:set-by-deploy-loop
+          command: ["sh", "-c", "while sleep 900 && python -m infra.observability.alerts.dead_mans_switch; do :; done; exit 1"]
+          env: *paging
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/harness
+              subPath: alert-state
+        - name: signal-send-canary
+          image: ${IMAGE_REGISTRY}/ops-runner:set-by-deploy-loop
+          command: ["sh", "-c", "while true; do python -m infra.observability.alerts.signal_send_canary; sleep 1800; done"]
+          env: *paging
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/harness
+              subPath: alert-state
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: alert-state
+---
+# Alertmanager's webhook (http://alert-relay:8000/alerts in alertmanager.yml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-relay
+spec:
+  selector:
+    app: alert-relay
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -1,0 +1,89 @@
+# The Pushgateway: where a CronJob puts what a server job wrote as a
+# node-exporter textfile (infra/observability/node_textfile/textfile.py,
+# `publish`, with PUSHGATEWAY_URL set). Prometheus scrapes it with
+# honor_labels, so the pusher's job name stands; a pusher's freshness is
+# push_time_seconds{job="<name>"}.
+#
+# Persisted, because a "last success" gauge that vanished on a restart would
+# read as a job that never ran. It is a cache of the last pushes, not state,
+# so the claim carries no backup label. v1.10.0 is a version choice.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pushgateway-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pushgateway
+  labels:
+    app: pushgateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pushgateway
+  template:
+    metadata:
+      labels:
+        app: pushgateway
+    spec:
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        fsGroup: 65534
+      containers:
+        - name: pushgateway
+          image: prom/pushgateway:v1.10.0
+          args:
+            - --persistence.file=/data/pushgateway.db
+            - --persistence.interval=1m
+          ports:
+            - name: http
+              containerPort: 9091
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              subPath: pushgateway-data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pushgateway-data
+---
+# Pushers use http://pushgateway.monitoring.svc.cluster.local:9091.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pushgateway
+spec:
+  selector:
+    app: pushgateway
+  ports:
+    - name: http
+      port: 9091
+      targetPort: http

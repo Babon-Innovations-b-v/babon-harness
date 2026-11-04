@@ -8,8 +8,11 @@ global:
   external_labels:
     cluster: harness
 
+# Named, not globbed: rules/cluster.yml is the cluster Prometheus' set and
+# must not fire a second time from here.
 rule_files:
-  - /etc/prometheus/rules/*.yml
+  - /etc/prometheus/rules/harness.yml
+  - /etc/prometheus/rules/watchdog.yml
 
 alerting:
   alertmanagers:

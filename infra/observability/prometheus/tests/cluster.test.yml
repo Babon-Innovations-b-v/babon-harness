@@ -1,0 +1,147 @@
+# promtool unit tests for rules/cluster.yml, the cluster Prometheus' set. Every
+# input series is made up here, with the answer it must give. Run from this
+# directory's parent:
+#   docker run --rm -v "$PWD/prometheus:/p:ro" -w /p/tests --entrypoint promtool \
+#     prom/prometheus:v3.4.1 test rules cluster.test.yml
+rule_files:
+  - ../rules/cluster.yml
+
+evaluation_interval: 1m
+
+tests:
+  # A failed Job pages in whatever namespace it ran; a finished one does not.
+  - interval: 1m
+    input_series:
+      - series: 'kube_job_failed{namespace="backups",job_name="volume-backup-1",condition="true"}'
+        values: '1x5'
+      - series: 'kube_job_failed{namespace="jobs",job_name="patrol-2",condition="true"}'
+        values: '1x5'
+      - series: 'kube_job_failed{namespace="jobs",job_name="patrol-3",condition="true"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: JobFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: backups
+              job_name: volume-backup-1
+              condition: "true"
+            exp_annotations:
+              summary: "job backups/volume-backup-1 failed"
+              first_action: "kubectl -n backups logs job/volume-backup-1 --tail 50; once read, kubectl -n backups delete job volume-backup-1 clears this"
+          - exp_labels:
+              severity: warning
+              namespace: jobs
+              job_name: patrol-2
+              condition: "true"
+            exp_annotations:
+              summary: "job jobs/patrol-2 failed"
+              first_action: "kubectl -n jobs logs job/patrol-2 --tail 50; once read, kubectl -n jobs delete job patrol-2 clears this"
+
+  # Next run seventy minutes overdue: pages for the active CronJob, never for the
+  # suspended one.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_next_schedule_time{namespace="jobs",cronjob="patrol"}'
+        values: '0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="jobs",cronjob="patrol"}'
+        values: '0x100'
+      - series: 'kube_cronjob_next_schedule_time{namespace="jobs",cronjob="weekly-compact"}'
+        values: '0x100'
+      - series: 'kube_cronjob_spec_suspend{namespace="jobs",cronjob="weekly-compact"}'
+        values: '1x100'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: CronJobNotScheduled
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: CronJobNotScheduled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: jobs
+              cronjob: patrol
+            exp_annotations:
+              summary: "cronjob jobs/patrol is 1h 10m 0s past its next run"
+              first_action: "kubectl -n jobs get cronjob patrol and its jobs; a stuck run blocks the next under Forbid"
+
+  # Three restarts in fifteen minutes page; the last one was for memory, so
+  # the OOM rule fires beside it.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="monitoring",pod="alert-relay-1",container="assistant-deadman"}'
+        values: '0 1 2 3 3 3'
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="monitoring",pod="alert-relay-1",container="assistant-deadman",reason="OOMKilled"}'
+        values: '1x5'
+      - series: 'kube_pod_container_status_restarts_total{namespace="monitoring",pod="prometheus-0",container="prometheus"}'
+        values: '0x5'
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="monitoring",pod="prometheus-0",container="prometheus",reason="OOMKilled"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PodRestarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: monitoring
+              pod: alert-relay-1
+              container: assistant-deadman
+            exp_annotations:
+              summary: "monitoring/alert-relay-1 container assistant-deadman restarted 3 times in 15 minutes"
+              first_action: "kubectl -n monitoring logs alert-relay-1 -c assistant-deadman --previous --tail 50"
+      - eval_time: 5m
+        alertname: ContainerOOMKilled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: monitoring
+              pod: alert-relay-1
+              container: assistant-deadman
+              reason: OOMKilled
+            exp_annotations:
+              summary: "monitoring/alert-relay-1 container assistant-deadman was killed for memory in the last 15 minutes"
+              first_action: "kubectl -n monitoring describe pod alert-relay-1; raise its memory limit or find what grew"
+
+  # The canary's last push is read from push_time_seconds: pushed at t=0 and
+  # never again, it pages once two hours have gone by.
+  - interval: 1m
+    input_series:
+      - series: 'push_time_seconds{job="signal_send",instance=""}'
+        values: '0x200'
+    alert_rule_test:
+      - eval_time: 110m
+        alertname: SignalSendStale
+        exp_alerts: []
+      - eval_time: 130m
+        alertname: SignalSendStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: signal_send
+            exp_annotations:
+              summary: "the Signal send canary last succeeded 2h 10m 0s ago"
+              first_action: "kubectl -n jobs logs job/<newest signal-send-canary job>; then kubectl -n assistant logs deploy/signal-cli --tail 50"
+
+  # A deployment one pod short for fifteen minutes pages.
+  - interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="assistant",deployment="assistant"}'
+        values: '0x20'
+      - series: 'kube_deployment_spec_replicas{namespace="assistant",deployment="assistant"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: WorkloadUnavailable
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: WorkloadUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: deployment
+              namespace: assistant
+              deployment: assistant
+            exp_annotations:
+              summary: "deployment assistant/assistant has had fewer ready pods than it asks for for 15 minutes"
+              first_action: "kubectl -n assistant describe deploy assistant; read the events of its pods"

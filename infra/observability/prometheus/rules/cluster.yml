@@ -1,0 +1,175 @@
+# The alert set of the cluster Prometheus (infra/k8s/monitoring). It reads pod
+# signals where harness.yml reads the server's: kube-state-metrics instead of
+# the textfile collector's container and systemd series, and the Pushgateway's
+# push_time_seconds for a job that ends with its pod. Each rule renders the same
+# two annotations as harness.yml, `summary` and `first_action`.
+#
+# The compose Prometheus does not load this file (its rule_files name
+# harness.yml and watchdog.yml), so one alert never fires from both.
+groups:
+  - name: harness-cluster
+    rules:
+      - alert: TargetDown
+        expr: up{job!="probes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "scrape target {{ $labels.job }} ({{ $labels.instance }}) has been down for 5 minutes"
+          first_action: "kubectl -n monitoring get pods -o wide, then kubectl logs --tail 50 on the pod behind that target"
+
+      - alert: EndpointDown
+        expr: probe_success{job="probes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} has failed its HTTPS probe for 5 minutes"
+          first_action: "open it in a browser; then kubectl -n ingress logs deploy/caddy --tail 50"
+
+      - alert: DiskAlmostFull
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"}
+               / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.mountpoint }} on node {{ $labels.node }} is {{ $value | humanizePercentage }} full"
+          first_action: "kubectl describe node {{ $labels.node }}; a full root disk evicts pods, so drain and replace the node"
+
+      - alert: MemoryPressure
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "only {{ $value | humanizePercentage }} of memory is available on node {{ $labels.node }}"
+          first_action: "kubectl top pods -A --sort-by=memory to see which pod holds it"
+
+      - alert: PodRestarting
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} restarted {{ $value | humanize }} times in 15 minutes"
+          first_action: "kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c {{ $labels.container }} --previous --tail 50"
+
+      - alert: ContainerOOMKilled
+        expr: |
+          kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+            and on(namespace, pod, container)
+          increase(kube_pod_container_status_restarts_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} was killed for memory in the last 15 minutes"
+          first_action: "kubectl -n {{ $labels.namespace }} describe pod {{ $labels.pod }}; raise its memory limit or find what grew"
+
+      # Every namespace, on purpose: a Job that fails anywhere (a CronJob in
+      # jobs, the nightly backup, a deploy run) pages, and a namespace added
+      # later is covered without editing this rule.
+      - alert: JobFailed
+        expr: kube_job_failed{condition="true"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "job {{ $labels.namespace }}/{{ $labels.job_name }} failed"
+          first_action: "kubectl -n {{ $labels.namespace }} logs job/{{ $labels.job_name }} --tail 50; once read, kubectl -n {{ $labels.namespace }} delete job {{ $labels.job_name }} clears this"
+
+      # A CronJob whose next run is an hour overdue and that is not suspended:
+      # the scheduler is not starting it (a run that never ends under
+      # concurrencyPolicy Forbid, a bad schedule, a controller down).
+      - alert: CronJobNotScheduled
+        expr: |
+          time() - kube_cronjob_next_schedule_time > 3600
+            and on(namespace, cronjob)
+          kube_cronjob_spec_suspend == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cronjob {{ $labels.namespace }}/{{ $labels.cronjob }} is {{ $value | humanizeDuration }} past its next run"
+          first_action: "kubectl -n {{ $labels.namespace }} get cronjob {{ $labels.cronjob }} and its jobs; a stuck run blocks the next under Forbid"
+
+      - alert: WorkloadUnavailable
+        expr: kube_deployment_status_replicas_available < kube_deployment_spec_replicas
+        for: 15m
+        labels:
+          severity: warning
+          kind: deployment
+        annotations:
+          summary: "deployment {{ $labels.namespace }}/{{ $labels.deployment }} has had fewer ready pods than it asks for for 15 minutes"
+          first_action: "kubectl -n {{ $labels.namespace }} describe deploy {{ $labels.deployment }}; read the events of its pods"
+
+      - alert: WorkloadUnavailable
+        expr: kube_statefulset_status_replicas_ready < kube_statefulset_replicas
+        for: 15m
+        labels:
+          severity: warning
+          kind: statefulset
+        annotations:
+          summary: "statefulset {{ $labels.namespace }}/{{ $labels.statefulset }} has had fewer ready pods than it asks for for 15 minutes"
+          first_action: "kubectl -n {{ $labels.namespace }} describe statefulset {{ $labels.statefulset }}; read the events of its pods"
+
+      - alert: WorkloadUnavailable
+        expr: kube_daemonset_status_number_unavailable > 0
+        for: 15m
+        labels:
+          severity: warning
+          kind: daemonset
+        annotations:
+          summary: "daemonset {{ $labels.namespace }}/{{ $labels.daemonset }} is missing on {{ $value | humanize }} node(s)"
+          first_action: "kubectl -n {{ $labels.namespace }} describe daemonset {{ $labels.daemonset }}"
+
+      # The canary pushes after every send that worked, every 30 minutes. Two
+      # hours without a push is four sends in a row that did not.
+      - alert: SignalSendStale
+        expr: time() - push_time_seconds{job="signal_send"} > 2 * 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "the Signal send canary last succeeded {{ $value | humanizeDuration }} ago"
+          first_action: "kubectl -n jobs logs job/<newest signal-send-canary job>; then kubectl -n assistant logs deploy/signal-cli --tail 50"
+
+      # Written by the deploy loop after every successful cycle, pushed to the
+      # Pushgateway in the cluster. The metric name is the contract.
+      - alert: DeployLoopStale
+        expr: time() - harness_deploy_last_success_timestamp_seconds > 6 * 3600
+        for: 15m
+        labels:
+          severity: warning
+          kind: stale
+        annotations:
+          summary: "the deploy loop has not finished a cycle for {{ $value | humanizeDuration }}"
+          first_action: "kubectl -n deploy get jobs --sort-by=.metadata.creationTimestamp, then the newest cycle's logs"
+
+      - alert: DeployLoopStale
+        expr: absent(harness_deploy_last_success_timestamp_seconds)
+        for: 6h
+        labels:
+          severity: warning
+          kind: never-reported
+        annotations:
+          summary: "the deploy loop has never reported a successful cycle"
+          first_action: "kubectl -n deploy get jobs --sort-by=.metadata.creationTimestamp, then the newest cycle's logs"
+
+      - alert: CertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="probes"} - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "the certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          first_action: "kubectl -n ingress logs deploy/caddy | grep -i acme"
+
+      - alert: CertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="probes"} - time() < 3 * 86400
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "the certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          first_action: "kubectl -n ingress logs deploy/caddy | grep -i acme; check DNS still points at the load balancer"

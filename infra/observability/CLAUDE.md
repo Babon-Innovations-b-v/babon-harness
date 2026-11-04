@@ -24,6 +24,12 @@ Prometheus -> Alertmanager -> alert-relay -> assistant /webhook/alertmanager -> 
 - **The Signal send canary's failure is not paged over Signal** (`SIGNAL_UNDER_TEST_UNITS`). It tells you once sending works again.
 - A new harness timer job gets `OnFailure=harness-notify-failure@%n.service` and the `harness-` prefix, or its failure is silent and invisible to `UnitFailed`.
 
+## In the cluster (`infra/k8s/monitoring`)
+
+- Image `ops-runner` (`Dockerfile.ops-runner`, compose service `ops-runner`, profile `cluster-image`) holds only this directory; the deploy loop builds it.
+- A job keeping state on `alert-state` is a container in the alert-relay pod, never a CronJob: one writer per claim.
+- Compose must not load `rules/cluster.yml`. `textfile.publish` pushes to `PUSHGATEWAY_URL` when set.
+
 ## Ports (loopback only)
 
 | Port | What | Used by |

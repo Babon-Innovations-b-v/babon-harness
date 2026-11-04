@@ -1,0 +1,73 @@
+# The cluster Prometheus. The compose file beside the rules
+# (infra/observability/prometheus/prometheus.yml) with every target named by
+# its Service in this namespace, node-exporter found per node, and two jobs the
+# server never had: kube-state-metrics (pod, job and CronJob state) and the
+# Pushgateway (what a CronJob publishes before its pod ends).
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: harness
+
+rule_files:
+  - /etc/prometheus/rules/cluster.yml
+  - /etc/prometheus/rules/watchdog.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ['alertmanager:9093']
+
+  - job_name: blackbox
+    static_configs:
+      - targets: ['blackbox-exporter:9115']
+
+  - job_name: kube-state-metrics
+    static_configs:
+      - targets: ['kube-state-metrics:8080']
+
+  # honor_labels: the job label is the one the pusher chose, so a rule reads
+  # push_time_seconds{job="signal_send"} and not job="pushgateway".
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+  # One target per node: the endpoints of the node-exporter Service in this
+  # namespace, labelled with the node they run on.
+  - job_name: node
+    kubernetes_sd_configs:
+      - role: endpointslice
+        namespaces:
+          names: [monitoring]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: node-exporter
+        action: keep
+      - source_labels: [__meta_kubernetes_endpointslice_endpoint_node_name]
+        target_label: node
+
+  # Every subdomain in PROBE_SUBDOMAINS over HTTPS through the blackbox
+  # exporter; the targets file is written by the probe-targets init container.
+  - job_name: probes
+    metrics_path: /probe
+    params:
+      module: [https_2xx]
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/*.json']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

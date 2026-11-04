@@ -5,7 +5,7 @@ unpacking its native library, for one), and then every page in the kit dies
 with it. Every 30 minutes this sends one message from the bot number to
 itself, which costs nobody a notification, and on success writes
 `harness_signal_send_last_success_timestamp_seconds` to the textfile
-directory.
+directory, or to the Pushgateway as job `signal_send` in the cluster.
 
 On success it also beats the assistant's `signal-send` heartbeat, the one
 component in `apps/assistant/core/monitor/registry.py` that only this canary
@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 
 from infra.observability.alerts.deadman import state_dir
 from infra.observability.alerts.notify import fan_out
-from infra.observability.node_textfile.textfile import write_textfile
+from infra.observability.node_textfile.textfile import publish
 
 METRIC = "harness_signal_send_last_success_timestamp_seconds"
 
@@ -115,7 +115,7 @@ def main() -> int:
         print(f"send canary FAILED: {exc}", file=sys.stderr)
         return 1
     try:
-        write_textfile("signal_send", [
+        publish("signal_send", [
             f"# HELP {METRIC} Last time the bot sent a Signal message to itself.",
             f"# TYPE {METRIC} gauge",
             f"{METRIC} {int(time.time())}",

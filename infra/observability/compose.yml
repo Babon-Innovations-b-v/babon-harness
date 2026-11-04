@@ -99,6 +99,16 @@ services:
       timeout: 5s
       retries: 3
 
+  # The cluster's image of this directory (Dockerfile.ops-runner): the alert
+  # relay and the deadmen in infra/k8s/monitoring run it. The deploy loop
+  # builds it from this block (infra/deploy_loop/_images.py); the profile
+  # keeps `docker compose up` from starting it on a server.
+  ops-runner:
+    profiles: ["cluster-image"]
+    build:
+      context: ../..
+      dockerfile: infra/observability/Dockerfile.ops-runner
+
 volumes:
   probe-targets:
   prometheus-data:

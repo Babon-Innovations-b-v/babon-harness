@@ -1,0 +1,17 @@
+# ops-runner: infra/observability as a cluster image, for the alert relay and
+# the deadmen in infra/k8s/monitoring. Standard library only, so this is the
+# bare interpreter plus this directory; a third-party import here is a dead
+# pager (CLAUDE.md beside this file).
+#
+# Built by the deploy loop from compose service ops-runner, with the
+# repository root as context, and rolled out by digest.
+FROM python:3.12.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+COPY infra/__init__.py infra/__init__.py
+COPY infra/observability/ infra/observability/
+
+USER 65534:65534

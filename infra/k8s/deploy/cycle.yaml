@@ -56,6 +56,10 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
+                # Where step 90 pushes harness_deploy_last_success_timestamp_seconds
+                # (rules/cluster.yml, DeployLoopStale).
+                - name: PUSHGATEWAY_URL
+                  value: http://pushgateway.monitoring.svc.cluster.local:9091
                 - name: DEPLOY_CYCLE_IMAGE
                   value: ${DEPLOY_CYCLE_IMAGE}
                 - name: DEPLOY_REPO_URL

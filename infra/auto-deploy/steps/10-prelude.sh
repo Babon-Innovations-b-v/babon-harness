@@ -103,9 +103,19 @@ record_deploy_verdict() {
     return 0
 }
 
-# Write one Prometheus textfile for the cycle. Best-effort.
+# Publish one Prometheus gauge for the cycle. Best-effort. In the cluster
+# (PUSHGATEWAY_URL set, infra/k8s/deploy/cycle.yaml) it replaces group
+# job=deploy-<name> on the Pushgateway, since the cycle's pod ends with the
+# cycle; on a server it is a node-exporter textfile.
 record_deploy_metric() {
     local name="$1" value="$2" dir="${HARNESS_TEXTFILE_DIR:-$STATE_DIR/textfile}"
+    if [ -n "${PUSHGATEWAY_URL:-}" ]; then
+        printf '%s %s\n' "$name" "$value" \
+            | curl -fsS --max-time 10 -X PUT --data-binary @- \
+                "${PUSHGATEWAY_URL%/}/metrics/job/deploy-$name" >/dev/null 2>&1 \
+            || log "outcome: could not push $name to the Pushgateway"
+        return 0
+    fi
     mkdir -p "$dir" 2>/dev/null || return 0
     printf '%s %s\n' "$name" "$value" > "$dir/.deploy-$name.prom.$$" 2>/dev/null \
         && mv -f "$dir/.deploy-$name.prom.$$" "$dir/deploy-$name.prom" 2>/dev/null || true

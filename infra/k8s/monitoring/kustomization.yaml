@@ -1,7 +1,36 @@
+# Prometheus, Alertmanager, the alert relay with the two deadmen beside it,
+# the Pushgateway, node-exporter on every node, kube-state-metrics and the
+# blackbox exporter. The configs are the files in infra/observability, read
+# from there, so the server and the cluster share one copy of each.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
 resources:
   - namespace.yaml
+  - prometheus.yaml
+  - alertmanager.yaml
+  - alert-relay.yaml
+  - pushgateway.yaml
+  - node-exporter.yaml
+  - kube-state-metrics.yaml
+  - blackbox.yaml
 components:
   - ../vault-secret
+  - ../system-pool
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml
+  - name: prometheus-rules
+    files:
+      - cluster.yml=../../observability/prometheus/rules/cluster.yml
+      - watchdog.yml=../../observability/prometheus/rules/watchdog.yml
+  - name: probe-targets-script
+    files:
+      - render_targets.py=../../observability/probes/render_targets.py
+  - name: alertmanager-config
+    files:
+      - alertmanager.yml=../../observability/alertmanager/alertmanager.yml
+  - name: blackbox-config
+    files:
+      - blackbox.yml=../../observability/blackbox/blackbox.yml
