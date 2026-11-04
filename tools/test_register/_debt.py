@@ -112,10 +112,6 @@ DEBT: tuple[tuple[str, str], ...] = (
     ('apps/notulen', 'apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py'),
     ('apps/notulen', 'apps/notulen/tests/test_a_talk_call_that_is_not_recordable_yet_is_retried_without_paging_and_a_real_refusal_pages_once.py'),
     ('apps/notulen', 'apps/notulen/tests/test_a_talk_webhook_whose_signature_does_not_match_the_bot_secret_is_refused.py'),
-    ('lib/dashkit', 'lib/dashkit/core/tests/test_app_factory_serves_the_frontend.py'),
-    ('lib/dashkit', 'lib/dashkit/core/tests/test_db_dsn_resolution_order.py'),
-    ('lib/dashkit', 'lib/dashkit/core/tests/test_get_user_reads_the_sso_headers.py'),
-    ('lib/dashkit', 'lib/dashkit/core/tests/test_identifier_allowlist.py'),
 )
 
 #: 108 files holding more than one test function that day, each with its
@@ -201,8 +197,4 @@ FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
     ('apps/documents/tests/test_render_html.py', 8),
     ('apps/notulen/tests/test_a_notulen_names_each_person_once_and_caps_the_speakers.py', 5),
     ('apps/notulen/tests/test_a_notulen_never_names_a_speaker_the_transcript_does_not_place.py', 4),
-    ('lib/dashkit/core/tests/test_app_factory_serves_the_frontend.py', 4),
-    ('lib/dashkit/core/tests/test_db_dsn_resolution_order.py', 4),
-    ('lib/dashkit/core/tests/test_get_user_reads_the_sso_headers.py', 5),
-    ('lib/dashkit/core/tests/test_identifier_allowlist.py', 2),
 )

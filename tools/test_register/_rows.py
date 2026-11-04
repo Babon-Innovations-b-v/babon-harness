@@ -99,45 +99,6 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
-        test='lib/dashkit/core/tests/test_identifier_allowlist.py',
-        pins=('lib/dashkit',),
-        runs_when=(
-            'lib/dashkit/**',
-        ),
-        proved_by=Break(
-            file='lib/dashkit/core/identifiers.py',
-            old='r"[a-z_][a-z0-9_]*"',
-            new='r".*"',
-            why='any string passes as a table name, so the refusal cases fail',
-        ),
-    ),
-    Row(
-        test='lib/dashkit/core/tests/test_get_user_reads_the_sso_headers.py',
-        pins=('lib/dashkit',),
-        runs_when=(
-            'lib/dashkit/**',
-        ),
-        proved_by=Break(
-            file='lib/dashkit/core/auth.py',
-            old='for name in ("Remote-User", "Remote-Email"):',
-            new='for name in ("Remote-Email", "Remote-User", "Authorization"):',
-            why='the email wins over the account id and a client header is read, so the order cases fail',
-        ),
-    ),
-    Row(
-        test='lib/dashkit/core/tests/test_db_dsn_resolution_order.py',
-        pins=('lib/dashkit',),
-        runs_when=(
-            'lib/dashkit/**',
-        ),
-        proved_by=Break(
-            file='lib/dashkit/core/db.py',
-            old='explicit = os.environ.get("DB_URL") or os.environ.get("DB_URL_OPS")',
-            new='explicit = os.environ.get("DB_URL_OPS") or os.environ.get("DB_URL")',
-            why='DB_URL_OPS wins over DB_URL, so the order case fails',
-        ),
-    ),
-    Row(
         test='infra/observability/tests/test_the_textfile_collector_and_probe_targets_render_what_the_rules_read.py',
         pins=('infra/observability/node_textfile',),
         runs_when=(
@@ -161,19 +122,6 @@ ROWS: tuple[Row, ...] = (
             old='if [ -n "$reset_failed" ] && grep -qE \'index\\.lock|Another git process seems to be running\' "$reset_output"; then',
             new='if [ -n "$reset_failed" ] && grep -qE \'no such lock message\' "$reset_output"; then',
             why='a lost race is no longer recognised, so a reset that lost the index lock counts as a failed repair',
-        ),
-    ),
-    Row(
-        test='lib/dashkit/core/tests/test_app_factory_serves_the_frontend.py',
-        pins=('lib/dashkit',),
-        runs_when=(
-            'lib/dashkit/**',
-        ),
-        proved_by=Break(
-            file='lib/dashkit/core/_frontend_static.py',
-            old='not str(target).startswith(str(base))\n            or not target.is_file()',
-            new='not target.is_file()',
-            why='a path that climbs out of the static folder is served, so the traversal case fails',
         ),
     ),
     Row(
@@ -1633,6 +1581,19 @@ ROWS: tuple[Row, ...] = (
             old="_STEP * (deepest - spec.rank)",
             new="_STEP * (spec.rank + 1)",
             why="a fallback outranks its preferred pool, so the expander order differs from the hand-written one",
+        ),
+    ),
+    Row(
+        test='lib/dashkit/core/tests/test_a_dashboard_serves_its_frontend_reads_the_sso_user_finds_its_database_and_quotes_only_allowed_identifiers.py',
+        pins=('lib/dashkit',),
+        runs_when=(
+            'lib/dashkit/**',
+        ),
+        proved_by=Break(
+            file='lib/dashkit/core/_frontend_static.py',
+            old='not str(target).startswith(str(base))\n            or not target.is_file()',
+            new='not target.is_file()',
+            why='a path that climbs out of the static folder is served, so the traversal case fails',
         ),
     ),
     Row(
