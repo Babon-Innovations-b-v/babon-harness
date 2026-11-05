@@ -1,6 +1,6 @@
 # infra/cluster/pool_fallbacks/
 
-Which empty pools stand in for each pool role when the provider is out of a machine type, and the cluster autoscaler's priority order over them. Tier S, stdlib only, reads nothing live. The only caller is `infra/cluster/create-cluster.sh`, which does the provider and `kubectl` work.
+Which empty pools stand in for each pool role when the provider is out of a machine type, and the cluster autoscaler's priority order over them. Tier S, stdlib only, reads nothing live. Callers: `infra/cluster/create-cluster.sh`, which does the provider and `kubectl` work, and `infra/cluster/apply.sh`, which renders the warm gate floor (`--warm`, `_warm.py`) into `infra/k8s/deploy/gate-warm.yaml`.
 
 ```
 python3 -m infra.cluster.pool_fallbacks --pools

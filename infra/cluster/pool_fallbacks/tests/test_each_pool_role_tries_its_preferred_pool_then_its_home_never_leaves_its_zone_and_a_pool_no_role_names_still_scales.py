@@ -23,13 +23,21 @@ written in bytes the way the provider reports it (100GB = 100000000000).
 WHAT IT WAS PROVED AGAINST. The weight turned from falling with the rank to
 rising with it, so a fallback outranks its preferred pool.
 
+THE WARM FLOOR. `warm_floor()` reads the gate role's working-hours count and
+turns WORKING_DAYS and WORKING_HOURS into the two cron lines, written out by
+hand: cron counts Sunday as 0, a minute comes before the hour, and hours that
+end before they start are refused. The count at a moment is the working
+count only on a working day from the opening minute up to, not including,
+the closing one. Swapping `_DAYS` to start on Monday turns
+both floor cases red.
+
 GUARDS. The stock fallback, ported from the cluster foundation (2026-11-04).
 """
 from __future__ import annotations
 
 import pytest
 
-from infra.cluster.pool_fallbacks import fallback_actions, pools, priorities
+from infra.cluster.pool_fallbacks import WarmFloor, fallback_actions, pools, priorities, warm_floor
 
 _TWO_ZONES = {
     "CLUSTER_ZONES": "zone-a,zone-b",
@@ -104,19 +112,41 @@ _ONE_POOL_LIVE = [
 ]
 _ONE_POOL_PRIORITIES = "10:\n  - ^id-gpu$\n1:\n  - .*\n"
 
+#: The same two zones with a warm gate floor: three nodes 08:30-18:00 on
+#: Monday to Friday, the gate's minimum of one otherwise (cron's Monday is 1).
+_WARM = {**_TWO_ZONES, "POOL_GATE_WARM": "3", "POOL_GATE_MIN": "1",
+         "WORKING_DAYS": "Mon-Fri", "WORKING_HOURS": "08:30-18:00"}
+_WARM_FLOOR = WarmFloor(working=3, idle=1, up="30 8 * * 1-5", down="0 18 * * 1-5",
+                        days=frozenset({1, 2, 3, 4, 5}), opens=(8, 30), closes=(18, 0))
+#: (cron weekday, hour, minute) -> the count the floor asks for then: inside
+#: the hours on a working day, the minute they close, before they open, Sunday.
+_WARM_MOMENTS = {(3, 8, 30): 3, (5, 17, 59): 3, (2, 18, 0): 1, (1, 8, 29): 1, (0, 12, 0): 1}
+#: A list of days, and a floor with no minimum outside working hours.
+_WARM_LIST = {**_TWO_ZONES, "POOL_GATE_WARM": "1",
+              "WORKING_DAYS": "Mon,Wed,Sun", "WORKING_HOURS": "09:00-17:15"}
+_WARM_LIST_FLOOR = WarmFloor(working=1, idle=0, up="0 9 * * 1,3,0", down="15 17 * * 1,3,0",
+                             days=frozenset({0, 1, 3}), opens=(9, 0), closes=(17, 15))
+#: Hours that end before they start are refused, never a schedule that never runs.
+_WARM_BACKWARDS = {**_TWO_ZONES, "POOL_GATE_WARM": "2", "WORKING_DAYS": "Mon-Fri", "WORKING_HOURS": "18:00-08:00"}
+
 
 @pytest.mark.parametrize(
-    ("settings", "live", "expected_pools", "expected_priorities", "expected_actions"),
+    ("settings", "live", "expected_pools", "expected_priorities", "expected_actions", "expected_warm"),
     [
-        (_TWO_ZONES, _TWO_ZONES_LIVE, _TWO_ZONES_POOLS, _TWO_ZONES_PRIORITIES, _TWO_ZONES_ACTIONS),
-        (_ONE_POOL, _ONE_POOL_LIVE, _ONE_POOL_POOLS, _ONE_POOL_PRIORITIES, {}),
+        (_TWO_ZONES, _TWO_ZONES_LIVE, _TWO_ZONES_POOLS, _TWO_ZONES_PRIORITIES, _TWO_ZONES_ACTIONS, None),
+        (_ONE_POOL, _ONE_POOL_LIVE, _ONE_POOL_POOLS, _ONE_POOL_PRIORITIES, {}, None),
+        (_WARM, _TWO_ZONES_LIVE, _TWO_ZONES_POOLS, _TWO_ZONES_PRIORITIES, _TWO_ZONES_ACTIONS, _WARM_FLOOR),
+        (_WARM_LIST, _TWO_ZONES_LIVE, _TWO_ZONES_POOLS, _TWO_ZONES_PRIORITIES, _TWO_ZONES_ACTIONS, _WARM_LIST_FLOOR),
+        (_WARM_BACKWARDS, _TWO_ZONES_LIVE, _TWO_ZONES_POOLS, _TWO_ZONES_PRIORITIES, _TWO_ZONES_ACTIONS,
+         "WORKING_HOURS='18:00-08:00' ends before it starts"),
     ],
-    ids=["two-zones-media-pinned", "one-pool-no-fallbacks"],
+    ids=["two-zones-media-pinned", "one-pool-no-fallbacks", "warm-floor-weekdays", "warm-floor-day-list",
+         "warm-hours-backwards"],
 )
 def test_each_pool_role_tries_its_preferred_pool_then_its_home_never_leaves_its_zone_and_a_pool_no_role_names_still_scales(
-    settings, live, expected_pools, expected_priorities, expected_actions,
+    settings, live, expected_pools, expected_priorities, expected_actions, expected_warm,
 ) -> None:
-    """The pool table, the expander's order and the fallback actions match the hand-written answer."""
+    """The pool table, the expander's order, the fallback actions and the warm floor match the hand-written answer."""
     got_pools = [
         (spec.name, spec.node_type, spec.zone, spec.rank, spec.min_size, spec.max_size,
          spec.root_volume_size, spec.taints, spec.shared_security_group)
@@ -131,3 +161,12 @@ def test_each_pool_role_tries_its_preferred_pool_then_its_home_never_leaves_its_
     assert configmap["data"]["priorities"] == expected_priorities
 
     assert fallback_actions(settings, live) == expected_actions
+
+    if isinstance(expected_warm, str):
+        with pytest.raises(ValueError, match=expected_warm.replace("(", r"\(")):
+            warm_floor(settings)
+    else:
+        assert warm_floor(settings) == expected_warm
+    if expected_warm == _WARM_FLOOR:
+        for (weekday, hour, minute), count in _WARM_MOMENTS.items():
+            assert expected_warm.count_at(weekday, hour, minute) == count, (weekday, hour, minute)

@@ -56,10 +56,24 @@ zones=${CLUSTER_ZONES:-}
 if [ -z "${DEPLOY_REPO_URL:-}" ]; then
     DEPLOY_REPO_URL=$(python3 -c 'import json, sys; repo = json.load(open(sys.argv[1])).get("repo", ""); print(f"https://github.com/{repo}.git" if repo else "")' "$REPO/.claude/project.json")
 fi
+# The gate image the tree pins, for the warm gate nodes to hold; the cycle
+# image (which every gate node pulls anyway) until one is pinned.
+GATE_IMAGE=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[2]); from infra.deploy_loop._gate_job import pinned_gate_image; print(pinned_gate_image(open(sys.argv[1]).read()))' "$REPO/infra/gate-image/pin" "$REPO")
+: "${GATE_IMAGE:=$DEPLOY_CYCLE_IMAGE}"
+# The warm gate floor (infra/cluster/pool_fallbacks/_warm.py): the working, idle
+# and current counts, then the up and down cron lines. The Deployment gets the
+# current count, the same the CronJobs would set, so an apply never fights them.
+# No floor: both CronJobs suspended on a dummy schedule, no warm node.
+warm=$(cd "$REPO" && python3 -m infra.cluster.pool_fallbacks --warm)
+{ read -r GATE_WARM_NODES GATE_IDLE_NODES GATE_WARM_NOW; read -r GATE_WARM_UP; read -r GATE_WARM_DOWN; } <<< "$warm" || true
+GATE_WARM_SUSPEND=false
+if [ "$GATE_WARM_NODES" = 0 ]; then
+    GATE_WARM_SUSPEND=true GATE_WARM_UP="0 0 1 1 *" GATE_WARM_DOWN="0 0 1 1 *"
+fi
 media_zones=${POOL_MEDIA_ZONES:-$zones}
 : "${MEDIA_ZONE:=${media_zones%%,*}}"
 # Every setting a manifest may name as ${KEY}; a new one is added here.
-PLACEHOLDERS="SCW_REGION SCW_PROJECT_ID VAULT_SECRET_NAME POOL_ROLE_LABEL IMAGE_REGISTRY_HOST IMAGE_REGISTRY INGRESS_LB_ZONE INGRESS_LB_TYPE INGRESS_LB_IP_ID BACKUP_SNAPSHOT_CLASS BACKUP_KEEP ASSISTANT_TIMEZONE MEDIA_PUBLIC_IP MEDIA_ZONE MEDIA_IMAGE_TAG DEPLOY_CYCLE_IMAGE DEPLOY_REPO_URL"
+PLACEHOLDERS="SCW_REGION SCW_PROJECT_ID VAULT_SECRET_NAME POOL_ROLE_LABEL IMAGE_REGISTRY_HOST IMAGE_REGISTRY INGRESS_LB_ZONE INGRESS_LB_TYPE INGRESS_LB_IP_ID BACKUP_SNAPSHOT_CLASS BACKUP_KEEP ASSISTANT_TIMEZONE MEDIA_PUBLIC_IP MEDIA_ZONE MEDIA_IMAGE_TAG DEPLOY_CYCLE_IMAGE DEPLOY_REPO_URL GATE_IMAGE GATE_WARM_NODES GATE_IDLE_NODES GATE_WARM_UP GATE_WARM_DOWN GATE_WARM_SUSPEND GATE_WARM_NOW"
 # shellcheck disable=SC2086
 export PLACEHOLDERS $PLACEHOLDERS
 

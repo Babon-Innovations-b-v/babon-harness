@@ -1,0 +1,189 @@
+# Warm gate nodes: POOL_GATE_WARM gate nodes stay up on WORKING_DAYS during
+# WORKING_HOURS (ASSISTANT_TIMEZONE), POOL_GATE_MIN otherwise, so a push in
+# working hours does not wait for a node to boot.
+#
+# What keeps a node up is cloud-agnostic: Deployment gate-warm holds one tiny
+# pod per gate node (required anti-affinity on the hostname), each marked
+# safe-to-evict false, so the autoscaler adds a node for every replica it
+# cannot place and never takes one of theirs back. They request almost
+# nothing, so a gate Job fits beside them. Each pod's init container is the
+# gate image the tree pins (GATE_IMAGE), so a warm node already holds it when
+# the first gate Job of the morning lands.
+#
+# CronJobs gate-warm-up and gate-warm-down scale the Deployment at the edges of
+# working hours (infra/cluster/pool_fallbacks/_warm.py writes their schedules).
+# An apply sets the replicas the floor asks for at that minute (GATE_WARM_NOW),
+# the same count the last edge's CronJob set, so the two never fight. With
+# POOL_GATE_WARM empty or 0 it is 0 and both CronJobs are suspended.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gate-warm
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+    app: gate-warm
+spec:
+  replicas: ${GATE_WARM_NOW}
+  selector:
+    matchLabels:
+      app: gate-warm
+  template:
+    metadata:
+      labels:
+        app: gate-warm
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 0
+      nodeSelector:
+        ${POOL_ROLE_LABEL}: gate
+      tolerations:
+        - key: ${POOL_ROLE_LABEL}
+          operator: Equal
+          value: gate
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: gate-warm
+              topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+        - name: registry-pull
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+      initContainers:
+        - name: gate-image
+          image: ${GATE_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "exit 0"]
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {memory: 32Mi}
+      containers:
+        - name: hold
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {memory: 16Mi}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gate-warm
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gate-warm
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["gate-warm"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gate-warm
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gate-warm
+subjects:
+  - kind: ServiceAccount
+    name: gate-warm
+---
+# Working hours start: POOL_GATE_WARM warm gate nodes.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gate-warm-up
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  schedule: "${GATE_WARM_UP}"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  suspend: ${GATE_WARM_SUSPEND}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: gate-warm-scale
+        spec:
+          serviceAccountName: gate-warm
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          imagePullSecrets:
+            - name: registry-pull
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: scale
+              image: ${DEPLOY_CYCLE_IMAGE}
+              command: ["kubectl", "scale", "deployment/gate-warm", "--replicas=${GATE_WARM_NODES}"]
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 128Mi}
+---
+# Working hours end: back to POOL_GATE_MIN.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gate-warm-down
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  schedule: "${GATE_WARM_DOWN}"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  suspend: ${GATE_WARM_SUSPEND}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: gate-warm-scale
+        spec:
+          serviceAccountName: gate-warm
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          imagePullSecrets:
+            - name: registry-pull
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: scale
+              image: ${DEPLOY_CYCLE_IMAGE}
+              command: ["kubectl", "scale", "deployment/gate-warm", "--replicas=${GATE_IDLE_NODES}"]
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 128Mi}

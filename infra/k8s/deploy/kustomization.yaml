@@ -10,5 +10,6 @@ resources:
   - buildkitd.yaml
   - cycle.yaml
   - receiver.yaml
+  - gate-warm.yaml
 components:
   - ../vault-secret

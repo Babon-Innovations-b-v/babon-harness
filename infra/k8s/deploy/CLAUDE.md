@@ -8,6 +8,7 @@ The deploy loop in namespace `deploy`: CronJob `deploy-cycle` (`cycle.yaml`), th
 - **Never start a cycle by hand while one runs** (`kubectl -n deploy get jobs`): the receiver checks, a hand does not.
 - **buildkitd speaks plain TCP**: keep its NetworkPolicy. Its GC (`maxUsedSpace` 40GB) is fitted to its 50Gi claim; change both together, then `kubectl -n deploy rollout restart deploy/buildkitd`. Never delete a `<image>:buildcache` tag by hand.
 - **buildkitd and the gate Jobs select the `gate` pool role; the cycle and the receiver the `system` role.** buildkitd carries `safe-to-evict: "false"`, so the autoscaler never takes the builder's node back.
+- **Warm gate nodes are pods, not a pool size** (`gate-warm.yaml`): Deployment `gate-warm` holds one pause pod per gate node (anti-affinity, safe-to-evict false) whose init container pulls the pinned gate image; CronJobs `gate-warm-up`/`-down` scale it at the edges of `WORKING_HOURS`, and an apply sets the count for that minute. Change the hours in `config/harness.env`, never the CronJobs.
 - Sizes and requests are starting points, not measured.
 
 ## First start (by hand, once)
