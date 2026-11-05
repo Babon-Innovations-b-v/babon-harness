@@ -1,0 +1,127 @@
+# The deploy-cycle image's trial judge (infra/deploy_loop/_cycle_image.py).
+# Step 50 builds a new deploy-cycle image when the shipped tree's
+# infra/deploy_loop changed, smoke-tests it and tries it on CronJob
+# deploy-cycle alone. This CronJob, still on the image every other object
+# runs, moves them all onto it (image and DEPLOY_CYCLE_IMAGE) once a cycle Job
+# in it ends green, and puts deploy-cycle back when two cycle Jobs in it fail
+# or none ends green within 30 minutes. It also puts any object an apply left
+# on another image back on the recorded good one. Its own image moves only on
+# a promotion, so a loop image too broken to start a cycle cannot stop the
+# rollback.
+#
+# State: ConfigMap deploy-cycle-image. DELIBERATELY NO `data:`, for the
+# bookmark's reason: an apply would otherwise put an old `good` back. Empty,
+# the guard records the image CronJob deploy-cycle runs as good on its first
+# tick.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deploy-cycle-image
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-cycle-image-guard
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+# It reads and writes its own ConfigMap, reads the cycle's Jobs, and patches
+# the image of the loop's own CronJobs, Deployments and DaemonSets in this
+# namespace. Nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploy-cycle-image-guard
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["deploy-cycle-image"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["list"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["list", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets"]
+    verbs: ["list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploy-cycle-image-guard
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deploy-cycle-image-guard
+subjects:
+  - kind: ServiceAccount
+    name: deploy-cycle-image-guard
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: deploy-cycle-image-guard
+  labels:
+    app.kubernetes.io/name: deploy-cycle-image-guard
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  schedule: "*/3 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 170
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deploy-cycle-image-guard
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 170
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: deploy-cycle-image-guard
+        spec:
+          serviceAccountName: deploy-cycle-image-guard
+          priorityClassName: deploy-loop
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          tolerations:
+            - key: ${POOL_ROLE_LABEL}
+              operator: Equal
+              value: system
+              effect: NoSchedule
+          imagePullSecrets:
+            - name: registry-pull
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: guard
+              image: ${DEPLOY_CYCLE_IMAGE}
+              imagePullPolicy: IfNotPresent
+              command: ["python3", "-m", "infra.deploy_loop", "cycle-image-guard"]
+              workingDir: /app
+              env:
+                - name: DEPLOY_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi

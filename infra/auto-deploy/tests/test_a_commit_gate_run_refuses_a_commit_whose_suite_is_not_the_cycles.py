@@ -1,4 +1,4 @@
-"""A verifying run's verdict is only about the suite the deploy cycle runs.
+"""A verifying run's verdict is only about the suite the deploy cycle runs, and reaches the cycle unaltered.
 
 Every check below is one row of CASES under the one test function; a
 row that fails fails the test. The sections below are the notes each
@@ -21,6 +21,12 @@ code follows from the rule above.
 WHAT IT WAS PROVED AGAINST. Comparing only the commit's list with itself, so a
 mismatch with the clone falls through.
 
+THE LANE'S HAND-OFF. The cases after the refusal pin the rest of the drawer:
+the ConfigMap the lane publishes (`lane_drawers.py`) carries only the queued
+commits and never overwrites a file the cycle holds; a burst (`batch.sh`) is
+halved only while red until one commit is red on its own; and the lane in the
+cluster (`cluster_lane.sh`) takes no bookmark that is not a full sha.
+
 GUARDS. The verdict cache.
 """
 from __future__ import annotations
@@ -30,7 +36,10 @@ import inspect
 
 # From a commit gate run refuses a commit whose suite is not the cycles.
 
+import json
+import shutil
 import subprocess
+import sys
 
 
 from pathlib import Path
@@ -194,6 +203,103 @@ def _the_only_clone_file_the_lane_opens_is_the_one_it_compares() -> None:
     )
 
 
+
+_DRAWER = Path(__file__).resolve().parents[1] / "commit_gate"
+
+
+def _drawers(*argv: str, stdin: str = "") -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(_DRAWER / "lane_drawers.py"), *argv], input=stdin,
+                          capture_output=True, text=True, check=False, timeout=60)
+
+
+def _the_lane_publishes_only_queued_commits_and_the_cycle_never_replaces_a_file_it_holds(tmp_path: Path) -> None:
+    """The lane's ConfigMap carries the queue's drawer files; unpacking adds, it never overwrites.
+
+    A verdict the cycle already holds may be the one it shipped on, so a copy
+    from the lane must not replace it; a key naming no drawer, or a verdict
+    line about another commit, is refused.
+    """
+    queued, passed, other = "1" * 40, "2" * 40, "3" * 40
+    lane = tmp_path / "lane"
+    (lane / "gate-verdicts").mkdir(parents=True)
+    (lane / "gate-scopes").mkdir()
+    (lane / "gate-verdicts" / queued).write_text(f"{queued} green selected 1 replayed t\n", encoding="utf-8")
+    (lane / "gate-verdicts" / passed).write_text(f"{passed} green selected 1 replayed t\n", encoding="utf-8")
+    (lane / "gate-scopes" / f"{queued}.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "shas").write_text(queued + "\n", encoding="utf-8")
+    packed = _drawers("pack", "--state-dir", str(lane), "--shas-file", str(tmp_path / "shas"),
+                      "--name", "commit-gate-verdicts", "--namespace", "deploy")
+    document = json.loads(packed.stdout)
+    assert sorted(document["data"]) == [f"s.{queued}", f"v.{queued}"]
+
+    cycle = tmp_path / "cycle"
+    (cycle / "gate-verdicts").mkdir(parents=True)
+    (cycle / "gate-verdicts" / queued).write_text("the cycle's own line\n", encoding="utf-8")
+    document["data"]["x." + other] = "no such drawer"
+    document["data"]["v." + other] = f"{passed} green selected 1 replayed t\n"
+    unpacked = _drawers("unpack", "--state-dir", str(cycle), stdin=json.dumps(document))
+    assert unpacked.stdout.strip() == "1"
+    assert (cycle / "gate-verdicts" / queued).read_text(encoding="utf-8") == "the cycle's own line\n"
+    assert (cycle / "gate-scopes" / f"{queued}.json").read_text(encoding="utf-8") == "{}"
+    assert not (cycle / "gate-verdicts" / other).exists()
+
+
+_FAKE_RUN_ONE = """#!/bin/bash
+# Stand-in for run_one.sh: red when the range it is asked about holds a red commit.
+printf '%s %s\\n' "$1" "${COMMIT_GATE_BATCH_BASE:--}" >> "$CALLS"
+range="$1"
+[ -n "${COMMIT_GATE_BATCH_BASE:-}" ] && range="$(cat "$RANGES/$COMMIT_GATE_BATCH_BASE-$1")"
+for sha in $range; do
+    grep -qx "$sha" "$REDS" && exit 1
+done
+exit 0
+"""
+
+
+def _a_batch_is_split_only_while_red_down_to_the_one_red_commit(tmp_path: Path, reds: list, calls: list) -> None:
+    """A burst is verified once on its newest commit and halved only while red.
+
+    Five made-up commits on a base; the stand-in run_one.sh is red exactly when
+    the range it is given holds a red commit. The calls expected are the
+    halving worked by hand: a green half moves the base past it, a red half is
+    split again, and the search ends on the one red commit asked on its own.
+    """
+    shutil.copy(_DRAWER / "batch.sh", tmp_path / "batch.sh")
+    (tmp_path / "run_one.sh").write_text(_FAKE_RUN_ONE, encoding="utf-8")
+    commits = [f"c{index}" for index in range(1, 6)]
+    ranges = tmp_path / "ranges"
+    ranges.mkdir()
+    for low, base in enumerate(["base", *commits]):
+        for high in range(low, len(commits)):
+            (ranges / f"{base}-{commits[high]}").write_text(" ".join(commits[low:high + 1]), encoding="utf-8")
+    (tmp_path / "reds").write_text("".join(f"{red}\n" for red in reds), encoding="utf-8")
+    env = {"PATH": "/usr/bin:/bin", "CALLS": str(tmp_path / "calls"), "RANGES": str(ranges),
+           "REDS": str(tmp_path / "reds")}
+    subprocess.run(["bash", str(tmp_path / "batch.sh"), "base", *commits], env=env, capture_output=True,
+                   text=True, check=True, timeout=60)
+    assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines() == calls
+
+
+_FAKE_KUBECTL_BOOKMARK = """#!/bin/bash
+printf '%s' "$BOOKMARK_VALUE"
+"""
+
+
+def _the_lane_takes_no_bookmark_that_is_not_a_full_sha(tmp_path: Path, value: str, taken: bool) -> None:
+    """No bookmark is no range: the lane verifies nothing rather than the whole history."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "kubectl").write_text(_FAKE_KUBECTL_BOOKMARK, encoding="utf-8")
+    (bin_dir / "kubectl").chmod(0o755)
+    state = tmp_path / "state"
+    script = f'. "{_DRAWER / "cluster_lane.sh"}"; lane_pull_bookmark'
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, timeout=60,
+                          env={"PATH": f"{bin_dir}:/usr/bin:/bin", "STATE_DIR": str(state), "BOOKMARK_VALUE": value})
+    assert (done.returncode == 0) is taken
+    written = state / "last-deployed-sha"
+    assert (written.read_text(encoding="utf-8").strip() == value) if taken else not written.exists()
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -222,6 +328,19 @@ CASES = [
     ],
 ),
     *_cases(_the_only_clone_file_the_lane_opens_is_the_one_it_compares),
+    *_cases(_the_lane_publishes_only_queued_commits_and_the_cycle_never_replaces_a_file_it_holds),
+    *_cases(_a_batch_is_split_only_while_red_down_to_the_one_red_commit, ("reds", "calls"), [
+        pytest.param([], ["c5 base"], id="a green burst is one run"),
+        pytest.param(["c3"], ["c5 base", "c2 base", "c5 c2", "c3 -"], id="the red in the middle is found alone"),
+        pytest.param(["c1"], ["c5 base", "c2 base", "c1 -"], id="the red first commit is found alone"),
+        pytest.param(["c5"], ["c5 base", "c2 base", "c5 c2", "c3 -", "c5 c3", "c4 -", "c5 -"],
+                     id="the red newest commit is found alone"),
+    ]),
+    *_cases(_the_lane_takes_no_bookmark_that_is_not_a_full_sha, ("value", "taken"), [
+        pytest.param("a" * 40, True, id="a full sha"),
+        pytest.param("", False, id="never seeded"),
+        pytest.param("main", False, id="not a sha"),
+    ]),
 ]
 
 

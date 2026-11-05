@@ -303,16 +303,20 @@ dashkit lives in `lib/dashkit` and every dashboard is built on it. A dashboard k
 ## infra/deploy
 
 ```
-push to main -> Caddy -> deploy-webhook -> deploy-cycle Job: lock -> fresh -> pick one commit -> export -> gate Job -> build -> roll out -> apply -> bookmark
+push to main -> Caddy -> deploy-webhook
+deploy-webhook -> commit-gate Job: a verdict for every queued commit -> ConfigMap commit-gate-verdicts
+deploy-webhook -> deploy-cycle Job: lock -> fresh -> verdicts -> pick one commit -> export -> gate -> build -> roll out -> apply -> bookmark
 ```
 
 ### The loop
 
-Pushing to `main` is the deploy.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=deploy) The loop runs in the cluster, in namespace `deploy`. CronJob `deploy-cycle` runs `infra/auto-deploy/auto-deploy.sh` every two minutes, and the push receiver `deploy-webhook` (behind Caddy at `deploy.<DOMAIN>/hooks/*`) checks the push's HMAC signature and starts a cycle at once. A cycle takes the lock, fast-forwards its own clone on volume `deploy-state`, and picks ONE commit past the deploy bookmark: the newest commit that already has a green verdict for its exact tree, otherwise the next one. It is never the tip and never a batch, because a red on a batch names nobody's commit. The bookmark's durable copy is ConfigMap `deploy-bookmark`.
+Pushing to `main` is the deploy.[◈](https://babon-innovations-b-v.github.io/babon-harness/diagrams/stack.html#focus=deploy) In namespace `deploy`, CronJob `deploy-cycle` runs `infra/auto-deploy/auto-deploy.sh` every two minutes, and the push receiver `deploy-webhook` (behind Caddy at `deploy.<DOMAIN>/hooks/*`) checks the push's HMAC signature and starts a cycle and the lane at once. A cycle takes the lock, fast-forwards its clone on volume `deploy-state`, and picks ONE commit past the bookmark, ConfigMap `deploy-bookmark`.
 
-The commit is exported with `git archive` into a tree of its own. The gate runs as one gate Job per module group (at most `GATE_SHARD_JOBS`), all at once on the gate pool, each a full clone of the commit in its own volume, in the gate image that commit's `infra/gate-image/pin` names by digest. A gate Job owns no volume, so a run gets faster as the autoscaler adds gate nodes. The stack's own images are built from the export by BuildKit (Deployment `buildkitd`, on the gate pool, with a registry cache), pushed as `<name>:git-<sha12>`, and rolled out by digest with `kubectl set image`. A rollout that does not finish is undone. When the commit changed `infra/k8s/`, `infra/cluster/` or `infra/caddy/`, the cycle applies the manifests and puts every image back on its last good digest. The bookmark moves only when everything shipped.
+That commit is the trusted head when the lane has one (below), else the newest commit green for its exact tree, else the next one. A red on a range nobody judged would name nobody's commit.
 
-Each stage reports on the commit's GitHub page as `vm/gate`, `vm/build`, `vm/boot` and `vm/deploy`. `failure` means the stage ran and said no; `error` means it could not form an opinion. The repository's only workflow opens an issue when those reports stop. How long a push takes to go live in the cluster is not measured.
+The commit is exported with `git archive`. The gate runs as one gate Job per module group, all at once on the gate pool, each a full clone in the gate image the commit's `infra/gate-image/pin` names by digest. The stack's own images are built by BuildKit (Deployment `buildkitd`) and rolled out by digest; a rollout that does not finish is undone. The bookmark moves only when everything shipped.
+
+When a shipped tree's `infra/deploy_loop` differs from the `deploy-cycle` image in use, the cycle builds it, runs `image/smoke.sh` in a pod, and tries it on CronJob `deploy-cycle` alone. CronJob `deploy-cycle-image-guard`, still on the old image, moves every other object onto it after one green cycle, or puts the cycle back after two failed ones or 30 minutes without a green one.
 
 ### The gate and its three verdicts
 
@@ -322,23 +326,34 @@ Each stage reports on the commit's GitHub page as `vm/gate`, `vm/build`, `vm/boo
 | red | the run happened and said no | nothing ships; a failing test run is cached |
 | amber | the run could not start or finish | nothing ships; never cached, never reverts anything, retried next tick, alerts after three |
 
-Red covers a failing test, code that would not load, a run that collected nothing, a test with no register row, and a test that still passes with its own break applied. Amber covers a gate Job that could not start or was evicted, a failed `uv sync`, a timeout, a missing interpreter and a run killed or out of memory. Both ship nothing, because a gate that could not run must never look like a gate that passed.
+Red covers a failing test, code that would not load, a run that collected nothing, a test with no register row, and a test that passes with its own break applied. Amber covers a gate Job that could not start, a failed `uv sync`, a timeout and a run killed or out of memory. A gate that could not run must never look like one that passed.
 
-The gate does not run the whole suite for every commit. `tools/gate_scope` follows the import graph and the register's triggers to pick the tests a change can reach; anything it cannot reason about runs the full suite. Narrowing is licensed only while the nightly unselected run (`tools/gate_scope/audit_full_run.sh`) is green; until it runs in the cluster, every commit runs the full suite. With no green run in 48 hours, or one test it proves the narrowing missed, every commit runs the full suite again.
+`tools/gate_scope` follows the import graph and the register's triggers to pick the tests a change can reach; anything it cannot reason about runs the full suite. Narrowing is licensed only while the nightly unselected run (`tools/gate_scope/audit_full_run.sh`) is green; with none in 48 hours, or one proven miss, every commit runs the full suite.
 
-A verifying lane (`commit_gate/`) can run the gate on every queued commit ahead of the cycle, so that when the cycle reaches a commit its verdict is already there. It does not run in the cluster yet; the receiver starts its CronJob `commit-gate` as soon as one exists.
+### The verifying lane
+
+| Lane verdict | Its reason field | What the cycle does |
+|---|---|---|
+| green, break replay passed | `replayed` | counts towards the trusted head |
+| green, covered by a batch | `batch:<sha12>` | counts, never as the head itself |
+| green, no replay | `none` | gates that commit itself |
+| red, the commit's | `regression` and the like | nothing; the lane's eject acted |
+
+CronJob `commit-gate` (`infra/auto-deploy/commit_gate/cluster_lane.sh`) judges every commit between the bookmark and `main` on its own tree, from its own clone on volume `commit-gate-work`. Its suites run as gate Jobs. It publishes its verdicts as ConfigMap `commit-gate-verdicts`, which step 18 copies into the cycle's state without replacing anything there.
+
+A burst is one batch: verified once on its newest commit, halved only while red, until one commit is red on its own run. That red is sorted like the cycle's, and when it is the commit's the lane's own eject takes it back.
+
+The trusted head is the newest commit up to which every commit has a replayed green, a batch green, no reachable test, or a red a later covered commit reverts (`python3 -m infra.deploy_loop trusted-head`). The cycle ships it without running pytest again. Without a narrowing licence only a `full` green counts.
 
 ### The register
 
-Every test has one row in `tools/test_register/_rows.py`: the module the test pins, the changed paths that select it, and the break, an exact edit to a source file that must turn the test red. `python3 -m tools.test_register --new <module> --says "<invariant>"` writes a test and its row together. The gate refuses a tree whose tests and rows disagree. After a green suite it applies the break of every row the commit touched and reruns that test; a test that still passes is red. A test that can never fail looks exactly like a good one, and this is what tells them apart.
+Every test has one row in `tools/test_register/_rows.py`: the module it pins, the paths that select it, and the break, an exact edit that must turn the test red. `python3 -m tools.test_register --new <module> --says "<invariant>"` writes a test and its row together. The gate refuses a tree whose tests and rows disagree, and after a green suite replays the break of every row the commit touched: a test that still passes is red.
 
 ### The eject
 
-Nothing holds the queue. Before a red is believed, the test files it names run again in a fresh gate Job and on the last good tree. A test that passes the second time, or fails on the last good tree too, is quarantined with an issue for its owner, and the suite runs again without it. Only a red that is the commit's stays red.
+The test files a red names run again in a fresh gate Job and on the last good tree. A test that passes the second time, or fails there too, is quarantined with an issue for its owner, and the suite runs again without it. Only the commit's red stays red.
 
-The eject takes that commit back off `main` and hands it to its author. The shipped config arms it (`EJECT_ENABLED=1`); with `0`, a red holds the queue until a person acts.
-
-Armed, it reverts exactly one commit. It never reverts its own commits, never more than one per commit, and only when the commit's parent is known good. The work goes back on a branch `auto-eject/<sha>` with a draft pull request. Never press merge on it: the branch opens with the tree the gate refused. Fix it there and land it on `main` as one squashed commit.
+The eject, armed by the shipped config (`EJECT_ENABLED=1`), reverts that one commit, only when its parent is known good, and never its own commits. The lane and the cycle each have an arm; the second sees the first one's `Auto-Eject:` revert on `main` and stands down. The work goes back on a branch `auto-eject/<sha>` with a draft pull request. Never press merge on it: fix it there and land it as one squashed commit.
 
 ## infra/observability
 

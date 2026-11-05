@@ -106,7 +106,7 @@ if [ "$bookmark_moved" -eq 0 ] && [ -n "$queue_hold" ]; then
     # Nothing else will act on a red when the eject is off or declined for good.
     if [ "${gate_red:-0}" -eq 1 ] && [ "$decided" != "pushed" ]; then
         case "${eject_outcome:-}:${eject_reason:-$decided_reason}" in
-            *:parent_unverified|*:rate_limited|*:already_decided) ;;
+            *:parent_unverified|*:rate_limited|*:already_decided|*:already_reverted) ;;
             *) queue_limit=1 ;;
         esac
     fi

@@ -9,6 +9,15 @@ Verbs, each one question:
                                  --shards-file; exit with the verdict code they add up to
     image-targets IMAGE          print `namespace kind name container` for each object to re-pin
     stack-images REPO            print `name context dockerfile` for each of the stack's own images
+    trusted-head --repo R --bookmark B --head H --verdicts D [--scope-cache C] [--unlicensed]
+                                 print `<head|-> <reason> <stopped-at|->`: the newest commit the
+                                 lane's verdicts let the cycle ship untested (`_trust.py`)
+    cycle-image-sum ROOT         print the sum of the files the deploy-cycle image bakes in
+    cycle-image-decide --sum S [--retry-seconds N]
+                                 ConfigMap deploy-cycle-image as JSON on stdin; print
+                                 `<build|current|trial|refused> <why>` (`_cycle_image.py`)
+    cycle-image-guard [--configmap C] [--failures N] [--seconds N]
+                                 one tick of the trial judge: promote, roll back or heal
 
 The one file in this package that runs kubectl or reads a clock; everything it
 decides is asked of the pure modules beside it.
@@ -28,12 +37,14 @@ import time
 from pathlib import Path
 
 from ._bookmark import bookmark_sha
+from ._cycle_image import baked_sum, build_decision, run_guard
 from ._gate_job import gate_job_manifest, pinned_gate_image
 from ._images import stack_images
 from ._outcome import RC_COULD_NOT_START, gate_job_outcome
 from ._pins import image_targets
 from ._receiver import serve
 from ._shards import combined_rc, read_shards
+from ._trust import first_parent_commits, selector_says_none, trusted_head
 
 _NAMESPACE = os.environ.get("DEPLOY_NAMESPACE", "deploy")
 _POLL_SECONDS = 10
@@ -183,6 +194,50 @@ def _stack_images(args: argparse.Namespace) -> int:
     return 0
 
 
+def _trusted_head(args: argparse.Namespace) -> int:
+    cache = Path(args.scope_cache) if args.scope_cache else None
+    try:
+        commits = first_parent_commits(args.repo, args.bookmark, args.head, Path(args.verdicts))
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f"trusted-head: could not read the range: {error}", file=sys.stderr)
+        print("- unreadable -")
+        return 0
+    answer = trusted_head(commits, lambda commit: selector_says_none(args.repo, commit, cache),
+                          licensed=not args.unlicensed)
+    print(f"{answer.head or '-'} {answer.reason} {answer.stopped_at or '-'}")
+    return 0
+
+
+def _cycle_image_sum(args: argparse.Namespace) -> int:
+    print(baked_sum(Path(args.root)))
+    return 0
+
+
+def _cycle_image_decide(args: argparse.Namespace) -> int:
+    try:
+        data = json.load(sys.stdin).get("data") or {}
+    except ValueError as error:
+        print(f"cycle-image-decide: the state is not JSON: {error}", file=sys.stderr)
+        return 2
+    state = {key: str(value) for key, value in data.items()}
+    word, why = build_decision(state, args.sum, time.time(), args.retry_seconds)
+    print(f"{word} {why}")
+    return 0
+
+
+def _kubectl_answer(argv: list) -> tuple:
+    """kubectl in the loop's namespace as (rc, stdout or stderr), for the guard."""
+    try:
+        done = _kubectl(*argv)
+    except (OSError, subprocess.SubprocessError) as error:
+        return 1, str(error)
+    return done.returncode, done.stdout if done.returncode == 0 else done.stderr
+
+
+def _cycle_image_guard(args: argparse.Namespace) -> int:
+    return run_guard(_kubectl_answer, args.configmap, failures=args.failures, seconds=args.seconds)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python3 -m infra.deploy_loop")
     verbs = parser.add_subparsers(dest="verb", required=True)
@@ -217,6 +272,24 @@ def _parser() -> argparse.ArgumentParser:
     images = verbs.add_parser("stack-images")
     images.add_argument("repo")
     images.set_defaults(run=_stack_images)
+    trust = verbs.add_parser("trusted-head")
+    for flag in ("--repo", "--bookmark", "--head", "--verdicts"):
+        trust.add_argument(flag, required=True)
+    trust.add_argument("--scope-cache", default="")
+    trust.add_argument("--unlicensed", action="store_true", help="narrowing is not licensed: only full greens count")
+    trust.set_defaults(run=_trusted_head)
+    image_sum = verbs.add_parser("cycle-image-sum")
+    image_sum.add_argument("root")
+    image_sum.set_defaults(run=_cycle_image_sum)
+    decide = verbs.add_parser("cycle-image-decide")
+    decide.add_argument("--sum", required=True)
+    decide.add_argument("--retry-seconds", type=float, default=21600)
+    decide.set_defaults(run=_cycle_image_decide)
+    guard = verbs.add_parser("cycle-image-guard")
+    guard.add_argument("--configmap", default="deploy-cycle-image")
+    guard.add_argument("--failures", type=int, default=2)
+    guard.add_argument("--seconds", type=float, default=1800)
+    guard.set_defaults(run=_cycle_image_guard)
     return parser
 
 

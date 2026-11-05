@@ -5,14 +5,24 @@ Budget: the deploy gate everything ships through. The status vocabulary, the gat
 The deploy loop's steps. `auto-deploy.sh` sources `steps/NN-*.sh` in one shell,
 in the cycle pod of CronJob `deploy-cycle` (`infra/k8s/deploy/`), every two
 minutes and on every push (the receiver, `infra/deploy_loop/`). Every call to
-the cluster is in `steps/cluster.sh`. `commit_gate/` (the verifying lane) and
-`branch_gate/` (hand-backs) are not in the cluster yet. Bible: `infra/deploy`.
+the cluster is in `steps/cluster.sh`. `commit_gate/` is the verifying lane,
+CronJob `commit-gate` (`cluster_lane.sh`, its own clone on PVC
+`commit-gate-work`); its verdicts reach the cycle only through ConfigMap
+`commit-gate-verdicts` (step 18). `branch_gate/` (hand-backs) is not in the
+cluster yet. Bible: `infra/deploy`.
 
 ## Rules
 
-- **One commit per cycle.** Step 20 takes the newest commit past the bookmark
-  with a green verdict for its exact tree, otherwise the next one. Never HEAD,
-  never a batch: a red on a batch names no commit.
+- **One commit per cycle.** Step 20 takes the trusted head
+  (`deploy_loop trusted-head`: every commit up to it judged by the lane on its
+  own tree) and step 40 runs no pytest for it; otherwise the newest commit with
+  a green verdict for its exact tree, otherwise the next one. Never HEAD of an
+  unjudged range: a red on it names no commit.
+- **The lane's words.** Only a green with reason `replayed` (its break replay
+  passed) counts for the trusted head. A `batch:<sha12>` green was verified on
+  a later commit's tree: never the head, never a step-40 cache hit. A red batch
+  writes nothing; `batch.sh` halves it. Keep `EJECT_RUN_ENABLED=1` in the
+  CronJob: the cycle jumps past a red only the lane saw.
 - **The gate fails closed.** Red (rc 1 to 5, no register row, a test that
   survives its own break) and amber (rc 124 timeout, 125 a gate Job that could
   not start or was evicted, 126/127, 137) both ship nothing. Only rc 0 and rc 1
@@ -28,6 +38,9 @@ the cluster is in `steps/cluster.sh`. `commit_gate/` (the verifying lane) and
   opinion. Never collapse `error` into either other word.
 - **The export, never the clone.** Images build from `$VERIFIED_TREE` and step
   80 applies from it; the gate Job fetches the commit itself.
+- **The lane never touches the cycle's volume, nor the cycle the lane's.**
+  `lane_drawers.py unpack` never replaces a file the cycle holds; the lane's
+  `run_one.sh` reads only `40-gate.sh` out of its clone (a test checks it).
 - **The bookmark is ConfigMap `deploy-bookmark`**, read into
   `$STATE_DIR/last-deployed-sha` by step 10 and written back by
   `cluster_bookmark_push` wherever that file moves. A ConfigMap without a `sha`

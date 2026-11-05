@@ -19,6 +19,9 @@
 #      BOOT_CHECK_TIMEOUT is undone (`kubectl rollout undo`) and recorded in
 #      BOOT_FAILED_SERVICES. A rolled image's reference is kept in
 #      $STATE_DIR/stack-images/<name>, which step 80 re-pins after an apply.
+#   4. The loop's own image: when the tree's infra/deploy_loop differs from the
+#      deploy-cycle image in use, build it, smoke-test it and try it on
+#      CronJob deploy-cycle alone (steps/cluster.sh, cluster_ship_cycle_image).
 #
 # A red gate ships nothing: this step returns before building anything.
 #
@@ -112,3 +115,4 @@ _deploy_services() {
 }
 
 _deploy_services || log "[deploy] step aborted unexpectedly; the bookmark holds"
+cluster_ship_cycle_image || log "[cycle-image] aborted unexpectedly; the loop keeps the image it runs"

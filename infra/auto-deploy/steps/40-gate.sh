@@ -90,7 +90,16 @@ if [ -z "${RELEASE_FORCE:-}" ] && [ "${GATE_ENABLED:-1}" = "1" ]; then
     elif [ -n "${OLD_SHA:-}" ] && [ "$(cat "$GATE_VERDICT_DIR/$NEW_SHA.range" 2>/dev/null)" = "$OLD_SHA" ]; then
         gate_cache_reusable=1
     fi
-    if [ "$cached_sha" = "$NEW_SHA" ] && [ "$cached_scope" = "$gate_scope" ] \
+    # A batch member was verified on a later commit's tree: never reused here.
+    case "$cached_reason" in batch:*) gate_cache_reusable=0 ;; esac
+    if [ "${build_head_source:-}" = "trusted" ]; then
+        # Step 20 found every commit from the bookmark up to this one judged on
+        # its own tree by the lane (a green that carried its break replay, a
+        # selector that reaches no test, or a red a later covered commit
+        # reverts). Running the range again asks the same question twice.
+        gate_cached=1; gate_reused=1; gate_ok=1; gate_red=0
+        log "[gate] trusted: every commit up to ${NEW_SHA:0:12} has its own verdict from the lane; not re-running pytest"
+    elif [ "$cached_sha" = "$NEW_SHA" ] && [ "$cached_scope" = "$gate_scope" ] \
             && [ "$gate_cache_reusable" -eq 1 ] \
             && [ -n "$cached_tree" ] && [ "$cached_tree" = "$gate_tree_now" ]; then
         case "$cached_verdict" in

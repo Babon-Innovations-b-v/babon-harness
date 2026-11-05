@@ -6,10 +6,17 @@
 #   commit_gate/verify_ahead.sh            the queue past the bookmark
 #   commit_gate/verify_ahead.sh <sha>...   these commits
 #
-# It never takes on the commit the cycle is gating right now (the first one
-# past the bookmark): two exports and two suites of one tree plus two writers
-# racing for one verdict file buy nothing. COMMIT_GATE_TAKE_CYCLE_HEAD=1 changes
-# that, for a lane on a box the cycle does not share.
+# By default it leaves alone the commit the cycle is gating right now (the
+# first one past the bookmark). COMMIT_GATE_TAKE_CYCLE_HEAD=1, which the
+# commit-gate CronJob sets, takes it too: the lane has its own pod and volume,
+# so every commit gets a verdict of its own and the cycle can ship on them
+# (`deploy_loop trusted-head`). run_one.sh never replaces a green the cycle
+# shipped on.
+#
+# COMMIT_GATE_BATCH=1 (set by the CronJob): two or more unanswered commits in a
+# row, from the oldest on, go to batch.sh as one batch, verified once on the
+# newest and split only while red; the rest wait for the next pass. Not capped
+# by COMMIT_GATE_AHEAD_MAX, since a batch is one run.
 #
 # Its own lock (fd 8), never the cycle's. Every path exits 0: the cycle gates
 # whatever this did not answer.
@@ -94,6 +101,27 @@ done
 if [ "${#TODO[@]}" -eq 0 ]; then
     log "${#QUEUE[@]} commit(s) queued, all already answered"
     exit 0
+fi
+# The run of unanswered commits from TODO's first on, each the first-parent
+# child of the one before it, as one batch.
+if [ "${COMMIT_GATE_BATCH:-0}" = "1" ] && [ "${#TODO[@]}" -ge 2 ]; then
+    base="$(git -C "$REPO" rev-parse --verify --quiet "${TODO[0]}^" 2>/dev/null || echo "")"
+    if [ -n "$base" ]; then
+        RUN=("${TODO[0]}")
+        for sha in "${TODO[@]:1}"; do
+            [ "$(git -C "$REPO" rev-parse --verify --quiet "${sha}^" 2>/dev/null)" = "${RUN[-1]}" ] || break
+            RUN+=("$sha")
+        done
+        if [ "${#RUN[@]}" -ge 2 ]; then
+            log "verifying ${#RUN[@]} commit(s) as one batch since ${base:0:12}"
+            if [ -n "$COMMIT_GATE_TAKEN_FILE" ]; then
+                printf '%s\n' "${RUN[@]}" 2>/dev/null > "$COMMIT_GATE_TAKEN_FILE" \
+                    || log "could not record which commits this pass took on"
+            fi
+            bash "$SELF/batch.sh" "$base" "${RUN[@]}" 8>&-
+            exit 0
+        fi
+    fi
 fi
 if [ "${#TODO[@]}" -gt "$COMMIT_GATE_AHEAD_MAX" ]; then
     log "${#TODO[@]} commit(s) need a verdict; taking the first $COMMIT_GATE_AHEAD_MAX in order"

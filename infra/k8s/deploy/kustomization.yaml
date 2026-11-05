@@ -11,5 +11,7 @@ resources:
   - cycle.yaml
   - receiver.yaml
   - gate-warm.yaml
+  - commit-gate.yaml
+  - cycle-image-guard.yaml
 components:
   - ../vault-secret

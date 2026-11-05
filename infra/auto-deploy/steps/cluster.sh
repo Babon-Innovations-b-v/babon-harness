@@ -18,6 +18,10 @@
 #   cluster_roll_image REF         set REF on every object running another tag of it,
 #                                  wait for each rollout, undo the ones that fail
 #   cluster_repin_images           put every stack image back on its last good digest
+#   cluster_lane_verdicts_pull     ConfigMap commit-gate-verdicts -> the cycle drawers
+#   cluster_lane_kick              start the commit-gate lane unless a lane Job runs
+#   cluster_ship_cycle_image       rebuild the deploy-cycle image when its baked files
+#                                  changed, smoke-test it, try it on deploy-cycle alone
 #
 # FAILURE POLICY: per function, below. None exits the cycle.
 
@@ -151,6 +155,170 @@ cluster_repin_images() {
         [ -n "$ref" ] || continue
         cluster_roll_image "$ref" || log "[manifests] re-pinning ${record##*/} to $ref did not roll out cleanly"
     done
+    return 0
+}
+
+# ── The verifying lane's verdicts ───────────────────────────────────────────
+# The commit-gate CronJob (../commit_gate/cluster_lane.sh) publishes what it
+# wrote as one ConfigMap; this copies it into the drawers under $STATE_DIR,
+# never replacing a file the cycle holds. Every failure is a log line: a
+# verdict that does not arrive is a commit this cycle gates itself.
+COMMIT_GATE_LANE_CONFIGMAP="${COMMIT_GATE_LANE_CONFIGMAP-commit-gate-verdicts}"
+cluster_lane_verdicts_pull() {
+    local document fetched
+    [ -n "$COMMIT_GATE_LANE_CONFIGMAP" ] || return 0
+    if ! document=$(kubectl -n "${DEPLOY_NAMESPACE:-deploy}" get configmap "$COMMIT_GATE_LANE_CONFIGMAP" -o json 2>&1); then
+        log "[verdicts] could not read configmap $COMMIT_GATE_LANE_CONFIGMAP; this cycle gates what it cannot read: $document"
+        return 0
+    fi
+    if ! fetched=$(printf '%s' "$document" \
+            | python3 "$REPO/infra/auto-deploy/commit_gate/lane_drawers.py" unpack --state-dir "$STATE_DIR" 2>>"$LOG"); then
+        log "[verdicts] the lane's configmap could not be unpacked; this cycle gates what it cannot read"
+        return 0
+    fi
+    [ "${fetched:-0}" != "0" ] && log "[verdicts] $fetched new file(s) from the commit-gate lane"
+    return 0
+}
+
+# The receiver starts the lane on a push; this starts it when a cycle finds it
+# idle, so a commit the lane missed is not left waiting for its own tick.
+cluster_lane_kick() {
+    local jobs answer
+    [ -n "$COMMIT_GATE_LANE_CONFIGMAP" ] && [ "${COMMIT_GATE_KICK:-1}" = "1" ] || return 0
+    if ! jobs=$(kubectl -n "${DEPLOY_NAMESPACE:-deploy}" get jobs -l app.kubernetes.io/name=commit-gate \
+            -o jsonpath='{range .items[*]}{.status.active}{"\n"}{end}' 2>&1); then
+        log "[verdicts] could not list commit-gate Jobs, so the lane waits for its tick: $jobs"
+        return 0
+    fi
+    printf '%s\n' "$jobs" | grep -q '^[1-9]' && return 0
+    if answer=$(kubectl -n "${DEPLOY_NAMESPACE:-deploy}" create job --from=cronjob/commit-gate "commit-gate-kick-$(date +%s)" 2>&1); then
+        log "[verdicts] started the commit-gate lane now: $answer"
+    else
+        log "[verdicts] could not start the commit-gate lane, so it waits for its tick: $answer"
+    fi
+    return 0
+}
+
+# ── The deploy-cycle image rebuilds itself ──────────────────────────────────
+# When the shipped tree's baked files (infra/deploy_loop, tests and markdown
+# aside: infra/deploy_loop/_cycle_image.py) are not the image in use's, build
+# deploy-cycle:git-<sha12>, smoke-test it in a pod (image/smoke.sh), and try it
+# on CronJob deploy-cycle alone, pinned by digest. CronJob
+# deploy-cycle-image-guard, still on the old image, moves every other object
+# onto it after one green cycle in it, or puts deploy-cycle back when cycles in
+# it fail or none ends green in time. State: ConfigMap $CYCLE_IMAGE_CONFIGMAP.
+# Nothing here holds the deploy: a build or smoke that says no alerts or logs,
+# and the loop goes on in the image it has.
+CYCLE_IMAGE_CONFIGMAP="${CYCLE_IMAGE_CONFIGMAP:-deploy-cycle-image}"
+CYCLE_IMAGE_RETRY_SECONDS="${CYCLE_IMAGE_RETRY_SECONDS:-21600}"
+
+_cluster_cycle_image_state_write() {
+    kubectl -n "${DEPLOY_NAMESPACE:-deploy}" patch configmap "$CYCLE_IMAGE_CONFIGMAP" --type merge -p "$1" >>"$LOG" 2>&1
+}
+
+# A trial the guard rolled back alerts once per refused image.
+_cluster_cycle_image_page_refusal() {
+    local state="$1" refused refused_at
+    refused=$(printf '%s' "$state" | python3 -c 'import json,sys;print((json.load(sys.stdin).get("data") or {}).get("refused_image",""))' 2>/dev/null)
+    refused_at=$(printf '%s' "$state" | python3 -c 'import json,sys;print((json.load(sys.stdin).get("data") or {}).get("refused_at",""))' 2>/dev/null)
+    [ -n "$refused" ] && [ -n "$refused_at" ] || return 0
+    fire_alert_once "cycle-image-refused" "${refused##*:}-$refused_at" \
+        "auto-deploy: a new deploy-cycle image was rolled back" \
+        "Image: $refused. It failed its smoke test, or no cycle in it ended green, so the loop runs on in the image every other object runs. The guard's log (kubectl -n ${DEPLOY_NAMESPACE:-deploy} logs -l app.kubernetes.io/name=deploy-cycle-image-guard) says why; the same baked files are built again after $(( CYCLE_IMAGE_RETRY_SECONDS / 3600 )) h, or at once when a commit changes them."
+    return 0
+}
+
+# 0 the image's smoke test passed in a pod, 1 it said no, 2 the pod could not
+# run or be read in CYCLE_IMAGE_SMOKE_SECONDS.
+_cluster_smoke_pod() {
+    local image="$1" name="$2" phase="" rc=2 namespace="${DEPLOY_NAMESPACE:-deploy}" deadline
+    if ! python3 -c '
+import json, sys
+image, name, label = sys.argv[1:4]
+print(json.dumps({"apiVersion": "v1", "kind": "Pod",
+    "metadata": {"name": name, "labels": {"app.kubernetes.io/name": "cycle-image-smoke"}},
+    "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
+             "priorityClassName": "deploy-loop", "nodeSelector": {label: "system"},
+             "tolerations": [{"key": label, "operator": "Equal", "value": "system", "effect": "NoSchedule"}],
+             "imagePullSecrets": [{"name": "registry-pull"}],
+             "securityContext": {"runAsUser": 1000, "runAsGroup": 1000, "runAsNonRoot": True},
+             "containers": [{"name": "smoke", "image": image,
+                             "command": ["bash", "/app/infra/deploy_loop/image/smoke.sh"],
+                             "resources": {"requests": {"cpu": "100m", "memory": "128Mi"},
+                                           "limits": {"memory": "512Mi"}}}]}}))' \
+            "$image" "$name" "${POOL_ROLE_LABEL:-harness/role}" \
+            | kubectl -n "$namespace" apply -f - >>"$LOG" 2>&1; then
+        return 2
+    fi
+    deadline=$(( $(date +%s) + ${CYCLE_IMAGE_SMOKE_SECONDS:-300} ))
+    until [ "$(date +%s)" -ge "$deadline" ]; do
+        phase=$(kubectl -n "$namespace" get pod "$name" -o 'jsonpath={.status.phase}' 2>/dev/null || true)
+        case "$phase" in
+            Succeeded) rc=0; break ;;
+            Failed) rc=1; break ;;
+        esac
+        sleep 5
+    done
+    kubectl -n "$namespace" logs "$name" >>"$LOG" 2>&1 || true
+    kubectl -n "$namespace" delete pod "$name" --wait=false >>"$LOG" 2>&1 || true
+    return "$rc"
+}
+
+cluster_ship_cycle_image() {
+    local tree="${VERIFIED_TREE:-}" tree_sum state decision word pinned smoke_rc now good_field
+    [ "${gate_red:-0}" -eq 0 ] && [ "${ship_abandoned:-0}" -eq 0 ] || return 0
+    [ -n "$tree" ] && [ -d "$tree/infra/deploy_loop/image" ] || return 0
+    if ! tree_sum=$(cd "$REPO" && python3 -m infra.deploy_loop cycle-image-sum "$tree" 2>>"$LOG"); then
+        log "[cycle-image] could not sum the baked files of ${tree##*/}; no build this cycle"
+        return 0
+    fi
+    if ! state=$(kubectl -n "${DEPLOY_NAMESPACE:-deploy}" get configmap "$CYCLE_IMAGE_CONFIGMAP" -o json 2>>"$LOG"); then
+        log "[cycle-image] could not read configmap $CYCLE_IMAGE_CONFIGMAP; no build this cycle"
+        return 0
+    fi
+    _cluster_cycle_image_page_refusal "$state"
+    decision=$(printf '%s' "$state" | (cd "$REPO" && python3 -m infra.deploy_loop cycle-image-decide \
+        --sum "$tree_sum" --retry-seconds "$CYCLE_IMAGE_RETRY_SECONDS") 2>>"$LOG") \
+        || decision="current the state could not be read"
+    word=${decision%% *}
+    if [ "$word" != "build" ]; then
+        [ "$word" = "current" ] || log "[cycle-image] ${decision#* }"
+        return 0
+    fi
+    log "[cycle-image] the baked files are $tree_sum, not the image in use's; building deploy-cycle at ${NEW_SHA:0:12}"
+    if ! pinned=$(cluster_build_image deploy-cycle . infra/deploy_loop/image/Dockerfile); then
+        fire_alert_once "cycle-image-build" "$NEW_SHA" "auto-deploy: the deploy-cycle image did not build" \
+            "SHA: $NEW_SHA. The loop keeps the image it runs and tries again next cycle. Build log: $DEPLOY_LOG_DIR/deploy-cycle.log"
+        return 0
+    fi
+    _cluster_smoke_pod "$pinned" "cycle-image-smoke-${NEW_SHA:0:12}"
+    smoke_rc=$?
+    now=$(date +%s)
+    if [ "$smoke_rc" -eq 2 ]; then
+        log "[cycle-image] the smoke pod for $pinned could not run or be read; nothing tried, next cycle again"
+        return 0
+    fi
+    if [ "$smoke_rc" -ne 0 ]; then
+        _cluster_cycle_image_state_write "{\"data\":{\"refused_image\":\"$pinned\",\"refused_sum\":\"$tree_sum\",\"refused_at\":\"$now\"}}" \
+            || log "[cycle-image] could not record the refusal of $pinned"
+        log "[cycle-image] $pinned failed its smoke test (the pod log is above); nothing runs it"
+        return 0
+    fi
+    # The image in use becomes the recorded good one when none is yet, so the
+    # guard has somewhere to roll back to from the first trial on.
+    good_field=$(printf '%s' "$state" | python3 -c 'import json,sys
+data = json.load(sys.stdin).get("data") or {}
+print("" if data.get("good") or not sys.argv[1] else ",\"good\":\"" + sys.argv[1] + "\"")' "${DEPLOY_CYCLE_IMAGE:-}" 2>/dev/null)
+    if ! _cluster_cycle_image_state_write "{\"data\":{\"candidate\":\"$pinned\",\"candidate_sum\":\"$tree_sum\",\"candidate_since\":\"$now\"$good_field}}"; then
+        log "[cycle-image] could not start the trial of $pinned in configmap $CYCLE_IMAGE_CONFIGMAP; next cycle again"
+        return 0
+    fi
+    if kubectl -n "${DEPLOY_NAMESPACE:-deploy}" patch cronjob deploy-cycle --type strategic -p \
+            "{\"spec\":{\"jobTemplate\":{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"cycle\",\"image\":\"$pinned\",\"env\":[{\"name\":\"DEPLOY_CYCLE_IMAGE\",\"value\":\"$pinned\"}]}]}}}}}}" >>"$LOG" 2>&1; then
+        log "[cycle-image] trying $pinned on cronjob/deploy-cycle; the guard moves everything else after one green cycle"
+    else
+        log "[cycle-image] kubectl refused $pinned on cronjob/deploy-cycle; the guard ends the trial it cannot see"
+    fi
     return 0
 }
 

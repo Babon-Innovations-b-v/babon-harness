@@ -54,7 +54,7 @@
     "CONTEXT.md"
    ],
    "bible": "as a proposed ADR, an invariant in its chapter.",
-   "code_seen": "0cd4bfed49ce"
+   "code_seen": "30bb516cc7f8"
   },
   "board": {
    "type": "database",
@@ -102,7 +102,7 @@
     "infra/auto-deploy"
    ],
    "bible": "Pushing to main is the whole deploy interface.",
-   "code_seen": "1e6bf6c92a15"
+   "code_seen": "1971c3006109"
   },
   "check": {
    "type": "external",

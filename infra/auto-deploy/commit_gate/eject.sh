@@ -11,10 +11,13 @@
 # the bookmark; `parent_unverified` is this arm's ordinary first answer, and the
 # cycle's arm (steps/88-eject.sh) decides the commit later if this one cannot.
 #
-# Off by default, like the whole eject: EJECT_ENABLED=1 arms it, EJECT_RUN_ENABLED=0
-# leaves every red to the cycle's arm. Set EJECT_RUN_ENABLED=0 when the lane runs
-# on a different box from the cycle: the one-write-per-sha claim and the
-# decision lock are local directories.
+# EJECT_ENABLED=1 arms it, as it arms the whole eject; EJECT_RUN_ENABLED=0
+# leaves every red to the cycle's arm. Keep it 1 in the cluster: the cycle
+# jumps past a red once a newer commit is green, so a red only this lane saw
+# would never be taken back. The two arms keep their claims on two volumes;
+# what stops a second revert is the decision this arm writes, which travels to
+# the cycle in ConfigMap commit-gate-verdicts, and eject_body.sh declining a
+# commit whose `Auto-Eject:` revert is already on main (`already_reverted`).
 #
 # The mechanism is steps/eject_body.sh; this file holds the lane's two hooks.
 # Exit code is always 0: run_one.sh's exit code is the suite's verdict, not this.
@@ -78,7 +81,7 @@ _eject_arm_preconditions_hold() {
 _eject_evidence_paths() {
     EJECT_TAIL_FILE="$STATE_DIR/gate-red-tails/$NEW_SHA"
     EJECT_SCOPE_FILE="$STATE_DIR/gate-scopes/$NEW_SHA.json"
-    EJECT_NO_TAIL_HINT="No failing-test list was recorded for this commit; journalctl -u harness-commit-gate has the run."
+    EJECT_NO_TAIL_HINT="No failing-test list was recorded for this commit; the lane's log has the run (kubectl -n ${DEPLOY_NAMESPACE:-deploy} logs -l app.kubernetes.io/name=commit-gate)."
     return 0
 }
 

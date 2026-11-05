@@ -1,11 +1,14 @@
 #!/bin/bash
-# The verifying lane's entry point, run by harness-commit-gate.timer every five
-# minutes and started by the push webhook on every push.
+# The verifying lane's drain, run by cluster_lane.sh in the pod of CronJob
+# commit-gate (infra/k8s/deploy/commit-gate.yaml), every two minutes and at
+# once on every push (the receiver starts a Job from the CronJob).
 #
 # It owns four things and nothing else: a snapshot of this drawer (so a push
 # landing mid-run cannot hand one pass half of one commit's scripts and half of
 # another's), the sweep of trees left by killed runs, the per-commit attempt
 # cap, and the drain: passes of verify_ahead.sh until a pass takes nothing on.
+# With COMMIT_GATE_FETCH=1 (the CronJob sets it) the clone moves to origin/main
+# before every pass, so a commit pushed while the lane runs is seen.
 #
 # THE ATTEMPT CAP counts ANSWERS, not offers. A commit taken on
 # COMMIT_GATE_ATTEMPT_MAX times without ever getting a verdict (every run amber,
@@ -13,9 +16,8 @@
 # retry can change (3 scope none, 79 another ignore list, no room) are not
 # counted. The deploy cycle still gates a parked commit itself.
 #
-# COMMIT_GATE_DISPATCH_ENABLED=0 is the switch that works: step 80 re-enables
-# every repository timer each cycle, so `systemctl disable` is undone in two
-# minutes.
+# The switch is the CronJob's `suspend`; COMMIT_GATE_DISPATCH_ENABLED=0 makes a
+# run that does start do nothing.
 #
 # FAILURE POLICY: every path exits 0; the cycle gates whatever the lane did not.
 
@@ -47,8 +49,7 @@ DISPATCH_SNAPSHOT=""
 DRAWER="$SELF"
 log() { printf '[%s] [commit-gate dispatch] %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
 
-# Only where no deploy cycle runs beside the lane: there the webhook and step
-# 15 move the clone, and here nothing else would.
+# The lane's clone is its own, on its own volume: nothing else moves it.
 _dispatch_fetch() {
     [ "$COMMIT_GATE_FETCH" = "1" ] || return 0
     git -C "$REPO" fetch --quiet origin main 2>/dev/null \
@@ -62,7 +63,7 @@ _dispatch_snapshot() {
     if made="$(mktemp -d -t harness-commit-gate-XXXXXX 2>/dev/null)" \
         && cp -R "$SELF" "$made/" 2>/dev/null \
         && mkdir -p "$made/steps" 2>/dev/null \
-        && cp "$SELF/../steps/doors.sh" "$SELF/../steps/eject_body.sh" \
+        && cp "$SELF/../steps/doors.sh" "$SELF/../steps/eject_body.sh" "$SELF/../steps/red_triage.sh" \
               "$SELF/../steps/build_verdict.sh" "$made/steps/" 2>/dev/null; then
         DISPATCH_SNAPSHOT="$made"
         DRAWER="$made/$(basename "$SELF")"
@@ -128,7 +129,7 @@ _dispatch_page_once() {
     [ -e "$PAGED_DIR/$sha" ] && return 0
     : > "$PAGED_DIR/$sha" 2>/dev/null || true
     fire_alert "commit gate: a commit cannot get a verdict" \
-        "${sha:0:12} was taken on $count times and left no verdict, so it is parked. Every attempt was amber or an exit code pytest does not decide from the tree alone (a failed uv sync, a collection error, a timeout). The deploy cycle still gates this commit itself, so nothing ships unverified. Read journalctl -u harness-commit-gate and $STATE_DIR/gate-sync-tails/$sha. To offer it again: rm $ATTEMPT_DIR/$sha" \
+        "${sha:0:12} was taken on $count times and left no verdict, so it is parked. Every attempt was amber or an exit code pytest does not decide from the tree alone (a gate Job that could not start, a collection error, a timeout). The deploy cycle still gates this commit itself, so nothing ships unverified. Read the lane's log (kubectl -n ${DEPLOY_NAMESPACE:-deploy} logs -l app.kubernetes.io/name=commit-gate). To offer it again: rm $ATTEMPT_DIR/$sha in the lane's volume" \
         --wakes-somebody
 }
 
@@ -165,6 +166,7 @@ _dispatch_drain() {
     while [ "$pass" -lt "$COMMIT_GATE_MAX_PASSES" ]; do
         [ "$(date +%s)" -lt "$deadline" ] || { log "out of time after $pass pass(es)"; return 0; }
         pass=$(( pass + 1 ))
+        [ "$pass" -gt 1 ] && _dispatch_fetch
         : > "$TAKEN_FILE" 2>/dev/null || true
         : > "$OUTCOME_FILE" 2>/dev/null || true
         COMMIT_GATE_TAKEN_FILE="$TAKEN_FILE" COMMIT_GATE_SKIP_FILE="$SKIP_FILE" \

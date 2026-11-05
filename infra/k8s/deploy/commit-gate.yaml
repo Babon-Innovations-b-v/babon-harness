@@ -1,0 +1,246 @@
+# The verifying lane: CronJob commit-gate runs
+# infra/auto-deploy/commit_gate/cluster_lane.sh (through cycle_entry.sh lane)
+# every two minutes, and the push receiver starts a Job from it on every push.
+# It judges every commit queued between the bookmark and origin/main on its own
+# tree, its suite as gate Jobs, and publishes the verdicts as ConfigMap
+# commit-gate-verdicts, which step 18 of deploy-cycle copies into the cycle's
+# state. A burst is one batch, verified on its newest commit and split only
+# while red (commit_gate/batch.sh). Its reds go to its own eject arm
+# (commit_gate/eject.sh).
+#
+# Its own clone, trees and verdicts live on PVC commit-gate-work, never on the
+# cycle's volume. One lane Job at a time: concurrencyPolicy Forbid, the volume
+# is ReadWriteOnce, and dispatch.sh holds its own lock.
+#
+# Stop: suspend this CronJob; the cycle then gates every commit itself.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: commit-gate
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+---
+# The lane reads the bookmark, publishes its own ConfigMap, makes gate Jobs and
+# reads their pods and logs, and starts a cycle Job when it has a new verdict.
+# It holds nothing else, and nothing cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: commit-gate
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["deploy-bookmark", "commit-gate-verdicts"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["commit-gate-verdicts"]
+    verbs: ["patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "create", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    resourceNames: ["deploy-cycle"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: commit-gate
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: commit-gate
+subjects:
+  - kind: ServiceAccount
+    name: commit-gate
+---
+# What the lane publishes. Never put `data:` here: the lane writes it with a
+# server-side apply, and an apply of data from this file would hand the cycle
+# verdicts nobody ran.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: commit-gate-verdicts
+  labels:
+    app.kubernetes.io/name: commit-gate
+    app.kubernetes.io/part-of: deploy-loop
+---
+# The lane's clone, its exported trees and its drawers. Losing it costs the
+# lane's verdicts, which the cycle then gets by gating itself.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: commit-gate-work
+  labels:
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: commit-gate
+  labels:
+    app.kubernetes.io/name: commit-gate
+    app.kubernetes.io/part-of: deploy-loop
+spec:
+  schedule: "*/2 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 110
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: commit-gate
+    spec:
+      backoffLimit: 0
+      # dispatch.sh starts no new pass after 1800 s; this caps the runs in
+      # flight and a kicked Job's wait for the volume.
+      activeDeadlineSeconds: 5400
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: commit-gate
+        spec:
+          serviceAccountName: commit-gate
+          # The token is mounted at a path of its own (volume kube), for
+          # cluster_lane.sh's kubeconfig only.
+          automountServiceAccountToken: false
+          priorityClassName: deploy-loop
+          restartPolicy: Never
+          nodeSelector:
+            ${POOL_ROLE_LABEL}: system
+          tolerations:
+            - key: ${POOL_ROLE_LABEL}
+              operator: Equal
+              value: system
+              effect: NoSchedule
+          imagePullSecrets:
+            - name: registry-pull
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsNonRoot: true
+          containers:
+            - name: lane
+              image: ${DEPLOY_CYCLE_IMAGE}
+              imagePullPolicy: IfNotPresent
+              command: ["bash", "/app/infra/deploy_loop/cycle_entry.sh", "lane"]
+              env:
+                - name: DEPLOY_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                # Every gate Job's fetch container, and what the image guard
+                # moves when it promotes a new deploy-cycle image.
+                - name: DEPLOY_CYCLE_IMAGE
+                  value: ${DEPLOY_CYCLE_IMAGE}
+                - name: DEPLOY_REPO_URL
+                  value: ${DEPLOY_REPO_URL}
+                - name: POOL_ROLE_LABEL
+                  value: ${POOL_ROLE_LABEL}
+                - name: HARNESS_ROOT
+                  value: /opt/harness
+                - name: HARNESS_ENV_FILE
+                  value: /var/run/harness/env/harness.env
+                - name: STATE_DIR
+                  value: /var/lib/harness
+                - name: COMMIT_GATE_ROOT
+                  value: /opt/harness/commit-gate
+                - name: COMMIT_GATE_LOG
+                  value: /var/log/harness/commit-gate.log
+                - name: BUILDKIT_HOST
+                  value: tcp://buildkitd.deploy.svc.cluster.local:1234
+                # The clone moves before every pass, so a commit pushed while
+                # the lane runs is seen.
+                - name: COMMIT_GATE_FETCH
+                  value: "1"
+                # Every commit gets a verdict of its own, the cycle's next one
+                # too, so the cycle can ship on them (deploy_loop trusted-head).
+                - name: COMMIT_GATE_TAKE_CYCLE_HEAD
+                  value: "1"
+                - name: COMMIT_GATE_BATCH
+                  value: "1"
+                # Commits in flight at once; each one's suite is spread over
+                # gate Jobs, one per module group.
+                - name: COMMIT_GATE_SLOTS
+                  value: "2"
+                # This lane takes back the reds it finds; the cycle jumps past
+                # a red once a newer commit is green, so a red only the lane
+                # saw would otherwise stay on main.
+                - name: EJECT_RUN_ENABLED
+                  value: "1"
+              volumeMounts:
+                - name: work
+                  mountPath: /opt/harness
+                  subPath: root
+                - name: work
+                  mountPath: /var/lib/harness
+                  subPath: state
+                - name: work
+                  mountPath: /var/log/harness
+                  subPath: log
+                - name: kube
+                  mountPath: /var/run/harness/kube
+                  readOnly: true
+                - name: vault
+                  mountPath: /var/run/harness/env
+                  readOnly: true
+                - name: git-read
+                  mountPath: /var/run/deploy/git
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              # The suites run in gate Jobs; this pod exports trees, asks the
+              # selector and the register, and waits.
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+                limits:
+                  memory: 2Gi
+          volumes:
+            - name: work
+              persistentVolumeClaim:
+                claimName: commit-gate-work
+            - name: kube
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      expirationSeconds: 3600
+                  - configMap:
+                      name: kube-root-ca.crt
+                      items:
+                        - key: ca.crt
+                          path: ca.crt
+            - name: vault
+              secret:
+                secretName: harness-env
+            - name: git-read
+              secret:
+                secretName: deploy-git-read
+                optional: true
+            - name: tmp
+              emptyDir:
+                sizeLimit: 4Gi

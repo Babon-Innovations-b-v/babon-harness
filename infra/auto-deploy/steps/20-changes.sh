@@ -2,9 +2,12 @@
 # Step 20: choose the ONE commit this cycle ships, diff it against the bookmark,
 # set what it touches, and decide how much of the suite the gate runs.
 #
-# ONE COMMIT PER CYCLE. The commit is the newest one past the bookmark that
-# already holds a green verdict for its exact tree (the verifying lane writes
-# those ahead of the cycle), and otherwise the NEXT commit after the bookmark.
+# ONE COMMIT PER CYCLE. The commit is the TRUSTED HEAD when there is one: the
+# newest commit up to which every commit past the bookmark has its own verdict
+# from the verifying lane (`python3 -m infra.deploy_loop trusted-head`, whose
+# docstring carries the rule); step 40 then runs no pytest for it. Otherwise
+# the newest one past the bookmark that already holds a green verdict for its
+# exact tree, and otherwise the NEXT commit after the bookmark.
 # Never HEAD, never a batch: a red on a batch names no commit, so nothing could
 # be handed back for it. A jumped range is gated at the union scope and reverts
 # nothing (`not_isolated`).
@@ -76,6 +79,8 @@ _verified_build_head() {
         r_sha=""; r_verdict=""; r_scope=""; r_at=""; r_reason=""; r_tree=""
         read -r r_sha r_verdict r_scope r_at r_reason r_tree < "$GATE_VERDICT_DIR/$candidate" 2>/dev/null || true
         [ "$r_sha" = "$candidate" ] && [ "$r_verdict" = "green" ] && [ -n "$r_tree" ] || continue
+        # A batch member was verified on a later commit's tree, never its own.
+        case "$r_reason" in batch:*) continue ;; esac
         tree_now=$(git rev-parse "${candidate}^{tree}" 2>/dev/null || echo "")
         [ "$r_tree" = "$tree_now" ] || continue
         if [ -n "$held_skip" ] && git merge-base --is-ancestor "$candidate" "$held_skip" 2>/dev/null; then
@@ -102,6 +107,44 @@ elif [ "$bookmark_usable" = "1" ]; then
 else
     NEW_SHA="$HEAD_SHA"
     build_head_source="no_baseline"
+fi
+
+# THE NARROWING LICENCE, read once for both its readers: the trust walk below
+# and the scope selection further down. Prints why narrowing is NOT licensed,
+# nothing when it is: a proven selection miss, or no green unselected audit in
+# 48 hours (a stamp dated in the future counts as none).
+_narrowing_unlicensed_why() {
+    local now="$1" at age
+    if [ -f "$STATE_DIR/gate-selection-miss" ]; then
+        echo "a nightly audit proved a selection miss; full gate until $STATE_DIR/gate-selection-miss is removed by hand"
+        return 0
+    fi
+    at=$(cat "$STATE_DIR/last-full-audit-ok" 2>/dev/null || echo 0)
+    case "$at" in ''|*[!0-9]*) at=0 ;; esac
+    age=$(( now - at ))
+    if [ "$at" -eq 0 ] || [ "$age" -gt 172800 ] || [ "$age" -lt 0 ]; then
+        echo "no successful unselected audit in 48h; full gate until the unselected audit goes green"
+    fi
+    return 0
+}
+narrowing_unlicensed="$(_narrowing_unlicensed_why "$(date +%s)")"
+
+# The trust walk. BUILD_HEAD_TRUSTS_LANE=0 is shadow: logged, not acted on.
+trust_head=""
+trust_reason=""
+trust_stop=""
+if [ "$bookmark_usable" = "1" ] && [ -z "${RELEASE_FORCE:-}" ] && [ "$OLD_SHA" != "$HEAD_SHA" ]; then
+    read -r trust_head trust_reason trust_stop < <( cd "$REPO" && timeout 300 \
+        python3 -m infra.deploy_loop trusted-head --repo "$REPO" \
+        --bookmark "$OLD_SHA" --head "$HEAD_SHA" --verdicts "$GATE_VERDICT_DIR" \
+        --scope-cache "$STATE_DIR/trust-scope" ${narrowing_unlicensed:+--unlicensed} 2>>"$LOG" ) || true
+    [ "$trust_head" = "-" ] && trust_head=""
+    [ "$trust_stop" = "-" ] && trust_stop=""
+    log "[trust] the lane's verdicts alone ship ${trust_head:-nothing} (${trust_reason:-no_answer}${trust_stop:+ at ${trust_stop:0:8}})"
+    if [ "${BUILD_HEAD_TRUSTS_LANE:-1}" = "1" ] && [ -n "$trust_head" ]; then
+        NEW_SHA="$trust_head"
+        build_head_source="trusted"
+    fi
 fi
 
 queue_depth=$(git rev-list --count --first-parent "${NEW_SHA}..${HEAD_SHA}" 2>/dev/null || echo 0)
@@ -181,19 +224,14 @@ gate_scope_json="$STATE_DIR/gate-scope.json"
 : > "$gate_paths_file"
 printf '%s\n' "$CHANGED" > "$STATE_DIR/gate-changed-paths"
 
-last_audit_at=$(cat "$STATE_DIR/last-full-audit-ok" 2>/dev/null || echo 0)
-case "$last_audit_at" in ''|*[!0-9]*) last_audit_at=0 ;; esac
-last_audit_age=$(( $(date +%s) - last_audit_at ))
 env_only=false
 if [ "$OLD_SHA" = "$NEW_SHA" ]; then
     # Only the vault changed. The commit was verified when it shipped.
     env_only=true
     gate_scope="none"
     log "[scope] no new commit, only a new vault version: nothing to verify"
-elif [ -f "$STATE_DIR/gate-selection-miss" ]; then
-    log "[scope] a nightly audit proved a selection miss; full gate until $STATE_DIR/gate-selection-miss is removed by hand"
-elif [ "$last_audit_at" -eq 0 ] || [ "$last_audit_age" -gt 172800 ] || [ "$last_audit_age" -lt 0 ]; then
-    log "[scope] no successful unselected audit in 48h; full gate until the unselected audit goes green"
+elif [ -n "$narrowing_unlicensed" ]; then
+    log "[scope] $narrowing_unlicensed"
 else
     scope_word=$(cd "$REPO" && python3 -m tools.gate_scope \
         --changed-file "$STATE_DIR/gate-changed-paths" --repo "$REPO" \

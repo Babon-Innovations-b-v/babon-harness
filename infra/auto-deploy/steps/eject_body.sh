@@ -240,6 +240,13 @@ _eject_preconditions_hold() {
     remote_head=$(timeout 30 git ls-remote "$(_eject_remote_url)" refs/heads/main 2>/dev/null | cut -f1)
     if [ -z "$remote_head" ]; then eject_reason="main_unreadable"; return 1; fi
     eject_base_sha="$remote_head"
+    # The other arm (lane or cycle, each with its own claims on its own
+    # volume) may have taken this commit back already; its revert says so.
+    if git -C "$REPO" cat-file -e "${remote_head}^{commit}" 2>/dev/null \
+            && git -C "$REPO" log --format=%B "$NEW_SHA..$remote_head" 2>/dev/null \
+                | grep -qx "Auto-Eject: $NEW_SHA"; then
+        eject_reason="already_reverted"; return 1
+    fi
     if [ "$remote_head" = "$NEW_SHA" ]; then
         eject_mode="restore"
     elif [ "$eject_range_count" -eq 1 ]; then

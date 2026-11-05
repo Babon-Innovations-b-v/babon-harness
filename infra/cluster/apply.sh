@@ -53,6 +53,14 @@ zones=${CLUSTER_ZONES:-}
 : "${MEDIA_PUBLIC_IP:=}"
 : "${MEDIA_IMAGE_TAG:=}"
 : "${DEPLOY_CYCLE_IMAGE:=}"
+# The deploy-cycle image rolls itself (infra/deploy_loop/_cycle_image.py): once
+# its guard has promoted one, ConfigMap deploy-cycle-image names it as `good`,
+# and an apply that put the settings' older image back would start a trial of
+# that one. Only when applying to a cluster that has the ConfigMap.
+if [ "$mode" = apply ] && [ -n "$DEPLOY_CYCLE_IMAGE" ]; then
+    promoted=$(kubectl -n deploy get configmap deploy-cycle-image -o 'jsonpath={.data.good}' 2>/dev/null || true)
+    [ -n "$promoted" ] && DEPLOY_CYCLE_IMAGE="$promoted"
+fi
 if [ -z "${DEPLOY_REPO_URL:-}" ]; then
     DEPLOY_REPO_URL=$(python3 -c 'import json, sys; repo = json.load(open(sys.argv[1])).get("repo", ""); print(f"https://github.com/{repo}.git" if repo else "")' "$REPO/.claude/project.json")
 fi

@@ -11,7 +11,9 @@ The deploy loop's cluster half: the questions the cycle asks Kubernetes, as pure
 | `_bookmark.py` | what ConfigMap `deploy-bookmark` may hold |
 | `_pins.py` | which objects run another tag of an image just built |
 | `_images.py` | the stack's own images and the compose service that builds each |
-| `cycle_entry.sh` | the CronJob's command: clone if missing, run `auto-deploy.sh` |
+| `_trust.py` | the trusted head: the newest commit up to which every commit has its own lane verdict |
+| `_cycle_image.py`, `image/smoke.sh` | the `deploy-cycle` image rolling itself: baked sum, when to build, the guard's trial |
+| `cycle_entry.sh` | the CronJobs' command: clone if missing, run `auto-deploy.sh`, or with `lane` reset to `origin/main` and run `commit_gate/cluster_lane.sh` |
 
 ## Do not
 
@@ -21,6 +23,7 @@ The deploy loop's cluster half: the questions the cycle asks Kubernetes, as pure
 - Never fetch blobless or shallow, and never put the read token in env or in the run container. The run is `env -i` and must stay off the API and the network for git objects.
 - Never read a missing `sha` key as "no bookmark": the cycle would gate the tip of main. Missing = refused; `""` = none yet.
 - `gate_run.sh`'s `env -i` list must match `tools/gate_scope/audit_full_run.sh`'s; the gate_scope test compares them.
-- `gate_fetch.sh` and `gate_run.sh` travel in each Job from the clone, every `$` doubled; `cycle_entry.sh` and `_receiver.py` ship only with a new `deploy-cycle` image tag.
+- `gate_fetch.sh` and `gate_run.sh` travel in each Job from the clone, every `$` doubled. Everything else here is baked into the `deploy-cycle` image, which the cycle rebuilds and tries itself.
+- Never let the trust walk take a green without `replayed`, or a batch green, as its head.
 
 Test: `tests/test_the_deploy_loop_asks_the_cluster_only_what_the_cycle_may_act_*.py`, this module's one test; a new rule is a new case in it.

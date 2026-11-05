@@ -36,17 +36,23 @@ from pathlib import Path
 import pytest
 
 from infra.deploy_loop import (
+    baked_sum,
     bookmark_sha,
+    build_decision,
     combined_rc,
     cronjobs_to_start,
     gate_job_manifest,
     gate_job_outcome,
     image_targets,
+    judge_trial,
+    pin_patches,
     pinned_gate_image,
     push_should_trigger,
     read_shards,
     stack_images,
+    trusted_head,
 )
+from infra.deploy_loop._trust import Commit as _TrustCommit
 
 _SECRET = "made-up-secret"
 _SHA = "a" * 40
@@ -221,6 +227,80 @@ def _a_shards_file_makes_one_job_per_shard_and_only_the_first_replays(tmp_path):
     assert [{var["name"]: var["value"] for var in run["env"]}["GATE_CHANGED_PATHS"] for run in runs] == ["pkg/a/code.py\n", ""]
 
 
+
+# The trust walk (`_trust.py`): commits are made up as (sha, tree, verdict line).
+_T = "e" * 40
+
+
+def _commit(letter, verdict="", reverts=""):
+    sha = letter * 40
+    return _TrustCommit(sha, _T, verdict.format(sha=sha, tree=_T), reverts)
+
+
+def _the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers(commits, scope_none, licensed,
+                                                                         head, reason, tmp_path):
+    answer = trusted_head(commits, lambda commit: commit.sha in scope_none, licensed=licensed)
+    assert (answer.head, answer.reason) == (head, reason)
+
+
+_GREEN = "{sha} green selected 1 replayed {tree}"
+_GREEN_FULL = "{sha} green full 1 replayed {tree}"
+_BATCH = "{sha} green selected 1 batch:cccccccccccc {tree}"
+_PLAIN = "{sha} green selected 1 none {tree}"
+_RED = "{sha} red selected 1 regression {tree}"
+_OTHER_TREE = "{sha} green selected 1 replayed " + "f" * 40
+
+
+def _the_baked_sum_moves_with_what_the_image_runs_and_not_with_its_tests_or_notes(tmp_path):
+    (tmp_path / "infra/deploy_loop/image").mkdir(parents=True)
+    (tmp_path / "infra/deploy_loop/tests").mkdir()
+    (tmp_path / "infra/deploy_loop/_x.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "infra/deploy_loop/image/Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    before = baked_sum(tmp_path)
+    (tmp_path / "infra/deploy_loop/tests/test_x.py").write_text("def test(): pass\n", encoding="utf-8")
+    (tmp_path / "infra/deploy_loop/CLAUDE.md").write_text("notes\n", encoding="utf-8")
+    assert baked_sum(tmp_path) == before
+    (tmp_path / "infra/deploy_loop/_x.py").write_text("x = 2\n", encoding="utf-8")
+    assert baked_sum(tmp_path) != before
+
+
+def _the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new(state, word, tmp_path):
+    assert build_decision(state, "s1", now=1000.0, retry_seconds=600)[0] == word
+
+
+def _cycle_job(image, created, condition=""):
+    status = {"conditions": [{"type": condition, "status": "True"}]} if condition else {}
+    return {"metadata": {"creationTimestamp": created},
+            "spec": {"template": {"spec": {"containers": [{"name": "cycle", "image": image}]}}}, "status": status}
+
+
+_OLD_IMAGE = "registry.example/ns/deploy-cycle:git-aaaaaaaaaaaa@sha256:" + "1" * 64
+_NEW_IMAGE = "registry.example/ns/deploy-cycle:git-bbbbbbbbbbbb@sha256:" + "2" * 64
+_TRIAL = {"good": _OLD_IMAGE, "candidate": _NEW_IMAGE, "candidate_since": "1000"}
+
+
+def _the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long(
+        state, cycle_image, jobs, now, action, tmp_path):
+    assert judge_trial(state, cycle_image, jobs, now).action == action
+
+
+def _a_promotion_moves_every_loop_object_and_its_image_setting_but_nothing_else(tmp_path):
+    def cronjob(name, image, env_image):
+        return {"kind": "CronJob", "metadata": {"name": name}, "spec": {"jobTemplate": {"spec": {"template": {
+            "spec": {"containers": [{"name": "c", "image": image,
+                                     "env": [{"name": "DEPLOY_CYCLE_IMAGE", "value": env_image}]}]}}}}}}
+    listing = {"kind": "List", "items": [
+        cronjob("deploy-cycle", _NEW_IMAGE, _NEW_IMAGE),
+        cronjob("commit-gate", _OLD_IMAGE, _OLD_IMAGE),
+        {"kind": "Deployment", "metadata": {"name": "buildkitd"},
+         "spec": {"template": {"spec": {"containers": [{"name": "b", "image": "moby/buildkit:v1"}]}}}},
+    ]}
+    patches = pin_patches([listing], _NEW_IMAGE)
+    assert [(kind, name) for kind, name, _ in patches] == [("cronjob", "commit-gate")]
+    moved = json.loads(patches[0][2])["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
+    assert moved == {"name": "c", "image": _NEW_IMAGE, "env": [{"name": "DEPLOY_CYCLE_IMAGE", "value": _NEW_IMAGE}]}
+    assert pin_patches([listing], _OLD_IMAGE, skip="cronjob/deploy-cycle") == []
+
 CASES = [
     *[
         pytest.param(_shards_add_up_to_the_code_one_pytest_would_give, {"codes": codes, "code": code}, id=label)
@@ -269,6 +349,70 @@ CASES = [
     pytest.param(_the_bookmark_is_a_full_sha_or_none_yet_and_nothing_else, {"data": {"sha": "main"}, "answer": ValueError}, id="bookmark-not-a-sha"),
     pytest.param(_a_new_image_is_set_on_every_object_running_another_tag_of_it, {}, id="image-targets"),
     pytest.param(_a_stack_image_is_built_from_the_compose_service_of_its_name, {}, id="stack-images"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _GREEN), _commit("2", _GREEN)], "scope_none": set(), "licensed": True,
+                  "head": "2" * 40, "reason": "all"}, id="trust-every-commit-replayed-green"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _GREEN), _commit("2"), _commit("3", _GREEN)], "scope_none": set(),
+                  "licensed": True, "head": "1" * 40, "reason": "unanswered"}, id="trust-stops-at-an-unanswered-commit"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1"), _commit("2", _GREEN)], "scope_none": {"1" * 40}, "licensed": True,
+                  "head": "2" * 40, "reason": "all"}, id="trust-a-commit-no-test-reaches-is-covered"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _BATCH), _commit("2", _BATCH)], "scope_none": set(), "licensed": True,
+                  "head": "", "reason": "empty"}, id="trust-a-batch-member-is-never-the-head"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _BATCH), _commit("2", _GREEN)], "scope_none": set(), "licensed": True,
+                  "head": "2" * 40, "reason": "all"}, id="trust-a-batch-is-covered-by-its-green-head"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _PLAIN)], "scope_none": set(), "licensed": True,
+                  "head": "", "reason": "unreplayed"}, id="trust-a-green-without-its-replay-stops-the-walk"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _OTHER_TREE)], "scope_none": set(), "licensed": True,
+                  "head": "", "reason": "other_tree"}, id="trust-a-verdict-about-another-tree-stops-the-walk"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _GREEN), _commit("2", _RED), _commit("3", _GREEN)], "scope_none": set(),
+                  "licensed": True, "head": "1" * 40, "reason": "red"}, id="trust-nothing-ships-over-an-open-red"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("2", _RED), _commit("3", _GREEN, reverts="2" * 40)], "scope_none": set(),
+                  "licensed": True, "head": "3" * 40, "reason": "all"}, id="trust-a-red-its-covered-revert-closes"),
+    pytest.param(_the_trust_walk_ships_only_up_to_the_last_commit_every_verdict_covers,
+                 {"commits": [_commit("1", _GREEN_FULL), _commit("2", _GREEN)], "scope_none": set(),
+                  "licensed": False, "head": "1" * 40, "reason": "unlicensed"}, id="trust-unlicensed-only-a-full-green"),
+    pytest.param(_the_baked_sum_moves_with_what_the_image_runs_and_not_with_its_tests_or_notes, {},
+                 id="cycle-image-baked-sum"),
+    pytest.param(_the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new,
+                 {"state": {"good": "img", "good_sum": "s0"}, "word": "build"}, id="cycle-image-new-sum-builds"),
+    pytest.param(_the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new,
+                 {"state": {"good": "img", "good_sum": "s1"}, "word": "current"}, id="cycle-image-same-sum-is-current"),
+    pytest.param(_the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new,
+                 {"state": {"good": "img", "candidate": "new"}, "word": "trial"}, id="cycle-image-nothing-during-a-trial"),
+    pytest.param(_the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new,
+                 {"state": {"refused_sum": "s1", "refused_at": "900"}, "word": "refused"},
+                 id="cycle-image-a-refused-sum-waits"),
+    pytest.param(_the_cycle_builds_its_image_only_when_nothing_is_on_trial_and_the_sum_is_new,
+                 {"state": {"refused_sum": "s1", "refused_at": "100"}, "word": "build"},
+                 id="cycle-image-a-refused-sum-is-retried-later"),
+    pytest.param(_the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long,
+                 {"state": _TRIAL, "cycle_image": _NEW_IMAGE, "now": 1100.0, "action": "promote",
+                  "jobs": [_cycle_job(_NEW_IMAGE, "1970-01-01T00:16:50Z", "Complete")]}, id="guard-one-green-cycle-promotes"),
+    pytest.param(_the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long,
+                 {"state": _TRIAL, "cycle_image": _NEW_IMAGE, "now": 1100.0, "action": "roll-back",
+                  "jobs": [_cycle_job(_NEW_IMAGE, "1970-01-01T00:16:50Z", "Failed"),
+                           _cycle_job(_NEW_IMAGE, "1970-01-01T00:17:00Z", "Failed")]}, id="guard-two-failed-cycles-roll-back"),
+    pytest.param(_the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long,
+                 {"state": _TRIAL, "cycle_image": _NEW_IMAGE, "now": 1100.0, "action": "wait",
+                  "jobs": [_cycle_job(_NEW_IMAGE, "1970-01-01T00:16:00Z", "Complete"),
+                           _cycle_job(_OLD_IMAGE, "1970-01-01T00:17:00Z", "Complete")]},
+                 id="guard-a-green-before-the-trial-or-in-the-old-image-does-not-count"),
+    pytest.param(_the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long,
+                 {"state": _TRIAL, "cycle_image": _NEW_IMAGE, "now": 3000.0, "action": "roll-back", "jobs": []},
+                 id="guard-no-green-cycle-in-time-rolls-back"),
+    pytest.param(_the_guard_promotes_after_one_green_cycle_and_rolls_back_after_two_failed_or_too_long,
+                 {"state": {}, "cycle_image": _OLD_IMAGE, "now": 1.0, "action": "seed", "jobs": []},
+                 id="guard-seeds-the-image-in-use-as-good"),
+    pytest.param(_a_promotion_moves_every_loop_object_and_its_image_setting_but_nothing_else, {},
+                 id="cycle-image-pin-patches"),
 ]
 
 

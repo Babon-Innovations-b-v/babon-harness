@@ -1,15 +1,21 @@
 #!/bin/bash
-# The deploy-cycle CronJob's command: make sure the cycle's clone exists, then
-# run infra/auto-deploy/auto-deploy.sh from it.
+# The command of the deploy loop's two CronJobs: make sure the clone exists,
+# then run the loop from it.
 #
-# The clone lives on the state volume at $HARNESS_ROOT/repo and is the
-# repository the cycle deploys; step 15 fast-forwards it under the cycle's
-# lock, so nothing here pulls. A clone that is missing (a fresh volume) is made
-# from DEPLOY_REPO_URL, with the read token from Secret deploy-git-read when
-# the repository is private.
+#   cycle_entry.sh         CronJob deploy-cycle: infra/auto-deploy/auto-deploy.sh
+#   cycle_entry.sh lane    CronJob commit-gate: move the clone to origin/main,
+#                          then infra/auto-deploy/commit_gate/cluster_lane.sh
 #
-# FAILURE POLICY: a clone that cannot be made exits 1, so the Job fails and
-# the CronJob's failed-Jobs history shows it; the next tick tries again.
+# The clone lives on the pod's own volume at $HARNESS_ROOT/repo. The cycle's
+# step 15 fast-forwards its clone under the cycle's lock, so nothing here pulls
+# for it; the lane's clone has no other writer, so the lane resets it to
+# origin/main itself. A clone that is missing (a fresh volume) is made from
+# DEPLOY_REPO_URL, with the read token from Secret deploy-git-read when the
+# repository is private.
+#
+# FAILURE POLICY: a clone that cannot be made or moved exits 1, so the Job
+# fails and the CronJob's failed-Jobs history shows it; the next tick tries
+# again.
 set -u
 : "${HARNESS_ROOT:?}" "${DEPLOY_REPO_URL:?}"
 clone="$HARNESS_ROOT/repo"
@@ -25,5 +31,10 @@ if [ ! -d "$clone/.git" ]; then
         git -C "$clone.partial" config credential.helper "${helper[1]#credential.helper=}" || exit 1
     fi
     mv "$clone.partial" "$clone" || exit 1
+fi
+if [ "${1:-}" = "lane" ]; then
+    git -C "$clone" fetch -q --prune origin main || { echo "cycle_entry: fetch of origin/main failed"; exit 1; }
+    git -C "$clone" reset -q --hard origin/main || exit 1
+    exec bash "$clone/infra/auto-deploy/commit_gate/cluster_lane.sh"
 fi
 exec bash "$clone/infra/auto-deploy/auto-deploy.sh"
