@@ -878,6 +878,58 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test="lib/dashkit/ai/tests/test_a_claude_call_is_metered_at_its_token_price_and_an_api_error_comes_back_as_data_and_is_still_logged.py",
+        pins=("lib/dashkit/ai",),
+        runs_when=(
+        "lib/dashkit/ai/**",
+        ),
+        proved_by=Break(
+            file="lib/dashkit/ai/call_claude.py",
+            old="        output_tokens / 1_000_000\n    ) * OUTPUT_COST_PER_M",
+            new="        output_tokens / 1_000_000\n    ) * INPUT_COST_PER_M",
+            why="output tokens are priced at the input rate, so the cost case fails",
+        ),
+    ),
+    Row(
+        test="lib/dashkit/core/audit/tests/test_an_activity_row_records_who_did_what_and_a_read_returns_newest_first_within_its_bounds.py",
+        pins=("lib/dashkit/core/audit",),
+        runs_when=(
+        "lib/dashkit/core/audit/**",
+        ),
+        proved_by=Break(
+            file="lib/dashkit/core/audit/fetch_activity.py",
+            old="(min(max(limit, 1), 500),)",
+            new="(limit,)",
+            why="the limit is not clamped, so both bound cases fail",
+        ),
+    ),
+    Row(
+        test="lib/dashkit/core/sync/tests/test_a_heartbeat_lands_only_with_the_right_bearer_and_a_known_status_and_a_never_run_job_reads_stale.py",
+        pins=("lib/dashkit/core/sync",),
+        runs_when=(
+        "lib/dashkit/core/sync/**",
+        ),
+        proved_by=Break(
+            file="lib/dashkit/core/sync/make_heartbeat_router.py",
+            old='        if authorization != f"Bearer {token}":',
+            new="        if not authorization:",
+            why="any bearer is accepted, so the wrong-bearer case is answered",
+        ),
+    ),
+    Row(
+        test="tools/test_register/birth/tests/test_a_new_test_that_reads_the_clock_the_network_or_the_machine_is_named_at_birth_and_one_reading_only_what_it_built_is_not.py",
+        pins=("tools/test_register/birth",),
+        runs_when=(
+        "tools/test_register/birth/**",
+        ),
+        proved_by=Break(
+            file="tools/test_register/birth/_scan.py",
+            old='    if name == "urlopen":',
+            new='    if name == "urlopen_":',
+            why="a fetched URL is not named, so the fetched-url case is let through",
+        ),
+    ),
+    Row(
         test="apps/tests/test_minutes_the_notulen_app_sends_reach_the_assistants_route_and_come_back_as_the_issues_it_filed.py",
         pins=("apps/notulen/app/core/board", "apps/assistant/gates",),
         runs_when=(
@@ -944,6 +996,19 @@ ROWS: tuple[Row, ...] = (
             old='    "gpu_jobs.naming",\n',
             new="",
             why="gpu_jobs.naming is not shipped, so the naming case fails",
+        ),
+    ),
+    Row(
+        test="lib/tests/test_the_dashkit_distribution_ships_every_package_and_imports_no_dashboard.py",
+        pins=("lib",),
+        runs_when=(
+        "lib/**",
+        ),
+        proved_by=Break(
+            file="lib/dashkit/pyproject.toml",
+            old='    "dashkit.ai",\n',
+            new="",
+            why="dashkit.ai is not shipped, so the ai case fails",
         ),
     ),
 )
