@@ -696,6 +696,45 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test="apps/assistant/mcp/agenda/tests/test_the_agenda_server_binds_loopback_unless_told_and_names_every_calendar_setting_it_is_missing.py",
+        pins=("apps/assistant/mcp/agenda",),
+        runs_when=(
+        "apps/assistant/mcp/agenda/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/mcp/agenda/serve.py",
+            old='_DEFAULT_HOST = "127.0.0.1"',
+            new='_DEFAULT_HOST = "0.0.0.0"',
+            why="the server binds every address by default, so the loopback case fails",
+        ),
+    ),
+    Row(
+        test="apps/assistant/mcp/agenda/ical/tests/test_free_time_is_every_gap_between_events_at_least_as_long_as_asked_inside_the_window.py",
+        pins=("apps/assistant/mcp/agenda/ical",),
+        runs_when=(
+        "apps/assistant/mcp/agenda/ical/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/mcp/agenda/ical/find_free.py",
+            old="if start > cursor and start - cursor >= duration:",
+            new="if start > cursor and start - cursor > duration:",
+            why="a gap exactly as long as asked is dropped, so the hour-long morning gap is lost",
+        ),
+    ),
+    Row(
+        test="apps/assistant/mcp/agenda/tools/tests/test_the_free_slots_tool_answers_the_gaps_between_the_events_the_calendar_holds.py",
+        pins=("apps/assistant/mcp/agenda/tools",),
+        runs_when=(
+        "apps/assistant/mcp/agenda/tools/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/mcp/agenda/tools/find_free_slots.py",
+            old="duration=timedelta(minutes=duration_minutes)",
+            new="duration=timedelta(hours=duration_minutes)",
+            why="the minutes are read as hours, so no gap is long enough and the slot cases fail",
+        ),
+    ),
+    Row(
         test="apps/assistant/shared/budget/tests/test_the_budget_trips_once_the_days_charges_reach_the_cap_and_a_malformed_cap_is_refused.py",
         pins=("apps/assistant/shared/budget",),
         runs_when=(
@@ -732,6 +771,19 @@ ROWS: tuple[Row, ...] = (
             old="_k8s_mod.cluster_configured())",
             new="True)",
             why="the kubectl tools are offered on every box, so the no-cluster cases offer them",
+        ),
+    ),
+    Row(
+        test="apps/assistant/mcp/tests/test_the_agenda_server_registers_every_tool_the_tools_package_exports_and_nothing_else.py",
+        pins=("apps/assistant/mcp",),
+        runs_when=(
+        "apps/assistant/mcp/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/mcp/agenda/server.py",
+            old="    update_event,\n    delete_event,\n):",
+            new="    update_event,\n):",
+            why="delete_event is left out of the registration, so the delete case fails",
         ),
     ),
 )
