@@ -630,4 +630,108 @@ ROWS: tuple[Row, ...] = (
             why="a Job the deadline killed reads as its container's exit code, so the deadline case gets 0 instead of 124",
         ),
     ),
+    Row(
+        test="apps/assistant/core/claim_audit/tests/test_a_sent_message_is_judged_only_against_the_readings_that_answered_and_a_number_no_read_returned_is_a_finding.py",
+        pins=("apps/assistant/core/claim_audit",),
+        runs_when=(
+        "apps/assistant/core/claim_audit/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/claim_audit/check.py",
+            old='        for reading in readings\n        if str(reading.get("outcome", "")) == READ_OK\n    )',
+            new="        for reading in readings\n    )",
+            why="an unavailable reading counts as evidence, so the unavailable case finds no fabricated number",
+        ),
+    ),
+    Row(
+        test="apps/assistant/core/knowledge/tests/test_a_knowledge_search_returns_the_rows_that_answer_the_question_and_never_a_row_sharing_one_ordinary_word.py",
+        pins=("apps/assistant/core/knowledge",),
+        runs_when=(
+        "apps/assistant/core/knowledge/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/knowledge/index.py",
+            old="    if len(matched) >= 2 or len(wanted) == 1:",
+            new="    if matched:",
+            why="a row matching one word of a longer question is offered, so the two-rows case returns both",
+        ),
+    ),
+    Row(
+        test="apps/assistant/core/monitor/checks/tests/test_a_check_is_dispatched_by_its_kind_and_a_heartbeat_is_up_only_inside_its_window_and_unknown_before_its_first_beat.py",
+        pins=("apps/assistant/core/monitor/checks",),
+        runs_when=(
+        "apps/assistant/core/monitor/checks/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/monitor/checks/heartbeat.py",
+            old="    if seen >= cutoff:",
+            new="    if seen <= cutoff:",
+            why="the window is turned around, so the fresh beat reads down and the overdue one up",
+        ),
+    ),
+    Row(
+        test="apps/assistant/core/notulen/tests/test_the_minutes_yield_every_action_row_and_decision_as_written_and_nothing_from_the_template_placeholders.py",
+        pins=("apps/assistant/core/notulen",),
+        runs_when=(
+        "apps/assistant/core/notulen/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/notulen/parse_minutes.py",
+            old='        if not text or text.lower() in {"actie", "action"}:',
+            new='        if text.lower() in {"actie", "action"}:',
+            why="a row with a name and no action becomes an action, so the action-row case fails",
+        ),
+    ),
+    Row(
+        test="apps/assistant/core/tools/kubectl/tests/test_kubectl_get_summarises_pods_by_readiness_and_restarts_in_the_default_namespace_and_reads_no_kind_it_does_not_list.py",
+        pins=("apps/assistant/core/tools/kubectl",),
+        runs_when=(
+        "apps/assistant/core/tools/kubectl/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/tools/kubectl/kubectl_get.py",
+            old='"ready": all(',
+            new='"ready": any(',
+            why="a pod with one ready container reads ready, so the pod summary cases fail",
+        ),
+    ),
+    Row(
+        test="apps/assistant/shared/budget/tests/test_the_budget_trips_once_the_days_charges_reach_the_cap_and_a_malformed_cap_is_refused.py",
+        pins=("apps/assistant/shared/budget",),
+        runs_when=(
+        "apps/assistant/shared/budget/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/shared/budget/is_tripped.py",
+            old="return _state.budget_spend_today_eur() >= cap_eur()",
+            new="return _state.budget_spend_today_eur() > cap_eur()",
+            why="spend exactly on the cap does not trip, so the on-the-cap and zero-cap cases fail",
+        ),
+    ),
+    Row(
+        test="apps/assistant/watch/claim_audit/tests/test_the_weekly_audit_posts_to_talk_unless_the_week_was_clean_and_exits_loud_only_when_the_report_reached_nobody.py",
+        pins=("apps/assistant/watch/claim_audit",),
+        runs_when=(
+        "apps/assistant/watch/claim_audit/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/watch/claim_audit/watch.py",
+            old="    if audit.findings == 0 and audit.messages:",
+            new="    if audit.findings == 0:",
+            why="a week with no messages is taken for a clean one, so the empty week is never posted",
+        ),
+    ),
+    Row(
+        test="apps/assistant/core/tools/tests/test_the_catalogue_offers_the_kubectl_tools_exactly_when_a_cluster_is_configured.py",
+        pins=("apps/assistant/core/tools", "apps/assistant/core/tools/kubectl",),
+        runs_when=(
+        "apps/assistant/core/tools/**",
+        ),
+        proved_by=Break(
+            file="apps/assistant/core/tools/__init__.py",
+            old="_k8s_mod.cluster_configured())",
+            new="True)",
+            why="the kubectl tools are offered on every box, so the no-cluster cases offer them",
+        ),
+    ),
 )
