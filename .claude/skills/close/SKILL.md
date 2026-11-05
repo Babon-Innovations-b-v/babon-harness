@@ -1,13 +1,13 @@
 ---
 name: close
-description: Cleanly end a work session. Finish the small stuff rather than writing it down, ship it, record where the PRD stands, and park only what genuinely cannot be done now, durably under a parent PRD so nothing is lost to the chat. Closes the PRD only when its work is actually finished, never just because the session is ending. Use at session end, or when the user says "close this out", "anything left?", "wrap up", or invokes /close.
+description: Cleanly end a work session. Finish the small stuff rather than writing it down, ship it, record where the PRD stands, move what only waits on time to the backlog, and stay open while anything still needs the user or is not done. Closes the PRD only when its work is actually finished, never just because the session is ending. Use at session end, or when the user says "close this out", "anything left?", "wrap up", or invokes /close.
 ---
 
 # Close
 
 A clean end to a session. A PRD can span many sessions, so the job is to leave it resumable, not to force it shut. Ship what is done, write down where it stands, and lose nothing to the chat.
 
-**Close finishes work; it does not tidy it away.** The failure this skill exists to prevent is a session that ends with a neat list of small things it could have done in the time it took to write the list. If a loose end is small and in scope, do it now, here, before closing. Parking is for what genuinely cannot be done in this session, and a parked line has to say which of those it is.
+**Close finishes work; it does not tidy it away.** The failure this skill exists to prevent is a session that ends with a neat list of small things it could have done in the time it took to write the list. If a loose end is in scope, do it now, here, before closing. Nothing is parked except what only time can finish, which goes to the backlog; what needs the user is asked, and the session stays open until it is answered.
 
 ## Steps
 
@@ -19,12 +19,11 @@ A clean end to a session. A PRD can span many sessions, so the job is to leave i
 
    **The bar is deliberately low.** A one-line fix, a stale sentence, a wrong comment, a missing test, a rename, a data update you have the access for: all of that is smaller than the paragraph explaining why you left it. Three signs you are about to park something you should be doing: you are writing "worth doing if", "candidate", or "buys nothing today"; you are describing the fix precisely enough that doing it would be shorter; you are closing an issue while listing what is still wrong with it. In each case, stop writing and go do it.
 
-   **Park only what you genuinely cannot finish now**, and say which of these it is, in the line itself:
-   - it needs a decision that is not yours to make, and you have asked;
-   - it needs access, data or a person you do not have;
-   - it is real work, not a loose end: a session of its own or more.
+   **A session does not close while something still needs the user or is not done.** Work that is not done gets done in this session, however big; "a session of its own" is not a reason to stop. Something that needs the user (a decision, an action only they can take, access you do not have) is asked now, in a few plain lines, and the session waits for the answer; it does not report closed with the question still open. The one thing that does not hold a session or a PRD open is **time**.
 
-   "I did not want to widen the scope" is not on that list. Fixing what your own change left wrong is finishing, not scope creep.
+   **Waiting on time goes to the backlog.** A check that only passes once days go by (a week of green runs, a delete after seven clean days, an observation window) is not unfinished work: make it, or move it, to a sub-issue under the standing backlog PRD (`backlog_prd` in `.claude/project.json`) on the `LowPriority` board column, with the date it can be checked in its title or first line, and take it off the PRD's acceptance list. The PRD then closes when everything else is met. This is the one kind of new issue close may file without asking.
+
+   "I did not want to widen the scope" is never a reason to leave something. Fixing what your own change left wrong is finishing, not scope creep.
 
    A parked line is written down, never filed as a new issue:
    - fits this PRD → its **Tasks** checklist;
@@ -43,6 +42,6 @@ A clean end to a session. A PRD can span many sessions, so the job is to leave i
 
 8. **Hand off the assignee.** The board filters on the whole issue's assignee, so an open issue must be assigned to whoever owns the next action. For each issue that stays open (and each open parent of anything you closed): if the user's part is done and the rest belongs to someone else, remove the user and assign that person (`gh issue edit N --remove-assignee <user> --add-assignee <owner>`). Read the next owner from the open sub-issues or the issue body; if it is genuinely unclear, leave the assignee and say so in the step-5 comment.
 
-9. **Report.** One line: what shipped, what is parked where, whether the PRD closed or stays open with what is left. If the session ran in its own worktree and is finished with it, `ExitWorktree` with remove, or leave it for `.claude/scripts/worktree-reap.py` to name once it is clean and merged.
+9. **Report.** One line: what shipped, what moved to the backlog to wait on time, whether the PRD closed. If anything still needs the user or is not done, this is not the report: say what you need from them, or keep working. If the session ran in its own worktree and is finished with it, `ExitWorktree` with remove, or leave it for `.claude/scripts/worktree-reap.py` to name once it is clean and merged.
 
 Team-facing text (comments, PRD edits) in English per [`.claude/soul.md`](../../soul.md). This skill closes a session; it does not open new scope.
