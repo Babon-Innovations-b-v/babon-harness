@@ -15,9 +15,17 @@ watching `design/` through `x-deploy-paths`. Which services a path must select
 follows from the layout rule in the module's docstring, read off the tree
 written here, never from an earlier answer.
 
+A service with a build block is narrower: a third fragment, `apps/api`, whose
+Dockerfile copies its own directory and `lib/shared/`, with an ignore file
+beside the Dockerfile that leaves out `apps/api/tests/`. By the docstring's
+rule a test or a doc in its directory rebuilds nothing, a file it copies from
+elsewhere rebuilds it (deleted or not, since the tree is not listed), and so
+do its Dockerfile, its ignore file and its fragment.
+
 WHAT IT WAS PROVED AGAINST. Matching a changed path against the fragment's
 directory without the trailing separator, so `apps/web` also claims
-`apps/website`.
+`apps/website`. Returning True from `image_reads` for every path turns the
+build-inputs case red.
 
 GUARDS. Step 50 restarts only what a commit changed.
 
@@ -236,6 +244,34 @@ def _tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return tmp_path
+
+
+def _api_tree(tmp_path: Path) -> Path:
+    repo = _tree(tmp_path)
+    (repo / "apps/api/tests").mkdir(parents=True)
+    (repo / "apps/api/compose.yml").write_text(
+        "services:\n  api:\n    build:\n      context: ../..\n      dockerfile: apps/api/Dockerfile\n",
+        encoding="utf-8",
+    )
+    (repo / "apps/api/Dockerfile").write_text(
+        "FROM python:3.12-slim\n# a comment\nCOPY apps/api/ /app/apps/api/\n"
+        "COPY --from=builder /out /out\nCOPY lib/shared/ \\\n    /app/lib/shared/\n",
+        encoding="utf-8",
+    )
+    (repo / "apps/api/Dockerfile.dockerignore").write_text("**\n!apps/api/**\n!lib/shared/**\napps/api/tests/**\n",
+                                                           encoding="utf-8")
+    return repo
+
+
+def _a_built_service_changes_only_with_what_its_image_reads(tmp_path: Path) -> None:
+    module = _load()
+    repo = _api_tree(tmp_path)
+    for path in ("apps/api/tests/test_a.py", "docs/bible.md"):
+        assert "api" not in module.changed_services(repo, [path]), path
+    for path in ("apps/api/app.py", "lib/shared/gone.py", "apps/api/Dockerfile",
+                 "apps/api/Dockerfile.dockerignore", "apps/api/compose.yml"):
+        assert "api" in module.changed_services(repo, [path]), path
+    assert module.changed_services(repo, ["lib/shared/x.py"]) == ["api"]
 
 
 def _a_change_inside_a_fragment_selects_its_services_only(tmp_path: Path) -> None:
@@ -845,6 +881,7 @@ def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=(
 
 CASES = [
     *_cases(_a_change_inside_a_fragment_selects_its_services_only),
+    *_cases(_a_built_service_changes_only_with_what_its_image_reads),
     *_cases(_a_watched_path_outside_the_fragment_selects_it),
     *_cases(_the_root_compose_file_or_config_selects_everything),
     *_cases(_a_path_no_fragment_owns_selects_nothing),

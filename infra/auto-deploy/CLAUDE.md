@@ -59,8 +59,10 @@ the cluster is in `steps/cluster.sh`. `commit_gate/` (the verifying lane) and
   back to the placeholder tag `set-by-deploy-loop` until the next cycle that
   changes a manifest re-pins them. Apply through a commit.
 - Never map a gate Job's fault to 0 to 5 (`infra/deploy_loop/_outcome.py`).
-- `compose_fragments.py` still decides which stack images a commit changes:
-  a stack image is a compose service with a `build:` block whose name a
-  manifest uses with the placeholder tag.
+- `compose_fragments.py` decides which stack images a commit changes: a stack
+  image is a compose service with a `build:` block whose name a manifest uses
+  with the placeholder tag, and it changes only when a path its Dockerfile
+  copies (after its ignore file), the Dockerfile, the ignore file or its
+  fragment changed. A new `COPY` from outside the fragment needs nothing else.
 - Step 68 (the assistant's workspace) still renders on the cycle's own volume;
   the gateway in the cluster does not read it yet.
