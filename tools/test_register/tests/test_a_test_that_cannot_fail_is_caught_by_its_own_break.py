@@ -69,6 +69,13 @@ the level that owns them. Each case's level and function count are read off the
 case by hand, and each expected refusal is matched by the start of its
 sentence, which names the file or level.
 
+The no-test rule: in the same two-module tree, rows for `pkg/alpha` and `pkg`
+leave `pkg/beta` with no test, and rows for the two modules leave the group
+`pkg` with none; each is one refusal naming that level, a debt entry excuses
+it, a debt entry for a tested level is refused, and rows for all three are
+clean. Only these cases turn the rule on. Skipping the `untested` call in
+`_check.py` turns both refusing cases red.
+
 The scaffold cases write the expected files out from the rule. A tests
 directory the call creates gets its `__init__.py`; one that already existed
 keeps its own shape. The filename is every word of the sentence, lowercased,
@@ -194,9 +201,14 @@ def _replays(body: str, proved_by: Break, runner: str, verdict: str, phrase: str
     return ("replay", body, proved_by, runner, verdict, phrase)
 
 
-def _checks(rows: tuple, contents: dict, debt=(), function_debt=(), refusals=(), pkg=True) -> tuple:
-    """A register case: the rows, the files, the two debt lists, the refusals."""
-    return ("check", rows, contents, debt, function_debt, refusals, pkg)
+def _checks(rows: tuple, contents: dict, debt=(), function_debt=(), refusals=(), pkg=True,
+            require_tests=False, untested_debt=()) -> tuple:
+    """A register case: the rows, the files, the debt lists, the refusals.
+
+    `require_tests` is the no-test rule; only the cases about it turn it on, so
+    the others need not give every scratch module and group its test.
+    """
+    return ("check", rows, contents, debt, function_debt, refusals, pkg, require_tests, untested_debt)
 
 
 def _quarantines(commits: tuple, believed: tuple, refused: tuple) -> tuple:
@@ -306,6 +318,19 @@ _CASES = {
         refusals=("test_real.py: its break edits the test itself, which proves nothing",)),
     "check: one test per module and per group is clean": _checks(
         (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/beta"), _row(_THREE, "pkg")), {}),
+    "check: every module and module group with its one test is clean under the no-test rule": _checks(
+        (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/beta"), _row(_THREE, "pkg")), {}, require_tests=True),
+    "check: a module with no test": _checks(
+        (_row(_ONE, "pkg/alpha"), _row(_THREE, "pkg")), {}, require_tests=True,
+        refusals=("pkg/beta is a module with no test",)),
+    "check: a module group with no test": _checks(
+        (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/beta")), {}, require_tests=True,
+        refusals=("pkg is a module group with no test",)),
+    "check: an untested level on the debt list": _checks(
+        (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/beta")), {}, require_tests=True, untested_debt=("pkg",)),
+    "check: a debt entry for a level that has its test": _checks(
+        (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/beta"), _row(_THREE, "pkg")), {}, require_tests=True,
+        untested_debt=("pkg",), refusals=("pkg is on the no-test debt list",)),
     "check: a second test of a module": _checks(
         (_row(_ONE, "pkg/alpha"), _row(_TWO, "pkg/alpha/a.py")), {},
         refusals=("pkg/alpha would have 2 tests",)),
@@ -513,7 +538,7 @@ def _shard_answer(root: Path, case: tuple) -> None:
 
 def _register_answer(root: Path, case: tuple) -> None:
     """What `check` refuses, each refusal matched by the start of its sentence."""
-    _kind, rows, contents, debt, function_debt, refusals, pkg = case
+    _kind, rows, contents, debt, function_debt, refusals, pkg, require_tests, untested_debt = case
     if pkg:
         _tree(root, contents)
         named = {row.test for row in rows}
@@ -521,7 +546,10 @@ def _register_answer(root: Path, case: tuple) -> None:
     else:
         _write(root, {"calc.py": _MODULE, **contents})
 
-    verdict = sorted(check(root, rows, require_break=False, debt=debt, function_debt=function_debt))
+    verdict = sorted(check(
+        root, rows, require_break=False, require_tests=require_tests, debt=debt,
+        function_debt=function_debt, untested_debt=untested_debt,
+    ))
 
     assert len(verdict) == len(refusals), verdict
     for expected in refusals:

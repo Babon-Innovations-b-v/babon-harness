@@ -1,8 +1,9 @@
 """The tests that were already over a one-test rule the day it arrived.
 
 OWNS: the known debt, listed once so main stayed green the day each rule
-arrived. Data only. Two lists: `DEBT` (a level with more than one test) and
-`FUNCTION_DEBT` (a file with more than one test function). Each only shrinks.
+arrived. Data only. Three lists: `DEBT` (a level with more than one test),
+`FUNCTION_DEBT` (a file with more than one test function) and `UNTESTED_DEBT`
+(a module or module group with no test at all). Each only shrinks.
 
 Each `DEBT` entry is the level (module, module group, or declared unit) the
 test was counted against that day, and the test file. `_second.py` matches by
@@ -22,4 +23,40 @@ DEBT: tuple[tuple[str, str], ...] = (
 #: count. A file may not grow past its count; one that shrank lowers its entry,
 #: and one down to a single test loses it. Only ever shrink.
 FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
+)
+
+#: 29 modules and module groups with no test of their own the day
+#: `--check` began refusing an untested level (`_coverage.py`). A level that
+#: gets its test loses its entry in the same commit; `--check` refuses an entry
+#: that excuses nothing. Only ever delete.
+UNTESTED_DEBT: tuple[str, ...] = (
+    "apps/assistant/core/claim_audit",
+    "apps/assistant/core/knowledge",
+    "apps/assistant/core/monitor/checks",
+    "apps/assistant/core/notulen",
+    "apps/assistant/core/tools/kubectl",
+    "apps/assistant/mcp/agenda",
+    "apps/assistant/mcp/agenda/ical",
+    "apps/assistant/mcp/agenda/tools",
+    "apps/assistant/shared/budget",
+    "apps/assistant/watch/claim_audit",
+    "apps/notulen/app/core/board",
+    "apps/notulen/app/core/minutes",
+    "apps/notulen/app/core/publish/github",
+    "apps/notulen/app/core/publish/retry",
+    "infra/gpu-jobs/gpu_jobs/cluster",
+    "infra/gpu-jobs/gpu_jobs/naming",
+    "infra/gpu-jobs/gpu_jobs/security",
+    "infra/observability/node_textfile",
+    "infra/observability/probes",
+    "lib/dashkit/ai",
+    "lib/dashkit/core/audit",
+    "lib/dashkit/core/sync",
+    "tools/test_register/birth",
+    "apps",
+    "apps/assistant/core/tools (group)",
+    "apps/assistant/mcp",
+    "infra",
+    "infra/gpu-jobs",
+    "lib",
 )

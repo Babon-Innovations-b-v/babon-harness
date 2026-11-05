@@ -11,7 +11,9 @@ The verbs, exactly one per run:
   --check [--base F --author E]
                              the register and the tree agree. rc 1 on any
                              disagreement, with every problem printed, not
-                             just the first. With `--base` (the rows before
+                             just the first, a module or module group with
+                             no test among them (`UNTESTED_DEBT` excused).
+                             With `--base` (the rows before
                              this change) and `--author` (its author's email),
                              a `quarantined=` line added by anyone but the
                              gate is refused too, and so is a python test this
@@ -24,8 +26,8 @@ The verbs, exactly one per run:
                              `--workers N` replays N rows at once, each on its
                              own copy of the tree.
   --new <module> --says "…"  write the test file and its row together.
-  --coverage                 how many modules the register pins, and which it
-                             does not. Never a non-zero exit: it is a number,
+  --coverage                 how many modules the register pins, which it
+                             does not, and the untested levels still on debt. Never a non-zero exit: it is a number,
                              not a verdict.
   --quarantined [--revision R]
                              every quarantine the gate honours, one per line:
@@ -69,7 +71,7 @@ from pathlib import Path
 
 from ._check import check
 from ._coverage import uncovered
-from ._debt import DEBT, FUNCTION_DEBT
+from ._debt import DEBT, FUNCTION_DEBT, UNTESTED_DEBT
 from ._modules import modules_in
 from ._owner import owner_login, quarantine_issue
 from ._quarantine import left_out
@@ -152,7 +154,7 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
 
 def _do_check(repo: Path, base: str = "", author: str = "") -> int:
     problems = (
-        check(repo, ROWS, debt=DEBT, function_debt=FUNCTION_DEBT)
+        check(repo, ROWS, debt=DEBT, function_debt=FUNCTION_DEBT, untested_debt=UNTESTED_DEBT)
         + _quarantines_refused(repo, base, author)
         + _born_unsealed(repo, base)
     )
@@ -298,6 +300,9 @@ def _do_coverage(repo: Path) -> int:
     print(f"modules {len(modules)} | pinned by a row {covered} | no test {len(gaps)}")
     for module in gaps:
         print(f"  no test: {module}")
+    print(f"levels with no test of their own, on the debt list: {len(UNTESTED_DEBT)}")
+    for level in UNTESTED_DEBT:
+        print(f"  debt: {level}")
     return 0
 
 

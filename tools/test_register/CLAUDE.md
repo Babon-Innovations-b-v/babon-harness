@@ -13,8 +13,8 @@ test, one function over parametrized cases:
 - **Never write a row by hand.** `python3 -m tools.test_register --new <module>
   --says "<invariant>"` writes the test file and its row together. A test with
   no row is refused by `--check`, at commit time and again in the deploy gate.
-- **Stdlib only, system `python3`.** `tools/gate_scope` imports this on the
-  deploy machine before any venv exists.
+- **Stdlib only, system `python3`.** `tools/gate_scope` imports it before any
+  venv exists.
 - **Absolute imports across the package boundary** (`from tools.test_register
   import ...`): pytest can load `gate_scope` as a top-level package, and a
   relative import then fails with "beyond top-level package".
@@ -22,11 +22,12 @@ test, one function over parametrized cases:
 - **`runs_when` is globs, never bare prefixes.** A row whose trigger matches
   everything runs on every commit, and `scope none` stops existing.
 - **Nothing here runs on a timer.** Replay runs on the rows a commit touches,
-  at commit time and again in the gate, so a finding always belongs to a commit.
+  so a finding always belongs to a commit.
 - **One test per module and per module group, one test function per file.**
-  `--check` refuses a second row for one level and a second `test_*` function in
-  a file. The debt lists in `_debt.py` only shrink, and a note excuses nothing:
-  a new check is a parametrized case of the level's one test.
+  `--check` refuses a level with no test, a second row for one level and a
+  second `test_*` function in a file. The debt lists in `_debt.py` only shrink
+  (`UNTESTED_DEBT`: delete the entry with the level's new test); a new check
+  is a parametrized case of the level's one test.
 - **Only the gate writes a row's `quarantined=` line.** The gate believes only
   a line on main that `GATE_AUTHOR_EMAIL` added; `--check --base --author`
   refuses one any other author adds. The owner (`people` name or login, else

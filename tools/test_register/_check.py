@@ -1,9 +1,10 @@
 """Is the register honest about the tree it describes?
 
 OWNS: the four ways a register and a tree can disagree, and the sentence each
-one is reported as. Two more are asked of their own modules and reported in the
-same list: a second test for one module or module group (`_second.py`), and a
-file holding more than one test function (`_functions.py`).
+one is reported as. Three more are asked of their own modules and reported in
+the same list: a module or module group with no test (`_coverage.py`), a second
+test for one (`_second.py`), and a file holding more than one test function
+(`_functions.py`).
 
 DOES NOT OWN: replaying a break (`_replay.py`), or deciding what to do about a
 problem (`.claude/hooks/pre-commit` refuses the commit, `infra/auto-deploy/steps/40-gate.sh`
@@ -34,6 +35,7 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
+from ._coverage import untested
 from ._functions import extra_tests
 from ._groups import module_groups
 from ._modules import modules_in
@@ -62,14 +64,19 @@ def check(
     rows: Sequence[Row],
     *,
     require_break: bool = True,
+    require_tests: bool = True,
     debt: Sequence[tuple[str, str]] = (),
     function_debt: Sequence[tuple[str, int]] = (),
+    untested_debt: Sequence[str] = (),
 ) -> tuple[str, ...]:
     """Every disagreement between the register and the tree, as sentences.
 
     `debt` and `function_debt` are the known lists over the one-test-a-level
     and one-function-a-file rules (`_debt.py` for the real register); each entry
     is excused, and one whose test has no row any more is a problem.
+    `require_tests` refuses a module or module group no row tests unless
+    `untested_debt` names it; a scratch register in a test that is not about
+    that rule turns it off.
     """
     problems: list[str] = []
     by_test = {row.test: row for row in rows}
@@ -90,6 +97,8 @@ def check(
         problems.extend(_break_problems(repo, row, require_break=require_break))
 
     modules = modules_in(repo)
+    if require_tests:
+        problems.extend(untested(rows, set(modules), set(module_groups(modules)), untested_debt))
     problems.extend(second_tests(rows, set(modules), set(module_groups(modules)), debt))
     problems.extend(extra_tests(repo, rows, function_debt))
     return tuple(problems)
