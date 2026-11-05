@@ -30,16 +30,9 @@ FUNCTION_DEBT: tuple[tuple[str, int], ...] = (
 #: gets its test loses its entry in the same commit; `--check` refuses an entry
 #: that excuses nothing. Only ever delete.
 UNTESTED_DEBT: tuple[str, ...] = (
-    "infra/gpu-jobs/gpu_jobs/cluster",
-    "infra/gpu-jobs/gpu_jobs/naming",
-    "infra/gpu-jobs/gpu_jobs/security",
-    "infra/observability/node_textfile",
-    "infra/observability/probes",
     "lib/dashkit/ai",
     "lib/dashkit/core/audit",
     "lib/dashkit/core/sync",
     "tools/test_register/birth",
-    "infra",
-    "infra/gpu-jobs",
     "lib",
 )

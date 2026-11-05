@@ -813,6 +813,71 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test="infra/gpu-jobs/gpu_jobs/cluster/tests/test_a_cluster_call_stale_on_its_token_reloads_the_config_and_retries_once_and_any_other_refusal_propagates.py",
+        pins=("infra/gpu-jobs/gpu_jobs/cluster",),
+        runs_when=(
+        "infra/gpu-jobs/gpu_jobs/cluster/**",
+        ),
+        proved_by=Break(
+            file="infra/gpu-jobs/gpu_jobs/cluster/k8s_call.py",
+            old="        if exc.status == 401:",
+            new="        if exc.status == 4010:",
+            why="a stale token is not recognised, so the stale-token case raises instead of retrying",
+        ),
+    ),
+    Row(
+        test="infra/gpu-jobs/gpu_jobs/naming/tests/test_a_job_name_keeps_its_suffix_past_the_truncation_and_never_ends_in_a_dash.py",
+        pins=("infra/gpu-jobs/gpu_jobs/naming",),
+        runs_when=(
+        "infra/gpu-jobs/gpu_jobs/naming/**",
+        ),
+        proved_by=Break(
+            file="infra/gpu-jobs/gpu_jobs/naming/job_name.py",
+            old='name = f"{prefix}-{seed[:seed_chars]}".lower().rstrip("-")',
+            new='name = f"{prefix}-{seed[:seed_chars]}".lower()',
+            why="a cut that ends on a dash keeps it, so the trailing-dash case fails",
+        ),
+    ),
+    Row(
+        test="infra/gpu-jobs/gpu_jobs/security/tests/test_a_gpu_worker_runs_as_uid_1000_with_every_capability_dropped_and_its_volumes_writable_by_its_group.py",
+        pins=("infra/gpu-jobs/gpu_jobs/security",),
+        runs_when=(
+        "infra/gpu-jobs/gpu_jobs/security/**",
+        ),
+        proved_by=Break(
+            file="infra/gpu-jobs/gpu_jobs/security/worker_security_context.py",
+            old='capabilities=client.V1Capabilities(drop=["ALL"]),',
+            new="capabilities=client.V1Capabilities(drop=[]),",
+            why="no capability is dropped, so the capabilities case fails",
+        ),
+    ),
+    Row(
+        test="infra/observability/node_textfile/tests/test_a_metric_is_pushed_as_one_group_replacement_when_a_pushgateway_is_set_and_written_whole_as_a_textfile_otherwise.py",
+        pins=("infra/observability/node_textfile",),
+        runs_when=(
+        "infra/observability/node_textfile/**",
+        ),
+        proved_by=Break(
+            file="infra/observability/node_textfile/textfile.py",
+            old='        method="PUT",',
+            new='        method="POST",',
+            why="the push is a POST that adds to the group, so the push case fails",
+        ),
+    ),
+    Row(
+        test="infra/observability/probes/tests/test_every_probe_target_is_one_https_url_per_subdomain_and_a_missing_domain_writes_nothing.py",
+        pins=("infra/observability/probes",),
+        runs_when=(
+        "infra/observability/probes/**",
+        ),
+        proved_by=Break(
+            file="infra/observability/probes/render_targets.py",
+            old="        if url not in urls:\n            urls.append(url)",
+            new="        urls.append(url)",
+            why="a repeated subdomain is probed twice, so the repeat case fails",
+        ),
+    ),
+    Row(
         test="apps/tests/test_minutes_the_notulen_app_sends_reach_the_assistants_route_and_come_back_as_the_issues_it_filed.py",
         pins=("apps/notulen/app/core/board", "apps/assistant/gates",),
         runs_when=(
@@ -851,6 +916,34 @@ ROWS: tuple[Row, ...] = (
             old="    update_event,\n    delete_event,\n):",
             new="    update_event,\n):",
             why="delete_event is left out of the registration, so the delete case fails",
+        ),
+    ),
+    Row(
+        test="infra/tests/test_the_gpu_pool_role_carries_the_taint_the_notulen_jobs_tolerate_and_its_pool_names_are_where_a_notulen_pod_may_land.py",
+        pins=("infra/cluster/pool_fallbacks", "infra/gpu-jobs/gpu_jobs/config",),
+        runs_when=(
+        "infra/cluster/pool_fallbacks/**",
+        "infra/gpu-jobs/gpu_jobs/config/**",
+        "config/harness.env.example",
+        ),
+        proved_by=Break(
+            file="infra/cluster/pool_fallbacks/_pools.py",
+            old='    return ((key, taint_value, "NoSchedule"),)',
+            new='    return ((key, taint_value, "NoExecute"),)',
+            why="the gpu pools carry an effect the pods do not tolerate, so the shipped-taint case fails",
+        ),
+    ),
+    Row(
+        test="infra/gpu-jobs/tests/test_the_gpu_jobs_distribution_ships_every_package_of_the_group.py",
+        pins=("infra/gpu-jobs",),
+        runs_when=(
+        "infra/gpu-jobs/**",
+        ),
+        proved_by=Break(
+            file="infra/gpu-jobs/pyproject.toml",
+            old='    "gpu_jobs.naming",\n',
+            new="",
+            why="gpu_jobs.naming is not shipped, so the naming case fails",
         ),
     ),
 )
