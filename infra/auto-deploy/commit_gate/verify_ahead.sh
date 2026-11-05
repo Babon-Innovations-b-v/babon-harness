@@ -41,7 +41,9 @@ _asked_to_skip() {
     grep -qxF -- "$sha" "$COMMIT_GATE_SKIP_FILE" 2>/dev/null
 }
 mkdir -p "$COMMIT_GATE_ROOT" 2>/dev/null || { log "cannot make $COMMIT_GATE_ROOT"; exit 0; }
-exec 8>"$COMMIT_GATE_ROOT/.verify-ahead.lock" || { log "cannot open the lock"; exit 0; }
+# dispatch.sh names a lock per pass slot (COMMIT_GATE_DRIVER_LOCK), so its
+# passes run side by side; a hand run meets slot 0's default.
+exec 8>"${COMMIT_GATE_DRIVER_LOCK:-$COMMIT_GATE_ROOT/.verify-ahead.lock}" || { log "cannot open the lock"; exit 0; }
 if ! flock -n 8; then
     log "another driver holds the lock; leaving the queue to it"
     exit 0

@@ -27,6 +27,13 @@ commits and never overwrites a file the cycle holds; a burst (`batch.sh`) is
 halved only while red until one commit is red on its own; and the lane in the
 cluster (`cluster_lane.sh`) takes no bookmark that is not a full sha.
 
+THE DRAIN. `dispatch.sh` gives a commit pushed while a pass runs a pass of its
+own at once when a second slot is free (`COMMIT_GATE_PASSES`), and makes it
+wait for the running pass when there is none; a commit a red batch took but
+never ran is taken again by the same drain. The shipped dispatcher runs over a
+real git repository with a stand-in `verify_ahead.sh` that records when it
+starts and ends each commit; the expected order is written from the rule.
+
 GUARDS. The verdict cache.
 """
 from __future__ import annotations
@@ -300,6 +307,80 @@ def _the_lane_takes_no_bookmark_that_is_not_a_full_sha(tmp_path: Path, value: st
     assert (written.read_text(encoding="utf-8").strip() == value) if taken else not written.exists()
 
 
+#: A stand-in for `verify_ahead.sh`, driven by FAKE_MODE. `push`: takes the
+#: oldest commit no pass took or answered, and while it runs commit A a commit
+#: B lands on main. `batch-red`: takes every such commit at once, and only the
+#: first gets a run, which is red, as `batch.sh` leaves a range whose first
+#: commit broke. Every pass appends what it did to $EVENTS, by commit subject.
+_FAKE_VERIFY_AHEAD = r"""#!/bin/bash
+set -u
+R="$COMMIT_GATE_REPO"
+name() { git -C "$R" log -1 --format=%s "$1"; }
+todo=()
+for sha in $(git -C "$R" rev-list --reverse "$(cat "$STATE_DIR/last-deployed-sha")..main"); do
+    grep -qxF "$sha" "$COMMIT_GATE_SKIP_FILE" 2>/dev/null && continue
+    [ -e "$STATE_DIR/gate-verdicts/$sha" ] && continue
+    todo+=("$sha")
+done
+[ "${#todo[@]}" -gt 0 ] || exit 0
+[ "$FAKE_MODE" = "push" ] && todo=("${todo[0]}")
+printf '%s\n' "${todo[@]}" > "$COMMIT_GATE_TAKEN_FILE.tmp"
+mv "$COMMIT_GATE_TAKEN_FILE.tmp" "$COMMIT_GATE_TAKEN_FILE"
+first="${todo[0]}"
+if [ "$FAKE_MODE" = "batch-red" ]; then
+    echo "take $(for sha in "${todo[@]}"; do name "$sha"; done | tr '\n' ' ' | sed 's/ $//')" >> "$EVENTS"
+    verdict=green; [ "${#todo[@]}" -gt 1 ] && verdict=red
+    [ "$verdict" = red ] && echo "$first 1" >> "$COMMIT_GATE_OUTCOME_FILE"
+else
+    echo "start $(name "$first")" >> "$EVENTS"
+    if [ "$(name "$first")" = A ]; then
+        git -C "$R" commit -q --allow-empty -m B
+        sleep 0.4
+    fi
+    echo "end $(name "$first")" >> "$EVENTS"
+    verdict=green
+fi
+echo "$first $verdict selected 1 none $(git -C "$R" rev-parse "$first^{tree}")" > "$STATE_DIR/gate-verdicts/$first"
+exit 0
+"""
+
+
+def _the_drain_gives_a_pushed_commit_a_pass_of_its_own_while_a_slot_is_free(
+        tmp_path: Path, mode: str, passes: int, events: list) -> None:
+    """What the shipped dispatcher made the stand-in do, in order, is what the rule says."""
+    repo = tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    _git(repo, "config", "user.email", "test@example.invalid")
+    _git(repo, "config", "user.name", "test")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "deployed")
+    bookmark = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "A")
+    if mode == "batch-red":
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "B")
+    drawer = tmp_path / "commit_gate"
+    drawer.mkdir()
+    (tmp_path / "steps").mkdir()
+    shutil.copy(_DRAWER / "dispatch.sh", drawer / "dispatch.sh")
+    shutil.copy(_DRAWER.parent / "steps" / "doors.sh", tmp_path / "steps" / "doors.sh")
+    (drawer / "verify_ahead.sh").write_text(_FAKE_VERIFY_AHEAD, encoding="utf-8")
+    state = tmp_path / "state"
+    (state / "gate-verdicts").mkdir(parents=True)
+    (state / "last-deployed-sha").write_text(bookmark + "\n", encoding="utf-8")
+    recorded = tmp_path / "events"
+    recorded.touch()
+    env = {
+        "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(tmp_path), "TMPDIR": str(tmp_path),
+        "HARNESS_ROOT": str(tmp_path / "harness"), "HARNESS_ENV_FILE": str(tmp_path / "none.env"),
+        "COMMIT_GATE_REPO": str(repo), "STATE_DIR": str(state), "COMMIT_GATE_LOG": str(tmp_path / "log"),
+        "COMMIT_GATE_ROOT": str(tmp_path / "root"), "COMMIT_GATE_BRANCH": "main",
+        "COMMIT_GATE_PASSES": str(passes), "COMMIT_GATE_POLL_SECONDS": "0.1",
+        "FAKE_MODE": mode, "EVENTS": str(recorded),
+    }
+    subprocess.run(["bash", str(drawer / "dispatch.sh")], env=env, capture_output=True,
+                   text=True, check=False, timeout=60)
+    assert recorded.read_text(encoding="utf-8").splitlines() == events
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -335,6 +416,14 @@ CASES = [
         pytest.param(["c1"], ["c5 base", "c2 base", "c1 -"], id="the red first commit is found alone"),
         pytest.param(["c5"], ["c5 base", "c2 base", "c5 c2", "c3 -", "c5 c3", "c4 -", "c5 -"],
                      id="the red newest commit is found alone"),
+    ]),
+    *_cases(_the_drain_gives_a_pushed_commit_a_pass_of_its_own_while_a_slot_is_free, ("mode", "passes", "events"), [
+        pytest.param("push", 2, ["start A", "start B", "end B", "end A"],
+                     id="a commit pushed while a pass runs gets its own pass at once"),
+        pytest.param("push", 1, ["start A", "end A", "start B", "end B"],
+                     id="with one pass slot it waits for the pass"),
+        pytest.param("batch-red", 1, ["take A B", "take B"],
+                     id="a commit a red batch never ran is taken again in the same drain"),
     ]),
     *_cases(_the_lane_takes_no_bookmark_that_is_not_a_full_sha, ("value", "taken"), [
         pytest.param("a" * 40, True, id="a full sha"),

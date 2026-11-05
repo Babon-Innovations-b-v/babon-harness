@@ -175,6 +175,20 @@ spec:
                 # the lane runs is seen.
                 - name: COMMIT_GATE_FETCH
                   value: "1"
+                # Up to three passes side by side: a commit pushed while a pass
+                # runs gets its own at once, on gate Jobs of its own. The drain
+                # keeps looking for COMMIT_GATE_IDLE_SECONDS once the queue is
+                # empty, so a push in that time costs no new lane pod.
+                - name: COMMIT_GATE_PASSES
+                  value: "3"
+                - name: COMMIT_GATE_POLL_SECONDS
+                  value: "2"
+                - name: COMMIT_GATE_IDLE_SECONDS
+                  value: "600"
+                # Every look that finds a new commit is a pass; the deadline is
+                # what ends a busy lane Job, not this ceiling.
+                - name: COMMIT_GATE_MAX_PASSES
+                  value: "400"
                 # Every commit gets a verdict of its own, the cycle's next one
                 # too, so the cycle can ship on them (deploy_loop trusted-head).
                 - name: COMMIT_GATE_TAKE_CYCLE_HEAD
