@@ -11,7 +11,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
-COPY infra/__init__.py infra/__init__.py
 COPY infra/observability/ infra/observability/
+# The send canary beats the assistant's signal-send heartbeat through these two.
+COPY apps/__init__.py apps/__init__.py
+COPY apps/assistant/__init__.py apps/assistant/__init__.py
+COPY apps/assistant/watch/__init__.py apps/assistant/watch/heartbeat.py apps/assistant/watch/door.py apps/assistant/watch/
 
 USER 65534:65534

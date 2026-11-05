@@ -1,0 +1,30 @@
+# What the assistant's chat relay CronJob (../assistant/schedule.yaml) may do
+# here: find the gateway pod and exec its `openclaw` CLI, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: assistant-chat-relay
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["gateway"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: assistant-chat-relay
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: assistant-chat-relay
+subjects:
+  - kind: ServiceAccount
+    name: assistant-chat-relay
+    namespace: assistant

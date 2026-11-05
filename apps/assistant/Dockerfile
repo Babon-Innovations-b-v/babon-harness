@@ -28,6 +28,10 @@ RUN pip install --no-cache-dir \
     psycopg2-binary \
     'mcp>=1.26,<2'
 
+# kubectl, for the chat relay CronJob that runs the gateway's CLI with
+# `kubectl exec` (infra/k8s/assistant/schedule.yaml). Static binary.
+COPY --from=alpine/k8s:1.35.8 /usr/bin/kubectl /usr/local/bin/kubectl
+
 COPY apps/__init__.py apps/__init__.py
 COPY apps/assistant/ apps/assistant/
 # What the assistant reads about the system it serves: the bible and the

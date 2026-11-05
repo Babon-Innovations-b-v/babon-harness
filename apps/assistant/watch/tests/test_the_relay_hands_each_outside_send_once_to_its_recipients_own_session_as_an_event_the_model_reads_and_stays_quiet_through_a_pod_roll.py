@@ -168,6 +168,16 @@ def _a_refused_system_event_holds_the_cursor_so_the_send_is_retried(tmp_path) ->
     cursor = (tmp_path / chat_relay.CURSOR_FILE).read_text().strip() if (tmp_path / chat_relay.CURSOR_FILE).exists() else "0"
     assert cursor == "0", f"the cursor moved to {cursor} past a send the model never got"
 
+def _a_set_exec_command_runs_the_cli_through_it(tmp_path, monkeypatch) -> None:
+    """In the cluster the gateway is a pod, so the CLI runs behind the exec command the job names."""
+    monkeypatch.setenv(chat_relay.EXEC_ENV, "kubectl -n gw exec deploy/gateway --")
+    gateway = _Gateway()
+    assert chat_relay.watch(tmp_path, _fetcher, lambda key, text: chat_relay.deliver(key, text, gateway)) == 0
+    assert gateway.calls, "the relay ran nothing"
+    for call in gateway.calls:
+        assert call[:6] == ["kubectl", "-n", "gw", "exec", "deploy/gateway", "--"], call
+        assert call[6] == "openclaw", call
+
 # From the chat relay stays quiet through a pod roll and still pages when the roll or the relay is stuck.
 
 from email.message import Message
@@ -402,6 +412,7 @@ def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=(
 
 
 CASES = [
+    *_cases(_a_set_exec_command_runs_the_cli_through_it),
     *_cases(_each_send_is_queued_for_the_model_and_injected_into_the_transcript),
     *_cases(_a_refused_system_event_holds_the_cursor_so_the_send_is_retried),
     *_cases(_a_pod_roll_pages_only_after_thirty_minutes),

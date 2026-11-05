@@ -41,7 +41,6 @@ RUN groupadd -g 1000 deploy \
     && git config --system safe.directory '*'
 
 WORKDIR /app
-COPY infra/__init__.py /app/infra/__init__.py
 COPY infra/deploy_loop /app/infra/deploy_loop
 USER deploy
 ENV HOME=/home/deploy PYTHONPATH=/app

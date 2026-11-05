@@ -4,6 +4,7 @@ namespace: assistant-gateway
 resources:
   - namespace.yaml
   - gateway.yaml
+  - chat-relay-rbac.yaml
 components:
   - ../vault-secret
   - ../system-pool

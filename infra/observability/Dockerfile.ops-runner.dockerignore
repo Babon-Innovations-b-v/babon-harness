@@ -1,8 +1,12 @@
 # Deny by default: the context is the repository root, and the image takes
 # only what its COPY lines name.
 **
-!infra/__init__.py
 !infra/observability/**
+!apps/__init__.py
+!apps/assistant/__init__.py
+!apps/assistant/watch/__init__.py
+!apps/assistant/watch/heartbeat.py
+!apps/assistant/watch/door.py
 infra/observability/tests/**
 infra/observability/systemd/**
 **/__pycache__/**

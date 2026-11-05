@@ -62,6 +62,9 @@ spec:
           env: &paging
             - name: ASSISTANT_URL
               value: http://assistant.assistant.svc.cluster.local:8000
+            # The same door, for the send canary's heartbeat (apps/assistant/watch/door.py).
+            - name: ASSISTANT_DOOR_URL
+              value: http://assistant.assistant.svc.cluster.local:8000
             - name: SIGNAL_CLI_URL
               value: http://signal-cli.assistant.svc.cluster.local:8080
             - name: RELAY_URL

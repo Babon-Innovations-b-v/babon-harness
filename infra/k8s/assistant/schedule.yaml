@@ -1,0 +1,278 @@
+# The assistant's scheduled passes, the compose host's timers in
+# apps/assistant/systemd/ as CronJobs: `python -m apps.assistant.watch <pass>`
+# in the door's own image, reaching the door at Service `assistant`. Each
+# schedule is its timer's, read in ASSISTANT_TIMEZONE. A pass's exit code is
+# its decision to page (apps/assistant/watch/run.py): non-zero leaves a failed
+# Job, which kube-state-metrics reports, where the compose host fired
+# harness-notify-failure@.
+#
+# The chat relay keeps its cursor on claim assistant-watch-state, mounted
+# where the pass writes it (/var/lib/harness), and runs the gateway's CLI with
+# `kubectl exec` (ASSISTANT_GATEWAY_EXEC; its Role is in ../assistant-gateway).
+# The claim audit writes its metric to an emptyDir: the week's report still
+# reaches Talk, but the cluster keeps no gauge of it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: assistant-watch-state
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: assistant-chat-relay
+---
+# The environment every pass shares, written once and named by each job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assistant-watch-env
+data:
+  ASSISTANT_DOOR_URL: http://assistant:8000
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  HOME: /tmp
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: assistant-patrol
+  labels:
+    app: assistant-patrol
+spec:
+  schedule: "0 9,13,17 * * *"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Never re-run: a trigger POSTed twice runs its pass twice. The failed
+      # Job is the record of the miss, and kube-state-metrics counts it.
+      backoffLimit: 0
+      activeDeadlineSeconds: 420
+      template:
+        metadata:
+          labels:
+            app: assistant-patrol
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: registry-pull
+          containers:
+            - name: watch
+              image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+              command: ["python", "-m", "apps.assistant.watch", "trigger", "/webhook/patrol"]
+              envFrom:
+                - configMapRef:
+                    name: assistant-watch-env
+                - secretRef:
+                    name: harness-keys
+                    optional: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: assistant-meeting-reminders
+  labels:
+    app: assistant-meeting-reminders
+spec:
+  schedule: "*/5 * * * *"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Never re-run: a trigger POSTed twice runs its pass twice. The failed
+      # Job is the record of the miss, and kube-state-metrics counts it.
+      backoffLimit: 0
+      activeDeadlineSeconds: 180
+      template:
+        metadata:
+          labels:
+            app: assistant-meeting-reminders
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: registry-pull
+          containers:
+            - name: watch
+              image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+              command: ["python", "-m", "apps.assistant.watch", "trigger", "/webhook/meeting-reminders"]
+              envFrom:
+                - configMapRef:
+                    name: assistant-watch-env
+                - secretRef:
+                    name: harness-keys
+                    optional: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: assistant-weekly-compact
+  labels:
+    app: assistant-weekly-compact
+spec:
+  schedule: "0 23 * * 0"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Never re-run: a trigger POSTed twice runs its pass twice. The failed
+      # Job is the record of the miss, and kube-state-metrics counts it.
+      backoffLimit: 0
+      activeDeadlineSeconds: 360
+      template:
+        metadata:
+          labels:
+            app: assistant-weekly-compact
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: registry-pull
+          containers:
+            - name: watch
+              image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+              command: ["python", "-m", "apps.assistant.watch", "trigger", "/webhook/compact"]
+              envFrom:
+                - configMapRef:
+                    name: assistant-watch-env
+                - secretRef:
+                    name: harness-keys
+                    optional: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: assistant-claim-audit
+  labels:
+    app: assistant-claim-audit
+spec:
+  schedule: "30 8 * * 1"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Never re-run: a trigger POSTed twice runs its pass twice. The failed
+      # Job is the record of the miss, and kube-state-metrics counts it.
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: assistant-claim-audit
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: registry-pull
+          containers:
+            - name: watch
+              image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+              command: ["python", "-m", "apps.assistant.watch", "claim-audit"]
+              envFrom:
+                - configMapRef:
+                    name: assistant-watch-env
+                - secretRef:
+                    name: harness-keys
+                    optional: true
+              env:
+                - name: OPENCLAW_CLAIM_AUDIT_TEXTFILE_DIR
+                  value: /textfile
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: textfile
+                  mountPath: /textfile
+          volumes:
+            - name: textfile
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: assistant-chat-relay
+  labels:
+    app: assistant-chat-relay
+spec:
+  schedule: "*/2 * * * *"
+  timeZone: ${ASSISTANT_TIMEZONE}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Never re-run: a trigger POSTed twice runs its pass twice. The failed
+      # Job is the record of the miss, and kube-state-metrics counts it.
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: assistant-chat-relay
+        spec:
+          serviceAccountName: assistant-chat-relay
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: registry-pull
+          containers:
+            - name: watch
+              image: ${IMAGE_REGISTRY}/assistant:set-by-deploy-loop
+              command: ["python", "-m", "apps.assistant.watch", "chat-relay"]
+              envFrom:
+                - configMapRef:
+                    name: assistant-watch-env
+                - secretRef:
+                    name: harness-keys
+                    optional: true
+              env:
+                - name: ASSISTANT_GATEWAY_EXEC
+                  value: kubectl -n assistant-gateway exec deploy/gateway -c gateway --
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: state
+                  mountPath: /var/lib/harness
+          volumes:
+            - name: state
+              persistentVolumeClaim:
+                claimName: assistant-watch-state

@@ -8,6 +8,7 @@ resources:
   - door.yaml
   - signal-cli.yaml
   - whisper.yaml
+  - schedule.yaml
 components:
   - ../vault-secret
   - ../system-pool

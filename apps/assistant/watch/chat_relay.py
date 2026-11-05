@@ -63,6 +63,7 @@ from apps.assistant.shared.zone import LOCAL_ZONE
 import json
 import logging
 import os
+import shlex
 import subprocess
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
@@ -80,6 +81,9 @@ FETCH_TIMEOUT_S = 30
 PAGE = 20
 
 CONTAINER = os.environ.get("ASSISTANT_GATEWAY_CONTAINER", "").strip() or "assistant-gateway"
+#: The command that runs a program inside the gateway, when it is not
+#: `docker exec <CONTAINER>`: in the cluster, `kubectl -n <ns> exec deploy/<name> --`.
+EXEC_ENV = "ASSISTANT_GATEWAY_EXEC"
 SHARED_SESSION_KEY = "agent:main:main"
 PEER_SESSION_PREFIX = "agent:main:signal:direct:"
 NO_SESSION = "session not found"
@@ -175,7 +179,8 @@ Runner = Callable[[Sequence[str]], subprocess.CompletedProcess]
 
 def _gateway_cli(what: str, args: Sequence[str], run: Runner | None) -> subprocess.CompletedProcess | None:
     """Run one `openclaw` command inside the gateway container, or None when it did not finish."""
-    argv = ["docker", "exec", CONTAINER, "openclaw", *args]
+    prefix = shlex.split(os.environ.get(EXEC_ENV, "")) or ["docker", "exec", CONTAINER]
+    argv = [*prefix, "openclaw", *args]
     runner = run or (lambda command: subprocess.run(
         command, capture_output=True, text=True, timeout=INJECT_TIMEOUT_S, check=False
     ))
