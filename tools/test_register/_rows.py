@@ -761,6 +761,73 @@ ROWS: tuple[Row, ...] = (
         ),
     ),
     Row(
+        test="apps/notulen/app/core/board/tests/test_minutes_reach_the_assistant_once_with_the_bearer_and_come_back_as_every_issue_opened_or_updated.py",
+        pins=("apps/notulen/app/core/board",),
+        runs_when=(
+        "apps/notulen/app/core/board/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/board/send_to_assistant.py",
+            old='touched = (answer.get("issues") or []) + (answer.get("updated") or [])',
+            new='touched = answer.get("issues") or []',
+            why="the updated issues are dropped from the answer, so the opened-and-updated case fails",
+        ),
+    ),
+    Row(
+        test="apps/notulen/app/core/minutes/tests/test_a_meeting_handed_to_the_gpu_skips_the_cpu_path_and_the_held_gpu_is_always_released.py",
+        pins=("apps/notulen/app/core/minutes",),
+        runs_when=(
+        "apps/notulen/app/core/minutes/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/minutes/process_job.py",
+            old="        # whichever way the dispatch went.\n        release_gpu(job_id)",
+            new="        # whichever way the dispatch went.\n        pass",
+            why="the held GPU is never released, so every case fails",
+        ),
+    ),
+    Row(
+        test="apps/notulen/app/core/publish/github/tests/test_minutes_land_in_a_month_folder_named_by_who_was_there_whatever_order_the_names_came_in.py",
+        pins=("apps/notulen/app/core/publish/github",),
+        runs_when=(
+        "apps/notulen/app/core/publish/github/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/publish/github/attendee_name.py",
+            old="    first_names = sorted({",
+            new="    first_names = list({",
+            why="the names keep their arrival order, so the two orderings of one pair name two folders",
+        ),
+    ),
+    Row(
+        test="apps/notulen/app/core/publish/retry/tests/test_minutes_waiting_past_the_threshold_page_once_an_hour_naming_the_jobs.py",
+        pins=("apps/notulen/app/core/publish/retry",),
+        runs_when=(
+        "apps/notulen/app/core/publish/retry/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/publish/retry/alert_stuck_committing.py",
+            old="    if current - _last_stuck_commit_alert_ts < _STUCK_COMMIT_ALERT_THROTTLE_SEC:",
+            new="    if False:",
+            why="the throttle is gone, so a second page inside the hour is sent",
+        ),
+    ),
+    Row(
+        test="apps/tests/test_minutes_the_notulen_app_sends_reach_the_assistants_route_and_come_back_as_the_issues_it_filed.py",
+        pins=("apps/notulen/app/core/board", "apps/assistant/gates",),
+        runs_when=(
+        "apps/notulen/app/core/board/**",
+        "apps/assistant/gates/**",
+        "apps/assistant/core/state/**",
+        ),
+        proved_by=Break(
+            file="apps/notulen/app/core/board/send_to_assistant.py",
+            old='"markdown": minutes_markdown,',
+            new='"text": minutes_markdown,',
+            why="the body names the minutes text, not markdown, so every filing case is refused as missing it",
+        ),
+    ),
+    Row(
         test="apps/assistant/core/tools/tests/test_the_catalogue_offers_the_kubectl_tools_exactly_when_a_cluster_is_configured.py",
         pins=("apps/assistant/core/tools", "apps/assistant/core/tools/kubectl",),
         runs_when=(
