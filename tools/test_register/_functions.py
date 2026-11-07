@@ -14,6 +14,10 @@ after check into it: one file of 41 functions is one row and passes. The rule
 exists to keep tests efficient and meaningful, so a module's checks are MERGED
 into one test of the answer that matters, never concatenated.
 
+A FILE OF NO TEST is refused too (2026-11-07 retro): a script-style file whose
+checks run only under `__main__`, or one that does not parse, has a row and a
+break and still runs nothing in the gate.
+
 WHO IS EXCUSED. A file on `FUNCTION_DEBT` up to the count it had the day the
 rule arrived, and nothing else; a note excuses nothing (`_second.py` says why).
 The debt only shrinks: a debt file that grows is refused, one that shrank must
@@ -73,7 +77,9 @@ def extra_tests(
             continue
         count = tests_in(path)
         owed = debt.get(row.test)
-        if owed is not None:
+        if count < 1:
+            problems.append(_none_collected(row.test, count))
+        elif owed is not None:
             problems.extend(_against_debt(row.test, count, owed))
         elif count > 1:
             problems.append(_refusal(row.test, count))
@@ -97,6 +103,15 @@ def _against_debt(test: str, count: int, owed: int) -> list[str]:
     if count < owed:
         return [f"{test} holds {count} tests now: lower its FUNCTION_DEBT entry from {owed} to {count}"]
     return []
+
+
+def _none_collected(test: str, count: int) -> str:
+    """A file pytest or node:test would collect nothing from: checks under `__main__`, or a file that does not parse."""
+    why = "does not parse" if count < 0 else "holds no test function or block"
+    return (
+        f"{test} {why}, so the gate collects nothing from it and its checks never run "
+        f"(a CHECKS list under `if __name__ == \"__main__\"` is not a test). Make them one test function."
+    )
 
 
 def _refusal(test: str, count: int) -> str:

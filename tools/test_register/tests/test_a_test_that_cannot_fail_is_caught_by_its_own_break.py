@@ -167,6 +167,7 @@ _HALF_SKIPPING_TEST = (
 _ONE, _TWO, _THREE = "pkg/alpha/tests/test_one.py", "pkg/alpha/tests/test_two.py", "pkg/tests/test_three.py"
 _TESTS = (_ONE, _TWO, _THREE)
 _PY_ONE = "def test_it() -> None:\n    assert True\n"
+_PY_MAIN_ONLY = "CHECKS = [lambda: True]\n\nif __name__ == \"__main__\":\n    assert all(check() for check in CHECKS)\n"
 _PY_THREE = _PY_ONE + "\n\ndef test_b() -> None:\n    assert True\n\n\nclass TestC:\n    def test_c(self) -> None:\n        assert True\n"
 
 #: Two more modules under `pkg/alpha`, which makes it a group as well as a module.
@@ -359,6 +360,8 @@ _CASES = {
         refusals=("pkg/alpha (group) would have 2 tests",)),
     "check: a file of three test functions, a class's method among them": _checks(
         (_row(_ONE, "pkg/alpha"),), {_ONE: _PY_THREE}, refusals=(f"{_ONE} holds 3 tests",)),
+    "check: a script-style file whose checks run only under __main__": _checks(
+        (_row(_ONE, "pkg/alpha"),), {_ONE: _PY_MAIN_ONLY}, refusals=(f"{_ONE} holds no test function",)),
     "check: a written reason does not excuse a second function": _checks(
         (_row(_ONE, "pkg/alpha", note="second test: two ports"),), {_ONE: _PY_THREE},
         refusals=(f"{_ONE} holds 3 tests",)),

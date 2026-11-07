@@ -29,6 +29,20 @@ WHAT IT WAS PROVED AGAINST. The register row's break makes `verdict` ignore the
 limit, so the 16-commit push goes through.
 
 GUARDS. The 2026-11-02 deploy jam: one session pushed 62 commits in an hour.
+
+A push to main is refused only for a red it adds.
+
+WHAT IT PINS. `.claude/hooks/local/push_gate.py`, which the same pre-push runs
+after the queue: only a push updating refs/heads/main is read, a register
+`--check` that said no (exit 1, no traceback) refuses while one that crashed
+does not, a touched test's pytest 1 to 3 refuses while 4, 5, 99 and 124 (no
+verdict) let the push go, a red main already had (the same failing file, the
+same register line) is not the push's, and the changed paths are the push's
+own diff against what main had. Answers are hand-written: a scratch repository
+with one commit changing `a.py` is the whole diff. Dropping `"Traceback" not in
+output` or reading pytest's 5 as a no fails this. GUARDS. The 2026-11-07
+retro: no gate ran on a push, and a module edited without its test reached the
+deploy gate unrun.
 """
 from __future__ import annotations
 
@@ -334,6 +348,45 @@ def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=(
     return rows
 
 
+_GATE_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "local" / "push_gate.py"
+
+
+def _a_push_is_refused_only_for_a_red_it_adds_to_main(tmp_path):
+    spec = importlib.util.spec_from_file_location("push_gate", _GATE_SCRIPT)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    zero, tip, had = "0" * 40, "b" * 40, "a" * 40
+    assert gate.pushed_tips([
+        f"HEAD {tip} refs/heads/main {had}\n",
+        f"HEAD {tip} refs/heads/other {had}\n",
+        f"(delete) {zero} refs/heads/main {had}\n",
+        "garbage\n",
+    ]) == [(tip, had)]
+    assert gate.refusal("register", 1, "x has no row in the register") is not None
+    assert gate.refusal("register", 1, "Traceback (most recent call last):") is None
+    assert gate.refusal("register", 0, "") is None
+    assert all(gate.refusal("touched tests", verdict, "1 failed") for verdict in (1, 2, 3))
+    assert not any(gate.refusal("touched tests", verdict, "") for verdict in (0, 4, 5, 99, 124))
+    pushed = "FAILED a/tests/test_a.py::test_a[x] - boom\nERROR b/tests/test_b.py - nope\n2 failed\n"
+    assert gate.failed_files(pushed) == {"a/tests/test_a.py", "b/tests/test_b.py"}
+    assert gate.new_reds("touched tests", pushed, "FAILED a/tests/test_a.py::test_a[y]\n") == {"b/tests/test_b.py"}
+    assert gate.new_reds("touched tests", pushed, pushed) == set()
+    assert gate.new_reds("register", "register: x\nregister: y\n", "register: x\n") == {"register: y"}
+    assert gate.new_reds("register", "register: x\n", "register: x\nregister: y\n") == set()
+    repo = tmp_path / "push"
+    repo.mkdir()
+    git = ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "-c", "core.hooksPath=/dev/null"]
+    subprocess.run([*git, "init", "-q"], check=True, env=gate._env())
+    for name in ("first.py", "a.py"):
+        (repo / name).write_text("x = 1\n", encoding="utf-8")
+        subprocess.run([*git, "add", name], check=True, env=gate._env())
+        subprocess.run([*git, "commit", "-qm", name], check=True, env=gate._env())
+    head, parent = (subprocess.run([*git, "rev-parse", ref], capture_output=True, text=True, check=True,
+                                   env=gate._env()).stdout.strip() for ref in ("HEAD", "HEAD^"))
+    assert gate.changed_paths(repo, head, parent) == ["a.py"]
+    assert gate.changed_paths(repo, head, zero) == []
+
+
 CASES = [
     *_cases(_bare_gh_issue_create_is_blocked),
     *_cases(_full_prd_create_passes),
@@ -364,6 +417,7 @@ CASES = [
     *_cases(_each_issue_type_has_its_own_maximum_body_length),
     *_cases(_a_second_issue_for_open_work_is_refused),
     *_cases(_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes),
+    *_cases(_a_push_is_refused_only_for_a_red_it_adds_to_main),
 ]
 
 
