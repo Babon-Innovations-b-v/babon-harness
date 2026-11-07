@@ -9,6 +9,10 @@ so this guard blocks, for a Bash call not run with ``run_in_background``:
 - a ``sleep`` over ``LONGEST_SLEEP`` seconds anywhere in the command;
 - a poll loop: ``while`` or ``until`` with a ``sleep`` in it, or a ``for`` loop sleeping over ``LONGEST_LOOP_SLEEP``
   seconds a round;
+- a ``tail`` that follows a file (``-f``, ``-F``, ``--follow``, ``tail --pid=<pid> -f /dev/null``), on its own or
+  piped into a ``grep -m1``: it ends only when it is killed, so it is a wait however it is wrapped;
+- a ``timeout`` over ``LONGEST_SLEEP`` seconds around a wait (a ``sleep``, ``wait``, ``inotifywait``, ``watch``,
+  ``gh run watch``, ``kubectl wait``, or a ``bash -c`` script that sleeps or waits);
 - a command the project names as long-running in ``.claude/project.json``, under ``wait_guard.foreground_runs``: each
   entry is ``{"run": <regex>, "unless": <regex or null>, "what": <how the block names it>}``, matched per command
   segment, and the entry's ``unless`` exempts a segment (a dry run, say). ``wait_guard.way_out`` adds the project's
@@ -33,6 +37,13 @@ _SLEEP = re.compile(r"(?<![\w.])sleep\s+(\d+(?:\.\d+)?)([smhd]?)\b")
 _MESSAGE = re.compile(r"""(?<![\w-])-m\s+(["'])[\s\S]*?(?<!\\)\1""")  # a commit message is words, not a wait
 _UNBOUNDED_LOOP = re.compile(r"(?<![\w.-])(while|until)\s[\s\S]*?(?<![\w.-])do\b([\s\S]*?)(?<![\w.-])done\b")
 _FOR_LOOP = re.compile(r"(?<![\w.-])for\s[\s\S]*?(?<![\w.-])do\b([\s\S]*?)(?<![\w.-])done\b")
+# The words a segment may start with before the command it runs: a `(`, NAME=value, nohup, stdbuf, a timeout.
+_LEAD = r"^\s*[({]?\s*(?:[A-Za-z_]\w*=\S*\s+|nohup\s+|stdbuf\s+(?:-\S+\s+)+|timeout\s+(?:-\S+\s+)*\S+\s+)*"
+_TAIL_FOLLOW = re.compile(_LEAD + r"tail\s(?:.*\s)?(?:-[A-Za-z]*[fF][A-Za-z]*|--follow(?:=\S*)?)(?=\s|$)")
+_TIMEOUT = re.compile(r"(?:^|[;&|\n(])\s*timeout\s+(?:-\S+\s+)*(\d+(?:\.\d+)?)([smhd]?)\s+([\s\S]*)")
+_WAITS = re.compile(r"^(?:sleep|wait|inotifywait|watch|gh\s+run\s+watch|kubectl\s+(?:\S+\s+)*?wait)\b")
+_SHELL_SCRIPT = re.compile(r"^(?:\S*/)?(?:ba|z|da)?sh\s+(?:-\S+\s+)*-c\b")
+_WAIT_IN_SCRIPT = re.compile(r"(?<![\w.-])(?:sleep|wait|inotifywait)\b")
 _SEGMENT = re.compile(r"&&|\|\||[;|\n]")
 _WAY_OUT = (
     "Never wait in the foreground (CLAUDE.md): start the command with run_in_background: true and go on with other "
@@ -82,6 +93,24 @@ def poll_loop(command):
     return None
 
 
+def tail_follow(command):
+    """A command segment that runs a tail following a file, or None."""
+    if any(_TAIL_FOLLOW.search(segment) for segment in _SEGMENT.split(command)):
+        return "a tail that follows a file"
+    return None
+
+
+def long_timeout(command):
+    """A timeout over LONGEST_SLEEP seconds around a wait, or None."""
+    for match in _TIMEOUT.finditer(command):
+        seconds = float(match.group(1)) * _UNITS[match.group(2)]
+        wrapped = match.group(3)
+        waits = _WAITS.match(wrapped) or (_SHELL_SCRIPT.match(wrapped) and _WAIT_IN_SCRIPT.search(wrapped))
+        if seconds > LONGEST_SLEEP and waits:
+            return f"a timeout of {seconds:g} s around a wait"
+    return None
+
+
 def long_run(command, runs):
     """A command segment that runs one of the project's long-running commands in the foreground, or None."""
     for segment in _SEGMENT.split(command):
@@ -95,8 +124,13 @@ def blocked(tool_input, settings):
     """Why this Bash call waits in the foreground, or None."""
     if tool_input.get("run_in_background"):
         return None
+    if "timeout_ms" in tool_input:
+        # The Monitor tool's script reaches this hook as a Bash call; its loop is
+        # the background watch this guard sends people to, never a foreground wait.
+        return None
     command = _MESSAGE.sub("-m ''", tool_input.get("command") or "")
-    return long_sleep(command) or poll_loop(command) or long_run(command, _foreground_runs(settings))
+    return (long_sleep(command) or poll_loop(command) or tail_follow(command) or long_timeout(command)
+            or long_run(command, _foreground_runs(settings)))
 
 
 def main():

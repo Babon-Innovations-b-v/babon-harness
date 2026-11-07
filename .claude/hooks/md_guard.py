@@ -60,7 +60,7 @@ _MESSAGE = (
 )
 
 _ASKED_FOR_MARKDOWN = re.compile(r"(?<![\w/])(?:\.md|md|markdown)\b", re.IGNORECASE)
-_RECENT_USER_MESSAGES = 20  # a yes has to hold through a working session, status messages included
+_RECENT_USER_MESSAGES = 20  # a yes holds through a working session; 3 lost one after a night of status messages
 
 
 def _approved() -> set[pathlib.Path]:
@@ -126,24 +126,43 @@ def _shell_candidates(command: str, base: pathlib.Path) -> list[tuple[str, pathl
     return found
 
 
-def _typed_messages(transcript: pathlib.Path) -> list[str]:
-    """The text of every message the person typed, oldest first; tool results are left out."""
-    texts: list[str] = []
-    for line in transcript.read_text(encoding="utf-8", errors="replace").splitlines():
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        message = entry.get("message") or {}
-        if entry.get("type") != "user" or message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            texts.append(content)
-        elif isinstance(content, list) and not any(
-                isinstance(part, dict) and part.get("type") == "tool_result" for part in content):
-            texts.append(" ".join(str(part.get("text", "")) for part in content if isinstance(part, dict)))
-    return texts
+def _typed_text(line: bytes) -> str | None:
+    """The text of one transcript line when it is a message the person typed, else None; tool results are left out."""
+    try:
+        entry = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(entry, dict) or entry.get("type") != "user":
+        return None
+    message = entry.get("message") or {}
+    if not isinstance(message, dict) or message.get("role") != "user":
+        return None
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list) and not any(
+            isinstance(part, dict) and part.get("type") == "tool_result" for part in content):
+        return " ".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    return None
+
+
+def _recent_typed_messages(transcript: pathlib.Path, count: int) -> list[str]:
+    """The last `count` messages the person typed, oldest first. Reads the transcript from its end in growing chunks,
+    never the whole file unless it must: a long session's transcript runs to hundreds of MB, and reading it all took
+    seconds a call, so the harness timed the guard out (failing open)."""
+    size = transcript.stat().st_size
+    chunk = 1 << 18
+    with transcript.open("rb") as stream:
+        while True:
+            start = max(0, size - chunk)
+            stream.seek(start)
+            lines = stream.read(size - start).split(b"\n")
+            if start:
+                lines = lines[1:]  # the first line is cut mid-way
+            texts = [text for text in map(_typed_text, filter(None, lines)) if text is not None]
+            if len(texts) >= count or not start:
+                return texts[-count:]
+            chunk *= 4
 
 
 def _user_asked_for_markdown(payload: dict) -> bool:
@@ -152,7 +171,7 @@ def _user_asked_for_markdown(payload: dict) -> bool:
     if not transcript:
         return False
     try:
-        recent = _typed_messages(pathlib.Path(transcript))[-_RECENT_USER_MESSAGES:]
+        recent = _recent_typed_messages(pathlib.Path(transcript), _RECENT_USER_MESSAGES)
     except OSError:
         return False
     return any(_ASKED_FOR_MARKDOWN.search(text) for text in recent)
@@ -163,8 +182,6 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return 0
-    if _user_asked_for_markdown(payload):
-        return 0
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input") or {}
     base = pathlib.Path(payload.get("cwd") or _REPO_ROOT)
@@ -173,12 +190,12 @@ def main() -> int:
         candidates = [(str(tool_input.get("file_path", "")), base)]
     elif tool == "Bash":
         candidates = _shell_candidates(str(tool_input.get("command", "")), base)
-    for raw, where in candidates:
-        offender = _blocked(raw, where)
-        if offender is not None:
-            print(_MESSAGE.format(path=offender.relative_to(_REPO_ROOT)), file=sys.stderr)
-            return 2
-    return 0
+    offenders = [offender for offender in (_blocked(raw, where) for raw, where in candidates) if offender is not None]
+    # The transcript is read only for a call that would create a new .md: every other call returns before it.
+    if not offenders or _user_asked_for_markdown(payload):
+        return 0
+    print(_MESSAGE.format(path=offenders[0].relative_to(_REPO_ROOT)), file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":
