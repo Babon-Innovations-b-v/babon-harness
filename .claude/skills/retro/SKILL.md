@@ -1,7 +1,6 @@
 ---
 name: retro
-description: "Conduct a retrospective on a coding session: suggest changes to the agent's environment (overlays, bible, CONTEXT.md, skills, hooks, issues) that would make future runs go better."
-disable-model-invocation: true
+description: "Conduct a retrospective on a coding session: suggest changes to the agent's environment (overlays, bible, CONTEXT.md, skills, hooks, issues) that would make future runs go better. Use when the user asks for a retro or retrospective, or says a session went badly and asks what to change."
 ---
 
 The user has asked for a **retrospective**. You are suggesting improvements to the coding agent's **environment** to improve future runs. Every improvement lands in a home that already exists; a new `.md` file needs the owner's yes first (root `CLAUDE.md`).

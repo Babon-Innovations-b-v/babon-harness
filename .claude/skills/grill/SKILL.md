@@ -7,17 +7,21 @@ description: Pocock grill-with-docs, adapted for this repo. You're on the team b
 
 The default grilling session, the [Pocock `grill-with-docs`](https://github.com/mattpocock/skills) pattern. Interview the plan against the existing domain model, sharpen terminology into `CONTEXT.md`, record real trade-offs as ADRs, all inline as decisions crystallise.
 
+## A question, not a task (check this first)
+
+A question that asks for facts rather than for work is not a task: a status question ("where does X stand", "did Z get finished"), a lookup ("what is our ..."), or an impact question ("what would I have to touch to ...", "what breaks if ..."). Skip orient, the dump check and the wayfinder check. Use the repo's index tools first (root `CLAUDE.md` names them; load them first if they arrive deferred), then ask the index first, using a ready-made query it lists when there is one; put every remaining search into ONE bundled shell call that prints a labelled report; read only the lines that call names. Check nothing the user did not ask about. Answer in this shape: the answer in two or three sentences, then at most five bullets of the things that matter most (what breaks, what to touch), then one line offering the full list. Never paste the full list unasked.
+
 ## Before asking anything (orient)
 
 1. Read the user's prompt.
-2. Read `.claude/soul.md` (voice + hard rules).
-3. Read root `CLAUDE.md`.
-4. Read `CONTEXT.md` (the canonical domain glossary, repo root).
-5. Decide which `docs/bible.md` chapters apply (chapter map in root `CLAUDE.md`). Read them.
-6. Decide which agents, overlays (`<area>/CLAUDE.md`), or MCP tools apply. Load them.
-7. Search GitHub for issues and PRDs that touch the prompt. Issues are where every effort is documented, so the relevant ones are half the context. Pull keywords and any `#N` from the prompt, run `search_issues` on the repo named in `.claude/project.json` (open **and** closed, since closed issues carry shipped history), and read the few that actually match: PRD body, current state, recent comments, linked sub-issues. Prefer open PRDs; a closed issue that already did this work is a signal to say so before grilling further. Skip only if the prompt is clearly issue-free (a greeting, a pure code question with no feature behind it).
-8. Read the owner's newest rules: `git log origin/main --since='3 days ago' --format='%h %s' | grep -i owner`, and the same for the owner's name as this repo's commits and rules write it (the owner handle is `owner` in `.claude/project.json`). A rule can land minutes before the work it governs. Any that touch the plan go into the plan, and into every agent brief written from it.
-9. Do the repo's own orient additions. Root `CLAUDE.md` may name extra steps for this point (index or search tools to load and ask before opening files, a topic-to-chapter map, which overlays bind a path). Do them here, before you ask anything; a step the repo names is part of orient, not an option.
+2. **Do the repo's own orient additions first, before you read or search anything else.** Root `CLAUDE.md` may name them (index or search tools to load and ask before opening files or calling `gh`, a topic-to-chapter map, which overlays bind a path). Load those tools now and put the prompt's own question to them; every later step that reads a file, a chapter or an issue goes through them first, and `gh`, `grep` or `cat` only fills what they cannot answer. A step the repo names is part of orient, not an option, and it comes first because a session follows this list in order: placed after the issue search, it was skipped. **Ask once per surface the prompt names, all in one turn**: each app, each system, each appendix of a pasted document (a consent form, a privacy promise) gets its own question to the index. One word for a many-sided prompt leaves the other surfaces dark, and their questions then go to the user instead.
+3. Read `.claude/soul.md` (voice + hard rules).
+4. Read root `CLAUDE.md`.
+5. Read `CONTEXT.md` (the canonical domain glossary, repo root).
+6. Decide which `docs/bible.md` chapters apply (chapter map in root `CLAUDE.md`). Read them.
+7. Decide which agents, overlays (`<area>/CLAUDE.md`), or MCP tools apply. Load them.
+8. Search GitHub for issues and PRDs that touch the prompt. Issues are where every effort is documented, so the relevant ones are half the context. Pull keywords and any `#N` from the prompt, ask the repo's index from step 2 when it holds issues, else run `search_issues` on the repo named in `.claude/project.json` (open **and** closed, since closed issues carry shipped history), and read the few that actually match: PRD body, current state, recent comments, linked sub-issues. Prefer open PRDs; a closed issue that already did this work is a signal to say so before grilling further. Skip only if the prompt is clearly issue-free (a greeting, a pure code question with no feature behind it).
+9. Read the owner's newest rules: `git log origin/main --since='3 days ago' --format='%h %s' | grep -i owner`, and the same for the owner's name as this repo's commits and rules write it (the owner handle is `owner` in `.claude/project.json`). A rule can land minutes before the work it governs. Any that touch the plan go into the plan, and into every agent brief written from it.
 10. If this conversation will **write files** and root `CLAUDE.md` asks writing sessions to work in their own worktree, enter one before writing anything: `EnterWorktree({name: "<slug>"})`, where the slug is `<issue-number>-<two-to-four-kebab-words>` when the session serves an issue and `x<mmdd>-<words>` when it does not. Then run `bash .claude/scripts/worktree-setup.sh` if the repo has one, and push from there with `git push origin HEAD:main`. A read-only session (a question, a review, a research pass) stays in the shared checkout.
 
 If a *fact* can be found by exploring the codebase or the backlog, look it up instead of asking. The *decisions* are the user's: put each one to them and wait for the answer. Consume-rule in [`.claude/skills/DOMAIN-AWARENESS.md`](../DOMAIN-AWARENESS.md): read `CONTEXT.md` + the relevant bible chapter + the area's ADRs first; flag ADR conflicts.
@@ -46,7 +50,7 @@ First reply = one sharp question, plus one line of context only if needed. No su
 
 ## During the session
 
-Interview the user relentlessly about every aspect of the plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies one-by-one. For each question, give your recommended answer. **Ask one question at a time, waiting for the answer before the next**, asking multiple questions at once is bewildering. Every reply stays short: one question, minimal context, then stop.
+Interview the user relentlessly about every aspect of the plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies one-by-one. For each question, give your recommended answer. **Check before you ask**: before a question goes to the user, put its subject to the repo's index (orient step 2) and search the code it names; ask only if neither settles it. A question whose answer is already built or already decided costs the user a round-trip and shows you did not look. **Ask one question at a time, waiting for the answer before the next**, asking multiple questions at once is bewildering. Every reply stays short: one question, minimal context, then stop.
 
 ### Challenge against the glossary
 

@@ -54,7 +54,7 @@ Before you publish, check the two mandatory fields: a clear **Acceptance** list 
 
 **First: loose, or under a parent PRD?** Does this work belong under an existing parent PRD (a follow-up, or a larger effort grill named)? Then it is **not a loose top-level PRD**: skip the `PRD` label and nest it as a native sub-issue, see 4b. Only a standalone, top-level effort gets the `PRD` label. In doubt: if it has a clear parent PRD, you nest.
 
-**A new PRD is a new root, so check the roots first.** The backlog is a tree: PRD-labelled roots on top, their children carrying `bug`/`enhancement`, three layers at most, and one root per subject. A session that reads its own prompt as a new workstream opens a second root beside one that is already open, so before you publish:
+**A new PRD is a new root, so check the roots first.** The backlog is a tree: PRD-labelled roots on top, their children carrying `bug`/`enhancement`, as many layers deep as the work needs, and one root per subject. A session that reads its own prompt as a new workstream opens a second root beside one that is already open, so before you publish:
 
 ```bash
 gh issue list --repo $REPO --label PRD --state open --limit 60
@@ -154,6 +154,13 @@ gh api graphql -f query='query($o:String!,$n:String!,$i:Int!){repository(owner:$
 ```
 
 This must return exactly the parent number from `## Parent`. If it is `null` or a different number, the sub-issue POST did not succeed or you pointed at the wrong parent: fix it now, do not let it float as a loose card.
+
+**A full parent.** GitHub caps a parent at 100 sub-issues and the POST then answers HTTP 422, "cannot have more than 100 sub-issues". A long-lived backlog PRD reaches that with mostly closed children. Ask the owner in one line whether to unlink the closed ones (they stay closed with their history; only the link goes), and on a yes unlink them, link the new issue, and say so in a comment on the parent:
+
+```bash
+gh api "repos/$REPO/issues/<parent-PRD>/sub_issues?per_page=100" --jq '.[] | select(.state=="closed") | .id' |
+  while read -r id; do gh api --method DELETE repos/$REPO/issues/<parent-PRD>/sub_issue -F sub_issue_id="$id" >/dev/null; done
+```
 
 ### 5. Track under the PRD
 
