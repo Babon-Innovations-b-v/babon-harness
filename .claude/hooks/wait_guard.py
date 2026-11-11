@@ -47,7 +47,10 @@ _WAIT_IN_SCRIPT = re.compile(r"(?<![\w.-])(?:sleep|wait|inotifywait)\b")
 _SEGMENT = re.compile(r"&&|\|\||[;|\n]")
 _WAY_OUT = (
     "Never wait in the foreground (CLAUDE.md): start the command with run_in_background: true and go on with other "
-    "work or end your turn; the completion notice wakes you. To wait for a condition, use the Monitor tool."
+    "work or end your turn; the completion notice wakes you. To wait for a condition, put the until-loop in that "
+    "background command: one notice when it ends. Some Claude Code versions hand a Monitor script to this hook "
+    "as plain Bash, so its sleep loops and tail -f can be blocked too; Monitor always suits kubectl logs -f or a "
+    "WebSocket."
 )
 
 
@@ -125,8 +128,11 @@ def blocked(tool_input, settings):
     if tool_input.get("run_in_background"):
         return None
     if "timeout_ms" in tool_input:
-        # The Monitor tool's script reaches this hook as a Bash call; its loop is
-        # the background watch this guard sends people to, never a foreground wait.
+        # A Monitor script that arrives carrying its timeout is the background
+        # watch this guard sends people to. Not every Claude Code sends it: on
+        # 2026-11-08 a Monitor call arrived with only `command` and
+        # `description`, and the transcript records the call only after its
+        # hooks run, so there such a loop is blocked; the way-out message says so.
         return None
     command = _MESSAGE.sub("-m ''", tool_input.get("command") or "")
     return (long_sleep(command) or poll_loop(command) or tail_follow(command) or long_timeout(command)

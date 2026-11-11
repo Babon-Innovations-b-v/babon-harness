@@ -18,11 +18,9 @@ Rules 1, 4, 6 and 7 (plain language, no preamble, warmth, English) stay
 requests. A word list cannot tell jargon from the right technical term, and a
 guard that looks like protection and is not is worse than none.
 
-It blocks at most ONCE per stop, and a re-sent reply goes through. That is
-deliberate and its shape is nudge, then allow. A long
-answer is sometimes the right answer, and a guard that can veto one would be a
-guard that suppresses a report. What it buys is that the length is chosen
-rather than drifted into.
+It blocks at most twice per turn (MAX_BLOCKS), so a turn can always end. Its message asks
+for the short rewrite outright: an earlier wording let a session "keep it if
+deliberate", and sessions re-sent the same long reply.
 
 FAILURE POLICY: fail-open. Anything unreadable, any unexpected shape, any
 exception exits 0 with no output, which ends the turn normally. A session that
@@ -38,8 +36,10 @@ import sys
 EM_DASH = "\u2014"
 
 #: Over this many words, a reply is long enough to be worth one second look.
-#: 120 is several times the typical length of a short answer, so it stops only
-#: the tail a reader would call too long: the tail is the failure, not the norm.
+#: Measured, not guessed: across 63 replies to a short question in one session,
+#: the median was 23 words and the tail ran 356, 187, 162, 157, 143, 137, 129.
+#: 120 is over five times the median and stops 8 of the 63, which are the eight
+#: a reader would call too long, so the tail is the failure and not the norm.
 LONG_REPLY_WORDS = 120
 
 #: At or under this, the question is short, so a long answer is answering
@@ -58,9 +58,44 @@ NOT_A_QUESTION = re.compile(r"^\s*<(task-notification|system-reminder|local-comm
 ASKED_FOR_DETAIL = re.compile(
     r"\b(explain|walk me through|in detail|deep dive|full (report|picture|"
     r"breakdown)|everything|elaborate|why does|how does|write up|document|"
-    r"summar(y|ise|ize) of)\b",
+    r"summar(y|ise|ize) of|list (me )?(all|every)|all the|full list|every one)\b",
     re.IGNORECASE,
 )
+
+
+#: How many times one turn may be sent back before its reply goes through.
+MAX_BLOCKS = 2
+
+
+def _counter_path(payload):
+    """The temp file that counts this session's blocks in the current turn."""
+    import tempfile
+    session = re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get("session_id", "none")))
+    return os.path.join(tempfile.gettempdir(), f"soul-guard-{session}.count")
+
+
+def _blocks_so_far(payload):
+    """How many times this turn has already been sent back."""
+    try:
+        with open(_counter_path(payload), encoding="utf-8") as handle:
+            return int(handle.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def _count_block(payload):
+    """Record one more block for this turn; a new turn starts from zero."""
+    count = _blocks_so_far(payload) + 1 if payload.get("stop_hook_active") else 1
+    with open(_counter_path(payload), "w", encoding="utf-8") as handle:
+        handle.write(str(count))
+
+
+def _reset_blocks(payload):
+    """A reply that passes ends the turn's count."""
+    try:
+        os.remove(_counter_path(payload))
+    except OSError:
+        pass
 
 
 def last_turns(transcript_path):
@@ -139,9 +174,10 @@ def main():
     if os.environ.get("SOUL_GUARD", "1") == "0":
         return
     payload = json.loads(sys.stdin.read())
-    # One block per stop. Without this the rewrite is checked again and a
-    # reply that cannot satisfy the guard would never reach the reader.
-    if payload.get("stop_hook_active"):
+    # At most MAX_BLOCKS blocks per turn, counted per session in a temp file,
+    # so a rewrite that is still too long is sent back once more, and a turn
+    # can always end.
+    if payload.get("stop_hook_active") and _blocks_so_far(payload) >= MAX_BLOCKS:
         return
     transcript = payload.get("transcript_path")
     if not transcript:
@@ -151,16 +187,18 @@ def main():
         return
     found = broken_rules(assistant, user)
     if not found:
+        _reset_blocks(payload)
         return
+    _count_block(payload)
     print(json.dumps({
         "decision": "block",
         "reason": (
             "Your reply breaks a soul rule that is checked rather than asked "
             "for (.claude/soul.md):\n"
             + "\n".join(f"  {item}" for item in found)
-            + "\nRewrite it and answer again. This is said once per turn, so a "
-            "reply you send again goes through: if the length is deliberate, "
-            "keep it."
+            + "\nRewrite it now: the plain answer in a few lines, under "
+            f"{LONG_REPLY_WORDS} words, and at most one line offering detail. "
+            "Sending the same reply again is not an answer to this."
         ),
     }))
 

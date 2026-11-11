@@ -14,7 +14,7 @@ Reads the Claude Code PreToolUse payload on stdin (``{tool_name, tool_input, ...
    numbers rot within hours, code refs like ``file.py:123`` stay allowed), a cited path under one of the project's
    ``cited_paths_must_exist`` prefixes that does not exist in the tree, and an issue in an area listed under
    ``area_first_line`` that lacks the bold line that area requires.
-4. A creation that breaks the issue tree's shape. The board is a forest: PRD-labelled roots, three layers at most,
+4. A creation that breaks the issue tree's shape. The board is a forest: PRD-labelled roots, as deep as the work needs,
    one root per subject. A ``PRD`` label together with a ``## Parent`` section is refused, and a new PRD must carry a
    ``## Root check`` section that names any open root already covering its subject. See ``_check_prd_root``.
 
@@ -154,9 +154,9 @@ def _check_issue_body(body, labels, config):
     _check_area_first_line(body, labels, config)
 
 
-# --- the issue tree: PRDs on top, three layers deep, one root per subject ----
+# --- the issue tree: PRDs on top, as deep as the work needs, one root per subject ----
 #
-# A root carries the PRD label, its children carry bug/enhancement, and nothing goes deeper than three layers. Two
+# A root carries the PRD label, its children carry bug/enhancement, at any depth. Two
 # mistakes break that shape and neither shows until someone reads the board: a second root for a subject that
 # already has one, and a PRD label on a nested issue. Both are made at creation, so both are checked here.
 

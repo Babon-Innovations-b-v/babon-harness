@@ -304,6 +304,8 @@ def _a_second_issue_for_open_work_is_refused(tmp_path, monkeypatch):
 # From a push waits while the deploy queue is long and an unblocking commit goes.
 
 import importlib.util
+import shutil
+import time
 
 
 _SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "local" / "push_queue.py"
@@ -387,6 +389,94 @@ def _a_push_is_refused_only_for_a_red_it_adds_to_main(tmp_path):
     assert gate.changed_paths(repo, head, zero) == []
 
 
+_HOOKS = pathlib.Path(__file__).resolve().parent.parent
+_GIT_ENV = {"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": "/nonexistent", "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+
+def _git(folder, *args):
+    """git's stdout for `args` in `folder`, failing the test when git fails."""
+    return subprocess.run(["git", "-C", str(folder), "-c", "core.hooksPath=/dev/null", *args], check=True,
+                          capture_output=True, text=True, env=_GIT_ENV).stdout.strip()
+
+
+def _capped_repo(folder, origin):
+    """A scratch repo at `folder` (remote `origin`) holding the shared pre-push and push_cap.py, its own pre-push a
+    stand-in that refuses when LOCAL_REFUSES is 1; its shared pre-push's path."""
+    hooks = folder / ".claude/hooks"
+    (hooks / "local").mkdir(parents=True)
+    _git(folder, "init", "-q")
+    _git(folder, "remote", "add", "origin", origin)
+    for name in ("pre-push", "push_cap.py"):
+        shutil.copy(_HOOKS / name, hooks / name)
+    own = hooks / "local/pre-push"
+    own.write_text('#!/usr/bin/env bash\ncat >/dev/null\n[ "${LOCAL_REFUSES:-0}" != 1 ]\n')
+    own.chmod(0o755)
+    return hooks / "pre-push"
+
+
+def _the_push_cap_holds_the_days_limit_over_every_repository(tmp_path):
+    """A day's pushes to main over every repository sharing one cap config stop at its limit, the latest limit
+    started wins, a push the repository's own hook refused or the remote refused gives its slot back, other
+    branches, tags and a release-only repository pass uncounted, no config is no cap and an unreadable one refuses."""
+    first, second = _capped_repo(tmp_path / "one", "git@example.com:a/one.git"), _capped_repo(tmp_path / "two", "x/two")
+    config = tmp_path / "cap.json"
+
+    def push(hook, branch="main", refuses=False, cap=config, ref="refs/heads/"):
+        line = f"{ref}{branch} {'1' * 40} {ref}{branch} {'2' * 40}\n"
+        done = subprocess.run(["bash", str(hook), "origin", "x"], input=line, capture_output=True, text=True,
+                              cwd=hook.parents[2], env=dict(_GIT_ENV, HARNESS_PUSH_CAP=str(cap),
+                                                             LOCAL_REFUSES="1" if refuses else "0"))
+        return done.returncode, done.stderr
+
+    # 6 a day from long ago, 4 from a day that has not come: 6 holds, over both repositories.
+    config.write_text(json.dumps({"limits": [{"from": "2000-01-01", "per_day": 6}, {"from": "2999-01-01", "per_day": 4}],
+                                  "ledger": str(tmp_path / "ledger.json")}))
+    answers = [push(hook) for hook in (first, second, first, second, first)]
+    assert all(code == 0 for code, _ in answers), answers
+    assert push(first, refuses=True)[0] == 1, "the repository's own hook still refuses"
+    assert push(second, branch="feature")[0] == 0, "another branch is no push to main"
+    assert push(second)[0] == 0, "the refused push gave its slot back: this is the 6th"
+    code, said = push(first)
+    assert code == 1 and "reached today's limit of 6" in said and "a/one.git" in said and "x/two" in said, said
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    config.write_text(json.dumps({"limits": [{"from": "2000-01-01", "per_day": 6}, {"from": today, "per_day": 4}],
+                                  "ledger": str(tmp_path / "later.json")}))
+    assert [push(first)[0] for _ in range(5)] == [0, 0, 0, 0, 1], "the latest started limit wins"
+    assert push(second, ref="refs/tags/", branch="v1")[0] == 0, "a release tag is no push to main"
+    later = {"limits": [{"from": "2000-01-01", "per_day": 4}], "ledger": str(tmp_path / "later.json")}
+    config.write_text(json.dumps(dict(later, uncounted=["one"])))
+    assert [push(first)[0] for _ in range(3)] == [0, 0, 0], "one is release-only: its pushes pass"
+    code, said = push(second)
+    assert code == 1 and "reached today's limit of 4" in said and said.count("a/one.git") == 4, said
+    config.write_text(json.dumps(dict(later, uncounted=["x/two"])))
+    assert push(second)[0] == 0 and push(first)[0] == 1, "two by its whole url passes; one is counted again"
+    assert push(first, cap=tmp_path / "none.json")[0] == 0, "no config, no cap"
+    # A push the remote refused (its commit not on origin's main) gives its slot back at the next claim from its
+    # repository; one the remote took, one still on its way and another repository's keep theirs.
+    one = first.parents[2]
+    _git(one, "commit", "-q", "--allow-empty", "-m", "taken")
+    taken = _git(one, "rev-parse", "HEAD")
+    _git(one, "update-ref", "refs/remotes/origin/main", taken)
+    _git(one, "commit", "-q", "--allow-empty", "-m", "refused")
+    refused = _git(one, "rev-parse", "HEAD")
+    old, recent = "2000-01-01T00:00:00+00:00", time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+    entries = [{"repo": "git@example.com:a/one.git", "sha": taken, "at": old},
+               {"repo": "git@example.com:a/one.git", "sha": refused, "at": old},
+               {"repo": "git@example.com:a/one.git", "sha": refused, "at": recent},
+               {"repo": "x/two", "sha": refused, "at": old}]
+    (tmp_path / "refused.json").write_text(json.dumps({today: entries}))
+    config.write_text(json.dumps({"limits": [{"from": "2000-01-01", "per_day": 4}],
+                                  "ledger": str(tmp_path / "refused.json")}))
+    assert push(first)[0] == 0, "the refused push's slot came back: this is the 4th"
+    kept = json.loads((tmp_path / "refused.json").read_text())[today]
+    assert [entry["at"] for entry in kept if entry["sha"] == refused] == [recent, old], kept
+    assert push(first)[0] == 1, "the remote's own push, the recent one and two's hold their slots"
+    config.write_text("{not json")
+    code, said = push(first)
+    assert code == 1 and "cannot be read" in said, said
+
+
 CASES = [
     *_cases(_bare_gh_issue_create_is_blocked),
     *_cases(_full_prd_create_passes),
@@ -418,6 +508,7 @@ CASES = [
     *_cases(_a_second_issue_for_open_work_is_refused),
     *_cases(_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes),
     *_cases(_a_push_is_refused_only_for_a_red_it_adds_to_main),
+    *_cases(_the_push_cap_holds_the_days_limit_over_every_repository),
 ]
 
 

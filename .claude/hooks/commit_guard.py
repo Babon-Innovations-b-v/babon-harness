@@ -105,7 +105,7 @@ def bypass_in(tokens):
 
 def _resolve_dir(raw, base):
     """`raw` as a directory, relative to `base`, or `base` when it is not one."""
-    candidate = Path(raw)
+    candidate = Path(raw).expanduser()  # shlex keeps `~` literal; the shell would not
     if not candidate.is_absolute():
         candidate = base / candidate
     try:
