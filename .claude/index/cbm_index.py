@@ -227,8 +227,13 @@ def index_into(binary: pathlib.Path, root: pathlib.Path, project: str,
     """The tool's index of ``root``, written into the cache ``env`` names."""
     for key in ("watcher_enabled", "auto_watch"):
         run_step([str(binary), "config", "set", key, "false"], env)
-    done = run_step([str(binary), "cli", "--quiet", "index_repository",
-                     "--repo-path", str(root), "--name", project], env)
+    command = [str(binary), "cli", "--quiet", "index_repository",
+               "--repo-path", str(root), "--name", project]
+    done = run_step(command, env)
+    if done.returncode != 0 and "aborted_previous_preserved" in tail_of(done):
+        # The tool aborts when files change under a run (a pull mid-build) and
+        # says to retry; one retry covers it, a second abort is reported.
+        done = run_step(command, env)
     if done.returncode == 0:
         return
     cause = tail_of(done)

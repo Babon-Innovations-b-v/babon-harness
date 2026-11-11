@@ -10,7 +10,8 @@ already on origin/main). Dirty orphans are reported, never deleted, so no work i
 worktree (a finished agent's, or one made by hand) is reaped only when it is clean and merged AND
 untouched for IDLE_HOURS, because finished agents leave many of them behind: they fill the disk, and
 they sit inside the repository tree, where a check that walks the tree finds files from other
-branches. A dirty or unmerged unlocked one is never touched.
+branches. A dirty or unmerged unlocked one is never touched, and neither is a worktree some live
+process uses (its working folder, an open or mapped file, or its command line names a path inside it).
 
 Run standalone (`python3 .claude/scripts/worktree-reap.py`) or via the SessionStart hook. Exit
 status is always 0 so it never blocks a session.
@@ -24,6 +25,7 @@ from pathlib import Path
 
 LOCK_PID_RE = re.compile(r"pid (\d+)")
 IDLE_HOURS = 6
+PROC = Path("/proc")
 
 
 def git_out(args, cwd=None):
@@ -94,6 +96,49 @@ def remove_worktree(entry, worktrees_dir):
     return True
 
 
+def process_paths(pid_dir):
+    """Every path one process holds: its working folder, program, root, open and mapped files, command-line words."""
+    paths = []
+    for link in ("cwd", "exe", "root"):
+        try:
+            paths.append(os.readlink(pid_dir / link))
+        except OSError:  # gone, or another user's: it holds nothing we can see
+            pass
+    try:
+        paths.extend(os.readlink(fd) for fd in (pid_dir / "fd").iterdir())
+    except OSError:
+        pass
+    try:
+        paths.extend(line.split(None, 5)[5] for line in (pid_dir / "maps").read_text().splitlines()
+                     if len(line.split(None, 5)) == 6)
+    except OSError:
+        pass
+    try:
+        paths.extend((pid_dir / "cmdline").read_bytes().decode(errors="replace").split("\0"))
+    except OSError:
+        pass
+    return paths
+
+
+def worktree_names(paths, worktrees_dir):
+    """The worktree names under worktrees_dir that these paths fall in (any text containing such a path counts)."""
+    marker = f"{worktrees_dir}/"
+    names = set()
+    for path in paths:
+        start = path.find(marker)
+        if start >= 0:
+            names.add(re.split(r"[/\s]", path[start + len(marker):], maxsplit=1)[0])
+    return names - {""}
+
+
+def held_by_processes(worktrees_dir):
+    """Names of the worktrees some live process uses (see process_paths)."""
+    paths = []
+    for pid_dir in PROC.glob("[0-9]*"):
+        paths.extend(process_paths(pid_dir))
+    return worktree_names(paths, worktrees_dir)
+
+
 def reap():
     """Names of the worktrees reaped, and of the stale-locked ones kept because of their work."""
     common_dir = git_common_dir()
@@ -104,8 +149,10 @@ def reap():
         return [], []
     self_root = Path(__file__).resolve().parents[2]
     reaped, kept_dirty = [], []
+    worktrees_dir = worktrees_dir.resolve()
+    in_use = held_by_processes(worktrees_dir)
     for entry in sorted(worktrees_dir.iterdir()):
-        if not entry.is_dir() or entry == self_root:
+        if not entry.is_dir() or entry == self_root or entry.name in in_use:
             continue
         pid = lock_pid(common_dir, entry.name)
         if pid is None:

@@ -28,6 +28,7 @@ The break that turns each test red (applied once each, seen red, reverted):
 - test_an_unstamped_or_outdated_index_is_built_before_it_is_asked: in `cbm_index.ready`, the condition made
   `if not stamp:` (an index of an older commit is answered from).
 - test_a_build_that_wrote_no_rows_is_never_stamped_or_placed: the `row_count` refusal in `_assembled` deleted.
+- test_a_build_the_tool_aborted_is_retried_once: the `aborted_previous_preserved` retry in `index_into` deleted.
 - test_a_failed_question_answers_its_cause_and_the_fix: in `server._called`, `"isError": False`.
 - test_a_malformed_call_is_answered_and_the_server_keeps_reading: the `isinstance(arguments, dict)` refusal in
   `server.answer` deleted (a string as arguments raised and ended the server).
@@ -200,6 +201,26 @@ def _an_unstamped_or_outdated_index_is_built_before_it_is_asked(
     moved = cbm_index.ready(repo)
     assert moved.get("rebuilt")
     assert cbm_index.stamp_of(pathlib.Path(moved["path"]), moved["project"]) == _git(repo, "rev-parse", "HEAD")
+
+
+def _a_build_the_tool_aborted_is_retried_once(tmp_path: pathlib.Path) -> None:
+    """A build the tool aborted mid-run (files changed under it) is retried once; a second abort is reported."""
+    for aborts, finishes in ((1, True), (2, False)):
+        runs = tmp_path / f"runs-{aborts}"
+        tool = tmp_path / f"tool-{aborts}" / "codebase-memory-mcp"
+        tool.parent.mkdir()
+        tool.write_text(f"""#!/bin/sh
+[ "$2" = index_repository ] || [ "$3" = index_repository ] || exit 0
+echo run >> {runs}
+if [ "$(wc -l < {runs})" -le {aborts} ]; then echo 'error: aborted_previous_preserved, retry' >&2; exit 1; fi
+""")
+        tool.chmod(0o755)
+        if finishes:
+            cbm_index.index_into(tool, tmp_path, "p", dict(os.environ))
+        else:
+            with pytest.raises(cbm_index.BuildError, match="aborted_previous_preserved"):
+                cbm_index.index_into(tool, tmp_path, "p", dict(os.environ))
+        assert len(runs.read_text().splitlines()) == 2, aborts
 
 
 def _a_build_that_wrote_no_rows_is_never_stamped_or_placed(
@@ -547,6 +568,7 @@ CASES = [
     *_cases(_the_binary_lives_under_the_cache_by_version),
     *_cases(_an_unstamped_or_outdated_index_is_built_before_it_is_asked),
     *_cases(_a_build_that_wrote_no_rows_is_never_stamped_or_placed),
+    *_cases(_a_build_the_tool_aborted_is_retried_once),
     *_cases(_a_failed_question_answers_its_cause_and_the_fix),
     *_cases(_a_malformed_call_is_answered_and_the_server_keeps_reading),
     *_cases(_an_issue_is_answered_by_number_with_its_parent_even_after_a_rebuild_dropped_the_rows),

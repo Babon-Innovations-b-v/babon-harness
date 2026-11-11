@@ -64,6 +64,34 @@ def _the_harness_code_under_dot_claude_runs_everything():
         assert gate_scope.plan({path}, "")[0] == "full", path
 
 
+_REAP_SPEC = importlib.util.spec_from_file_location(
+    "worktree_reap", pathlib.Path(__file__).resolve().parent.parent / "worktree-reap.py"
+)
+
+
+worktree_reap = importlib.util.module_from_spec(_REAP_SPEC)
+
+
+_REAP_SPEC.loader.exec_module(worktree_reap)
+
+
+def _a_worktree_a_live_process_uses_is_held_from_the_reaper(tmp_path, monkeypatch):
+    """A process whose working folder, open file or command line is inside a worktree holds it; others hold none."""
+    worktrees = tmp_path / "worktrees"
+    for name in ("w1", "w2", "w3", "idle"):
+        (worktrees / name).mkdir(parents=True)
+    proc = tmp_path / "proc"
+    (proc / "10" / "fd").mkdir(parents=True)
+    (proc / "10" / "cwd").symlink_to(worktrees / "w1" / "src")
+    (proc / "10" / "fd" / "3").symlink_to(worktrees / "w2" / "log.txt")
+    (proc / "11").mkdir()
+    (proc / "11" / "cmdline").write_bytes(b"python3\0" + str(worktrees / "w3" / "run.py").encode() + b"\0")
+    (proc / "12").mkdir()
+    (proc / "12" / "cwd").symlink_to(tmp_path)
+    monkeypatch.setattr(worktree_reap, "PROC", proc)
+    assert worktree_reap.held_by_processes(worktrees) == {"w1", "w2", "w3"}
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -89,6 +117,7 @@ CASES = [
     *_cases(_ci_runs_everything),
     *_cases(_a_quiet_local_run_is_not_forced),
     *_cases(_the_harness_code_under_dot_claude_runs_everything),
+    *_cases(_a_worktree_a_live_process_uses_is_held_from_the_reaper),
 ]
 
 
