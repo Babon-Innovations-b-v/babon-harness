@@ -13,5 +13,18 @@
   "wait_guard": {
     "foreground_runs": [],
     "way_out": ""
+  },
+  "purge": {
+    "_comment": "Where /purge (.claude/skills/purge, the generic shared skill) finds this repository's test bookkeeping: each value a command run at a worktree root, or an instruction where there is no command.",
+    "setup": "bash .claude/scripts/worktree-setup.sh",
+    "suite": "PYTHONPATH=$PWD .venv/bin/pytest -q",
+    "test_check": "python3 -m tools.test_register --check (and --replay <test> for a row added or folded into)",
+    "test_debt": "python3 -m tools.test_register --coverage",
+    "test_new": "python3 -m tools.test_register --new <module or group> --says \"<what it pins>\" (its row in tools/test_register/_rows.py carries the break)",
+    "debt_lists": "tools/test_register/_debt.py: DEBT, FUNCTION_DEBT, UNTESTED_DEBT",
+    "time_budget": "no per-file limit in the register; the suite within the time the deploy gate allows",
+    "modules": "tools/test_register/_modules.py (a module) and _groups.py (a module group)",
+    "duplicates": null,
+    "extra_checks": []
   }
 }
