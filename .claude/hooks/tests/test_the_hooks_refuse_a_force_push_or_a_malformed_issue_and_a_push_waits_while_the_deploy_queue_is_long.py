@@ -374,6 +374,43 @@ def _a_sub_agent_hands_back_and_a_finished_one_is_said_until_closed(tmp_path):
     assert wait.returncode == 2 and "detached" in wait.stderr and "completion notice" not in wait.stderr
 
 
+# From an ended job's scratch going at session start, and a full disk said in one line.
+
+_DISK_KEEP = pathlib.Path(__file__).resolve().parent.parent / "disk_keep.py"
+
+
+def _an_ended_jobs_scratch_goes_but_what_it_keeps_and_a_full_disk_is_said(tmp_path):
+    """The sweep (DISK_KEEP_SWEEP=1) empties an ended job's hour-old scratch but its KEEP paths, never a working
+    job's or one a process works in; a session start on a disk over the threshold says one line, under it nothing.
+    Breaks: `ended_scratch` returns [] (the ended scratch stays); drop `scratch not in busy` (a busy one goes);
+    `note`'s `percent <= FULL_PERCENT` made True (a full disk says nothing)."""
+    import os
+    import time
+    jobs = tmp_path / "jobs"
+    for job, state in (("ended", "done"), ("working", "working"), ("busy", "done")):
+        (jobs / job / "tmp" / "run").mkdir(parents=True)
+        (jobs / job / "state.json").write_text(json.dumps({"state": state}))
+        (jobs / job / "tmp" / "run" / "scratch.bin").write_text("x" * 4096)
+        (jobs / job / "tmp" / "result.json").write_text("{}")
+    (jobs / "ended" / "tmp" / "KEEP").write_text("result.json\n")
+    busy = subprocess.Popen(["sleep", "30"], cwd=jobs / "busy" / "tmp")
+    old = time.time() - 7200
+    for path in jobs.rglob("*"):
+        os.utime(path, (old, old))
+    env = dict(os.environ, HOME=str(tmp_path), DISK_KEEP_JOBS=str(jobs), DISK_KEEP_STATE=str(tmp_path / "state"))
+    try:
+        run = lambda **more: subprocess.run([sys.executable, str(_DISK_KEEP)], input="{}", capture_output=True,
+                                            text=True, env=dict(env, **more), timeout=60)
+        assert run(DISK_KEEP_SWEEP="1").stdout == ""
+        assert not (jobs / "ended/tmp/run").exists() and (jobs / "ended/tmp/result.json").exists()
+        assert (jobs / "working/tmp/run/scratch.bin").exists() and (jobs / "busy/tmp/run/scratch.bin").exists()
+        said = json.loads(run(DISK_KEEP_FULL_PERCENT="0").stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "% full" in said and "emptied 1 ended jobs' scratch" in said and "object storage" in said
+        assert run(DISK_KEEP_FULL_PERCENT="100").stdout == ""
+    finally:
+        busy.kill()
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -462,6 +499,7 @@ CASES = [
     *_cases(_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes),
     *_cases(_a_push_is_refused_only_for_a_red_it_adds_to_main),
     *_cases(_a_sub_agent_hands_back_and_a_finished_one_is_said_until_closed),
+    *_cases(_an_ended_jobs_scratch_goes_but_what_it_keeps_and_a_full_disk_is_said),
 ]
 
 

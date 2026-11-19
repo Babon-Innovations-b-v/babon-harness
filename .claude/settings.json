@@ -42,6 +42,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 150
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/disk_keep.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/disk_keep.py\" ] || exit 0; CLAUDE_HOOK=SessionStart python3 \"$h/disk_keep.py\"",
+            "timeout": 10
           }
         ]
       }

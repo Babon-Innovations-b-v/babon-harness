@@ -75,6 +75,16 @@ assistant starts empty and is wired to the owner's own Signal number, calendar a
 during onboarding. Minutes, memory notes and the people list are written into the owner's own
 private copy as they happen.
 
+### A disk holds tools, not data
+
+On every machine (the owner's PC, the server, a pod, a rented machine) datasets, inputs, results
+and models are read from and written to object storage; a local disk holds the tools, the OS,
+caches with a size cap that evict on their own, and tmp files deleted when their job ends (owner,
+2026-11-19, after a PC's disk filled to 99%). At every session start `disk_keep.py` empties, in the
+background, each ended agent job's scratch (`~/.claude/jobs/<job>/tmp`, untouched an hour, no process
+in it) but the paths its `tmp/KEEP` names, and says one line when the disk is over 80% full: its
+largest folders and what Docker could reclaim. It informs, never blocks.
+
 ## apps/assistant
 
 ### What runs
