@@ -43,6 +43,9 @@ with one commit changing `a.py` is the whole diff. Dropping `"Traceback" not in
 output` or reading pytest's 5 as a no fails this. GUARDS. The 2026-11-07
 retro: no gate ran on a push, and a module edited without its test reached the
 deploy gate unrun.
+
+A sub-agent hands back and a finished one is said until closed (agent_close.py, wait_guard.py).
+Dropping `and not in_agent` in agent_close's `answer`, or wait_guard's `_HAND_BACK` choice, fails this.
 """
 from __future__ import annotations
 
@@ -331,6 +334,46 @@ def _a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes()
     assert queue.verdict(40, 1, True, limit=15) is None
 
 
+
+# From agent_close and wait_guard (2026-11-19: sub-agents left open for hours, waiting on their own background work or
+# never stopped). The answers are the rule's: a sub-agent hears the hand-back rule, a finished background one is said
+# to the session that started it twice at most, a TaskStop crosses it off; never a block.
+
+def _agent_close(payload, ledger):
+    import os
+    import subprocess
+    hooks = pathlib.Path(__file__).resolve().parent.parent
+    done = subprocess.run([sys.executable, str(hooks / "agent_close.py")], input=json.dumps(payload), text=True,
+                          capture_output=True, env=dict(os.environ, AGENT_CLOSE_DIR=str(ledger)))
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)["hookSpecificOutput"]["additionalContext"] if done.stdout.strip() else ""
+
+
+def _a_sub_agent_hands_back_and_a_finished_one_is_said_until_closed(tmp_path):
+    import subprocess
+    ledger, transcript = tmp_path / "ledger", tmp_path / "s1" / "subagents" / "agent-a1.jsonl"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text(json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Done."}]}}))
+    transcript.with_suffix(".meta.json").write_text(json.dumps({"requestShape": "background"}))
+    assert "Never end your turn" in _agent_close({"hook_event_name": "SubagentStart", "agent_id": "a1"}, ledger)
+    background = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                  "tool_input": {"command": "cp -r a b", "run_in_background": True}}
+    assert "detached" in _agent_close(dict(background, agent_id="a1"), ledger)
+    assert _agent_close(background, ledger) == ""
+    stop = {"hook_event_name": "SubagentStop", "agent_id": "a1", "agent_transcript_path": str(transcript)}
+    call = {"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": "Read", "tool_input": {}}
+    assert _agent_close(stop, ledger) == "" and _agent_close(dict(call, agent_id="a9"), ledger) == ""
+    assert "TaskStop (task_id a1)" in _agent_close(call, ledger)
+    _agent_close({"hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": "TaskStop",
+                  "tool_input": {"task_id": "a1"}}, ledger)
+    assert _agent_close(stop, ledger) == "" and _agent_close(call, ledger) == ""
+    wait = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve().parent.parent / "wait_guard.py")],
+                          input=json.dumps({"tool_name": "Bash", "agent_id": "a1",
+                                            "tool_input": {"command": "sleep 400; ls"}}),
+                          text=True, capture_output=True)
+    assert wait.returncode == 2 and "detached" in wait.stderr and "completion notice" not in wait.stderr
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -418,6 +461,7 @@ CASES = [
     *_cases(_a_second_issue_for_open_work_is_refused),
     *_cases(_a_push_waits_while_the_deploy_queue_is_long_and_an_unblocking_commit_goes),
     *_cases(_a_push_is_refused_only_for_a_red_it_adds_to_main),
+    *_cases(_a_sub_agent_hands_back_and_a_finished_one_is_said_until_closed),
 ]
 
 

@@ -18,7 +18,9 @@ so this guard blocks, for a Bash call not run with ``run_in_background``:
   segment, and the entry's ``unless`` exempts a segment (a dry run, say). ``wait_guard.way_out`` adds the project's
   own route out (a detach flag, a wrapper) to the block message.
 
-The block message names the way out.
+The block message names the way out: in the main session, the background run and its completion notice; in a
+sub-agent (the payload carries ``agent_id``), a detached run handed back, since a sub-agent waiting on its own
+background work stays open until it ends (agent_close.py says the same when a sub-agent starts).
 
 FAILURE POLICY: fail-open. Any parse error or unknown shape exits 0 (allow). Exit 2 + stderr is the only block path.
 """
@@ -51,6 +53,13 @@ _WAY_OUT = (
     "background command: one notice when it ends. Some Claude Code versions hand a Monitor script to this hook "
     "as plain Bash, so its sleep loops and tail -f can be blocked too; Monitor always suits kubectl logs -f or a "
     "WebSocket."
+)
+# A sub-agent that ends its turn on its own background work stays open, idle, until that work ends (2026-11-19).
+_HAND_BACK = (
+    "Never wait in the foreground, and as a sub-agent never end your turn on your own background work either: it "
+    "holds you open. Run what ends within a few minutes without the wait; start anything longer detached "
+    "(setsid nohup <command> > <log> 2>&1 < /dev/null &) and return your final report with its pid, log and the "
+    "command that checks it; the session that started you watches it."
 )
 
 
@@ -148,7 +157,8 @@ def main():
         sys.exit(0)
     if reason:
         extra = str(settings.get("way_out") or "")
-        print(f"Blocked: {reason}. {_WAY_OUT}" + (f" {extra}" if extra else ""), file=sys.stderr)
+        way_out = _HAND_BACK if payload.get("agent_id") else _WAY_OUT
+        print(f"Blocked: {reason}. {way_out}" + (f" {extra}" if extra else ""), file=sys.stderr)
         sys.exit(2)
 
 

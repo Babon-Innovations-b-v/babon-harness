@@ -58,6 +58,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || exit 0; python3 \"$h/agent_close.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -115,6 +120,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 150
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || exit 0; python3 \"$h/agent_close.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -142,6 +152,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || exit 0; python3 \"$h/agent_close.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -183,6 +198,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || exit 0; python3 \"$h/agent_close.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -194,6 +214,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/dispatch.py\" ] || exit 0; python3 \"$h/dispatch.py\"",
             "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/agent_close.py\" ] || exit 0; python3 \"$h/agent_close.py\"",
+            "timeout": 5
           }
         ]
       }
