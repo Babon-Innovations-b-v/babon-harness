@@ -18,7 +18,7 @@ Rules 1, 4, 6 and 7 (plain language, no preamble, warmth, English) stay
 requests. A word list cannot tell jargon from the right technical term, and a
 guard that looks like protection and is not is worse than none.
 
-It blocks at most twice per turn (MAX_BLOCKS), so a turn can always end. Its message asks
+It blocks at most once per turn (MAX_BLOCKS), so a turn can always end. Its message asks
 for the short rewrite outright: an earlier wording let a session "keep it if
 deliberate", and sessions re-sent the same long reply.
 
@@ -63,8 +63,9 @@ ASKED_FOR_DETAIL = re.compile(
 )
 
 
-#: How many times one turn may be sent back before its reply goes through.
-MAX_BLOCKS = 2
+#: How many times one turn may be sent back before its reply goes through: once
+#: (the owner, 2026-11-22: "max fire once"), so a rewrite always ends the turn.
+MAX_BLOCKS = 1
 
 
 def _counter_path(payload):
@@ -175,8 +176,7 @@ def main():
         return
     payload = json.loads(sys.stdin.read())
     # At most MAX_BLOCKS blocks per turn, counted per session in a temp file,
-    # so a rewrite that is still too long is sent back once more, and a turn
-    # can always end.
+    # so the rewrite after a block always goes through.
     if payload.get("stop_hook_active") and _blocks_so_far(payload) >= MAX_BLOCKS:
         return
     transcript = payload.get("transcript_path")
