@@ -95,6 +95,11 @@
             "type": "command",
             "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/wait_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/wait_guard.py\" ] || exit 0; python3 \"$h/wait_guard.py\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "h=\"$PWD/.claude/hooks\"; [ -f \"$h/rm_guard.py\" ] || h=\"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/hooks\"; [ -f \"$h/rm_guard.py\" ] || exit 0; python3 \"$h/rm_guard.py\"",
+            "timeout": 5
           }
         ]
       },

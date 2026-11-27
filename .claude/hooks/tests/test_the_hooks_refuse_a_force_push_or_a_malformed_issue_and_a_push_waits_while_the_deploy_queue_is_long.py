@@ -46,6 +46,11 @@ deploy gate unrun.
 
 A sub-agent hands back and a finished one is said until closed (agent_close.py, wait_guard.py).
 Dropping `and not in_agent` in agent_close's `answer`, or wait_guard's `_HAND_BACK` choice, fails this.
+
+A delete path's bare variables are guarded and nothing else moves (rm_guard.py): in an rm's or rmdir's path
+arguments each `$NAME`/`${NAME}` comes back as a quoted `${NAME:?}` in updatedInput; every other command, option,
+quoted or already guarded path is left as sent. `delete_paths` returning [] at once, or a glob put inside the quotes,
+fails this.
 """
 from __future__ import annotations
 
@@ -411,6 +416,30 @@ def _an_ended_jobs_scratch_goes_but_what_it_keeps_and_a_full_disk_is_said(tmp_pa
         busy.kill()
 
 
+_RM_GUARD = pathlib.Path(__file__).resolve().parent.parent / "rm_guard.py"
+_RM_ROWS = [  # (command as sent, command as it runs; None: left as sent)
+    ("rm -rf $O/$n/renders", 'rm -rf "${O:?}/${n:?}/renders"'),
+    ("for f in $L; do rm -f $f.png; done", 'for f in $L; do rm -f "${f:?}.png"; done'),
+    ("cd $W && rm -rf ${W}/out", 'cd $W && rm -rf "${W:?}/out"'),
+    ("rm -rf $HOME/.cache/x", 'rm -rf "${HOME:?}/.cache/x"'),
+    ('rm -- "$x"', 'rm -- "${x:?}"'),
+    ('rm -rf "$D"/*.png', 'rm -rf "${D:?}"/*.png'),
+    ('rm -rf "${O:?}/${n:?}/renders"', None),
+    ("rm -rf /tmp/x", None),
+    ("echo $O/$n; ls $HOME", None),
+    ("git rm $x", None),
+    ("rm -rf '$x'", None),
+]
+
+
+def _a_delete_path_s_bare_variables_are_guarded_and_nothing_else_moves(sent, runs):
+    done = subprocess.run([sys.executable, str(_RM_GUARD)], input=json.dumps(_bash(sent)), text=True,
+                          capture_output=True)
+    assert done.returncode == 0, done.stderr
+    told = json.loads(done.stdout)["hookSpecificOutput"]["updatedInput"]["command"] if done.stdout.strip() else None
+    assert told == runs
+
+
 def _cases(scenario, argnames="", argvalues=((),), ids=None, *, marks=(), uses=()):
     """One case per row a check is given; a check given no rows is one case of its fixtures."""
     names = [name.strip() for name in argnames.split(",") if name.strip()] if isinstance(argnames, str) else list(argnames)
@@ -500,6 +529,7 @@ CASES = [
     *_cases(_a_push_is_refused_only_for_a_red_it_adds_to_main),
     *_cases(_a_sub_agent_hands_back_and_a_finished_one_is_said_until_closed),
     *_cases(_an_ended_jobs_scratch_goes_but_what_it_keeps_and_a_full_disk_is_said),
+    *_cases(_a_delete_path_s_bare_variables_are_guarded_and_nothing_else_moves, "sent, runs", _RM_ROWS),
 ]
 
 
